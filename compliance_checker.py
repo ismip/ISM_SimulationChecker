@@ -1,6 +1,8 @@
+#!/usr/bin/env python3
 import datetime
 import os
 import subprocess
+import argparse
 
 import cftime
 import numpy as np
@@ -9,18 +11,38 @@ import xarray as xr
 from tqdm import tqdm
 
 
+DEFAULT_SOURCE_PATH = "./test"
+DEFAULT_EXPERIMENT_SET = "ismip6"
+EXPERIMENT_SET_CHOICES = ("ismip6", "ismip6_ext")
+
+CRITERIA_CSV_FILENAME = "ismip6_criteria.csv"
+EXPERIMENTS_ISMIP6_CSV_FILENAME = "experiments_ismip6.csv"
+EXPERIMENTS_ISMIP6_EXT_CSV_FILENAME = "experiments_ismip6_ext.csv"
+
+AIS_GRID_EXTENT = [-3040000, -3040000, 3040000, 3040000]
+GIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
+AIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
+GIS_POSSIBLE_RESOLUTION = [1, 2, 4, 5, 10, 20]
+
+TIME_STEP_MIN_DAYS = 360
+TIME_STEP_MAX_DAYS = 367
+AVERAGE_YEAR_DAYS = 365
+
+
 def main() -> None:
-    source_path = "./test"
+    args = _parse_args()
+    source_path = args.source_path
+    experiment_set = args.experiment_set
     workdir = os.getcwd()
 
     commit_num = _get_commit_number()
     ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir)
 
     experiments_ismip6_ext = _load_experiments_csv(
-        os.path.join(workdir, "experiments_ismip6_ext.csv")
+        os.path.join(workdir, EXPERIMENTS_ISMIP6_EXT_CSV_FILENAME)
     )
     experiments_ismip6 = _load_experiments_csv(
-        os.path.join(workdir, "experiments_ismip6.csv")
+        os.path.join(workdir, EXPERIMENTS_ISMIP6_CSV_FILENAME)
     )
 
     scalar_variables_ismip6 = [
@@ -38,7 +60,14 @@ def main() -> None:
     scalar_variables = scalar_variables_ismip6
 
     # Set up the experiment list: extension (2300) or ISMIP6 (2100).
-    experiments = experiments_ismip6
+    if experiment_set == "ismip6_ext":
+        experiments = experiments_ismip6_ext
+    elif experiment_set == "ismip6":
+        experiments = experiments_ismip6
+    else:
+        raise ValueError(
+            "Experiment set not recognized. Please choose between 'ismip6' and 'ismip6_ext'."
+        )
 
     _run_compliance_checker(
         source_path=source_path,
@@ -61,15 +90,35 @@ def _get_commit_number() -> str:
         return commit_num.decode("UTF-8")
     except Exception:
         print(
-            "Commit number associtad with this code. Is there a .git in this directory ?"
+            "Commit number associated with this code. Is there a .git in this directory ?"
         )
         return "No commit number identified."
+
+
+def _parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Check simulation NetCDF datasets for ISMIP6 compliance."
+    )
+    parser.add_argument(
+        "--source-path",
+        default=DEFAULT_SOURCE_PATH,
+        help="Path to the directory containing experiment subdirectories.",
+    )
+    parser.add_argument(
+        "--experiment-set",
+        choices=EXPERIMENT_SET_CHOICES,
+        default=DEFAULT_EXPERIMENT_SET,
+        help="Experiment set rules to apply: ismip6 or ismip6_ext.",
+    )
+    return parser.parse_args()
 
 
 def _load_criteria(workdir: str):
     try:
         ismip = pd.read_csv(
-            workdir + "/ismip6_criteria.csv", delimiter=";", decimal=","
+            os.path.join(workdir, CRITERIA_CSV_FILENAME),
+            delimiter=";",
+            decimal=",",
         )
     except IOError:
         print(
@@ -607,11 +656,11 @@ def _run_variable_checks(
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
 
     if region == "AIS":
-        grid_extent = [-3040000, -3040000, 3040000, 3040000]
-        possible_resolution = [1, 2, 4, 8, 16, 32]
+        grid_extent = AIS_GRID_EXTENT
+        possible_resolution = AIS_POSSIBLE_RESOLUTION
     else:
-        grid_extent = [-720000, -3450000, 960000, -570000]
-        possible_resolution = [1, 2, 4, 5, 10, 20]
+        grid_extent = GIS_GRID_EXTENT
+        possible_resolution = GIS_POSSIBLE_RESOLUTION
 
     for ivar in file_variables:
         if ivar in ismip_var:
@@ -800,7 +849,7 @@ def _run_time_checks(
     iteration = len(ds.coords["time"])
     start_exp = min(ds["time"]).values.astype("datetime64[D]")
     end_exp = max(ds["time"]).values.astype("datetime64[D]")
-    avgyear = 365
+    avgyear = AVERAGE_YEAR_DAYS
     duration_days = end_exp - start_exp
     duration_years = duration_days.astype("timedelta64[Y]") / np.timedelta64(1, "Y")
     _ = duration_years
@@ -832,7 +881,7 @@ def _run_time_checks(
         else:
             time_step = ds["time"].values[1] - ds["time"].values[10]
 
-    if 360 <= time_step <= 367:
+    if TIME_STEP_MIN_DAYS <= time_step <= TIME_STEP_MAX_DAYS:
         log_file.write(" - Time step: " + str(time_step) + " days" + "\n")
     else:
         log_file.write(
