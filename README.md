@@ -2,7 +2,7 @@
 
 The script checks the compliance of a simulation dataset according criteria, which are related to:
 
-* naming conventions 
+* naming conventions
 * admissible numerical values,
 * spatial definition of the grid which differs according to the ice sheet (AIS vs GIS),
 * time recording dependent of the experiments.
@@ -26,30 +26,30 @@ The code has been developed with python 3.9 and the following modules:
 * pandas
 * datetime
 * tqdm
-  
+
 => Conda users can install the **isscheck** environnment with the YML file [isschecker_env.yml](https://github.com/jbbarre/ISM_SimulationChecker/blob/main/isschecker_env.yml).
 
 *************************************************
 
 ### Test the code
 
-1. Conda users: activate the isschecker environnement: `> conda activate isschecker`. 
-   For others, be sure that the dependencies specified in the YML file [isschecker_env.yml]  (https://github.com/jbbarre/ISM_SimulationChecker/blob/main/isschecker_env.yml) are installed. 
-   
+1. Conda users: activate the isschecker environnement: `> conda activate isschecker`.
+   For others, be sure that the dependencies specified in the YML file [isschecker_env.yml] (https://github.com/jbbarre/ISM_SimulationChecker/blob/main/isschecker_env.yml) are installed.
+
 2. In a terminal, run the script: `> python compliance_checker.py`. A progression bar appears in the terminal and shows the progression.
-   
+
 3. Without any changes, the script checks the `test` directory, which contains a single file. After processing the check, open the *compliance_checker_log.txt* file created in the `test` directory. The compliance checker raises errors because the test data is just a short extraction of a complete dataset.
-   
+
 *************************************************
 
 ### How to launch a compliance check ?
 
-1. In *compliance_checker.py*, specify the path of the directory to check by changing the value of the variable **source_path** and change the experiments tested from **experiments = experiments_ismip6** to **experiments = experiments_ismip6_ext** to test the new 2300 extensions. The compliance criteria csv file (*ismip6_criteria.csv*) must be located in the same directory as *compliance_checker.py* .
+1. In a terminal, run the script with the source path and experiment set:
+`> ./compliance_checker.py --source-path ./test --experiment-set ismip6`
 
-2. In a terminal, run the script:
-`> python compliance_checker.py`.
+2. Use `--experiment-set ismip6_ext` to test the ISMIP6 extension (2300) experiment set.
 
-3. The script creates a *compliance_checker_log.txt* file in the source_path, which reports the errors and warnings.
+3. The script creates a *compliance_checker_log.txt* file in the source path, which reports the errors and warnings.
 
 
 
