@@ -1,5 +1,5 @@
-variable;dim;type;variable_name;standard_name;alias_name;units;mandatory;min_value_ais;max_value_ais;min_value_gis;max_value_gis
-acabf;x-y-t;FL;Surface mass balance flux;land_ice_surface_specific_mass_balance_flux;;kg m-2 s-1;1;-0,0001;0,0010;-0,0001;0,0010
+variable;dim;type;variable_name;standard_name;alias_name;units;mandatory;min_value_ais;max_value_ais;min_value_gris;max_value_gris
+acabf;x-y-t;FL;Surface mass balance flux;land_ice_surface_specific_mass_balance_flux;;kg m-2 s-1;1;-0,0001;0,0010;-0,0006;0,0010
 base;x-y-t;ST;Base elevation;base_altitude;;m;1;-4000;4000;-3000;4000
 dlithkdt;x-y-t;FL;Ice thickness imbalance;tendency_of_land_ice_thickness;;m s-1;0;-0,0001000000;0,000100000;-0,0001000000;0,000100000
 hfgeoubed;x-y-t;FL;Geothermal heat flux;upward_geothermal_heat_flux_in_land_ice;upward_geothermal_heat_flux_at_ground_level;W m-2;0;0,0;0,3;0,0;0,3
@@ -16,8 +16,8 @@ orog;x-y-t;ST;Surface elevation;surface_altitude;;m;1;0;4500;0;4500
 sftflf;x-y-t;ST;Floating ice sheet area fraction;floating_ice_shelf_area_fraction;floating_ice_sheet_area_fraction;1;1;0;1;0;1
 sftgif;x-y-t;ST;Land ice area fraction;land_ice_area_fraction;;1;1;0;1;0;1
 sftgrf;x-y-t;ST;Grounded ice sheet area fraction;grounded_ice_sheet_area_fraction;;1;1;0;1;0;1
-strbasemag;x-y-t;ST;Basal drag;land_ice_basal_drag;magnitude_of_land_ice_basal_drag;Pa;1;0;200000;0;200000
-topg;x-y-t;ST;Bedrock elevation;bedrock_altitude;;m;1;-7000;4000;-3000;4000
+strbasemag;x-y-t;ST;Basal drag;land_ice_basal_drag;magnitude_of_land_ice_basal_drag;Pa;1;0;300000;0;300000
+topg;x-y-t;ST;Bedrock elevation;bedrock_altitude;;m;1;-7000;4000;-4000;4000
 xvelbase;x-y-t;ST;Basal velocity in x;land_ice_basal_x_velocity;;m s-1;0;-0,000400;0,000400;-0,000800;0,000800
 xvelmean;x-y-t;ST;Mean velocity in x;land_ice_vertical_mean_x_velocity;;m s-1;1;-0,000400;0,000400;-0,000800;0,000800
 xvelsurf;x-y-t;ST;Surface velocity in x;land_ice_surface_x_velocity;;m s-1;0;-0,000400;0,000400;-0,000800;0,000800

@@ -13,19 +13,21 @@ from tqdm import tqdm
 
 DEFAULT_SOURCE_PATH = "./test"
 DEFAULT_EXPERIMENT_SET = "ismip6"
-EXPERIMENT_SET_CHOICES = ("ismip6", "ismip6_ext")
+EXPERIMENT_SET_CHOICES = ("ismip6", "ismip6_ext", "ismip7")
 
-CRITERIA_CSV_FILENAME = "ismip6_criteria.csv"
+CRITERIA_CSV_FILENAME = "ismip7_criteria.csv"
 EXPERIMENTS_ISMIP6_CSV_FILENAME = "experiments_ismip6.csv"
 EXPERIMENTS_ISMIP6_EXT_CSV_FILENAME = "experiments_ismip6_ext.csv"
+EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
 
 AIS_GRID_EXTENT = [-3040000, -3040000, 3040000, 3040000]
-GIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
+GrIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
 AIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
-GIS_POSSIBLE_RESOLUTION = [1, 2, 4, 5, 10, 20]
+#GrIS_POSSIBLE_RESOLUTION = [1, 2, 4, 5, 10, 20]
+GrIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
 
-TIME_STEP_MIN_DAYS = 360
-TIME_STEP_MAX_DAYS = 367
+TIME_STEP_MIN_DAYS = 365
+TIME_STEP_MAX_DAYS = 366
 AVERAGE_YEAR_DAYS = 365
 
 
@@ -43,6 +45,9 @@ def main() -> None:
     )
     experiments_ismip6 = _load_experiments_csv(
         os.path.join(workdir, EXPERIMENTS_ISMIP6_CSV_FILENAME)
+    )
+    experiments_ismip7 = _load_experiments_csv(
+        os.path.join(workdir, EXPERIMENTS_ISMIP7_CSV_FILENAME)
     )
 
     scalar_variables_ismip6 = [
@@ -64,6 +69,8 @@ def main() -> None:
         experiments = experiments_ismip6_ext
     elif experiment_set == "ismip6":
         experiments = experiments_ismip6
+    elif experiment_set == "ismip7":
+        experiments = experiments_ismip7
     else:
         raise ValueError(
             "Experiment set not recognized. Please choose between 'ismip6' and 'ismip6_ext'."
@@ -97,7 +104,7 @@ def _get_commit_number() -> str:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check simulation NetCDF datasets for ISMIP6 compliance."
+        description="Check simulation NetCDF datasets for ISMIP compliance."
     )
     parser.add_argument(
         "--source-path",
@@ -108,7 +115,7 @@ def _parse_args() -> argparse.Namespace:
         "--experiment-set",
         choices=EXPERIMENT_SET_CHOICES,
         default=DEFAULT_EXPERIMENT_SET,
-        help="Experiment set rules to apply: ismip6 or ismip6_ext.",
+        help="Experiment set rules to apply: ismip6 or ismip6_ext or ismip7.",
     )
     return parser.parse_args()
 
@@ -466,6 +473,7 @@ def _process_single_file(
     model = file_name_split[3]
     _ = (group, model)
     file_extention = file_name_split[len(file_name_split) - 1][-2:]
+    print(considered_variable, region, group, model)
 
     ds = xr.open_dataset(os.path.join(source_path, xp, file))
     file_variables = list(ds.data_vars)
@@ -641,14 +649,14 @@ def _run_variable_checks(
         var_naming_errors += 1
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
 
-    if region.upper() not in ["AIS", "GIS"]:
+    if region not in ["AIS", "GrIS"]:
         log_file.write(
             "- ERROR: Region "
             + region
-            + " not recognized. It should be AIS or GIS. The compliance check has been interrupted for this variable.\n"
+            + " not recognized. It should be AIS or GrIS. The compliance check has been interrupted for this variable.\n"
         )
         report_naming_issues.append(
-            "Compliance check ignored: region (AIS/GIS) not identified in the file "
+            "Compliance check ignored: region (AIS/GrIS) not identified in the file "
             + file_name
             + " due to wrong naming."
         )
@@ -659,8 +667,8 @@ def _run_variable_checks(
         grid_extent = AIS_GRID_EXTENT
         possible_resolution = AIS_POSSIBLE_RESOLUTION
     else:
-        grid_extent = GIS_GRID_EXTENT
-        possible_resolution = GIS_POSSIBLE_RESOLUTION
+        grid_extent = GrIS_GRID_EXTENT
+        possible_resolution = GrIS_POSSIBLE_RESOLUTION
 
     for ivar in file_variables:
         if ivar in ismip_var:
@@ -714,7 +722,7 @@ def _run_variable_checks(
                     )
                     var_num_errors += 1
             else:
-                log_file.write(" - ERROR: The array only contains Nan values.\n")
+                log_file.write(" - ERROR: The array only contains missing values.\n")
                 var_num_errors += 1
 
             (
@@ -756,8 +764,7 @@ def _run_spatial_and_time_checks(
     Ybottomleft = int(min(coords["y"]).values.item())
     Xtopright = int(max(coords["x"]).values.item())
     Ytopright = int(max(coords["y"]).values.item())
-
-    if Xbottomleft == grid_extent[0] & Ybottomleft == grid_extent[1]:
+    if (Xbottomleft == grid_extent[0] and Ybottomleft == grid_extent[1]):
         log_file.write(" - Grid: Lowest left corner is well defined.\n")
     else:
         log_file.write(
@@ -772,7 +779,7 @@ def _run_spatial_and_time_checks(
             + "] Expected\n"
         )
         var_spatial_errors += 1
-    if Xtopright == grid_extent[2] & Ytopright == grid_extent[3]:
+    if (Xtopright == grid_extent[2] and Ytopright == grid_extent[3]):
         log_file.write(" - Grid: Upper right corner is well defined.\n")
     else:
         log_file.write(
@@ -781,9 +788,9 @@ def _run_spatial_and_time_checks(
             + ","
             + str(Ytopright)
             + "] is not correctly defined. ["
-            + str(grid_extent[0])
+            + str(grid_extent[2])
             + ","
-            + str(grid_extent[1])
+            + str(grid_extent[3])
             + "] Expected\n"
         )
         var_spatial_errors += 1
@@ -887,7 +894,7 @@ def _run_time_checks(
         log_file.write(
             " - ERROR: the time step("
             + str(time_step)
-            + ") should be comprised between [360,367].\n"
+            + ") should be comprised between [" + TIME_STEP_MIN_DAYS + " and " + TIME_STEP_MAX_DAYS+ "].\n"
         )
         var_time_errors += 1
 
@@ -1022,9 +1029,9 @@ def _write_log_header(
         "************************************************************************************\n"
     )
     log_file.write(f"Commit Number: {commit_num} \n")
-    log_file.write("verification criteria: ismip6_criteria.csv \n")
+    log_file.write("verification criteria: " + CRITERIA_CSV_FILENAME + "\n")
     log_file.write("date: " + today.strftime("%Y/%m/%d") + "\n")
-    log_file.write("source: https://github.com/jbbarre/ISM_SimulationChecker \n")
+    log_file.write("source: https://github.com/ismip/ISM_SimulationChecker \n")
     log_file.write(" \n")
     log_file.write(
         "------------------------------------------------------------------------------------\n"
@@ -1046,7 +1053,7 @@ def _write_log_header(
     log_file.write(
         "====================================================================================\n"
     )
-    log_file.write("Tips: Use Cltr+F to look for specific problems. \n")
+    log_file.write("Hint: Use Cltr+F to look for specific problems. \n")
     log_file.write(" \n")
 
 

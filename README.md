@@ -1,17 +1,17 @@
 # Ice Sheet Simulation compliance checker
 
-The script checks the compliance of a simulation dataset according criteria, which are related to:
+The script checks the compliance of a simulation dataset according to criteria, which are related to:
 
 * naming conventions
 * admissible numerical values,
-* spatial definition of the grid which differs according to the ice sheet (AIS vs GIS),
+* spatial definition of the grid (different for AIS vs GrIS),
 * time recording dependent of the experiments.
 
-The compliance criteria of output variables are defined in a separate csv file. The compliance criteria of experiments are directly defined as a dictionnary in the python file.
+The compliance criteria of output variables and experiments are defined in a separate csv files. 
 
 => For ISMIP6 simulations, the criteria are following the conventions defined in the [ISMIP6 wiki](https://www.climate-cryosphere.org/wiki/index.php?title=ISMIP6-Projections-Antarctica#Appendix_1_.E2.80.93_Output_grid_definition_and_interpolation). The associated csv file is [ismip6_criteria.csv](https://github.com/jbbarre/ISM_SimulationChecker/blob/main/ismip6_criteria.csv)
 
-=> ISMIP6 2300 file name convention: check carrefully the section _A2.1 File name convention_ of the [ISMIP6 2300 wiki](https://www.climate-cryosphere.org/wiki/index.php?title=ISMIP6-Projections2300-Antarctica)
+=> For ISMIP6 2300 file name convention: check carefully the section _A2.1 File name convention_ of the [ISMIP6 2300 wiki](https://www.climate-cryosphere.org/wiki/index.php?title=ISMIP6-Projections2300-Antarctica)
 
 *************************************************
 
@@ -50,6 +50,3 @@ The code has been developed with python 3.9 and the following modules:
 2. Use `--experiment-set ismip6_ext` to test the ISMIP6 extension (2300) experiment set.
 
 3. The script creates a *compliance_checker_log.txt* file in the source path, which reports the errors and warnings.
-
-
-
