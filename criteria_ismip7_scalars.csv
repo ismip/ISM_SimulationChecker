@@ -1,0 +1,11 @@
+variable;dim;type;variable_name;standard_name;alias_name;units;mandatory;min_value_ais;max_value_ais;min_value_gris;max_value_gris
+lim;t;ST;Total ice mass;land_ice_mass;;kg;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+limnsw;t;ST;Mass above floatation;land_ice_mass_not_displacing_sea_water;;kg;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+iareagr;t;ST;Grounded ice area;grounded_ice_sheet_area;;m^2;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+iareafl;t;ST;Floating ice area;floating_ice_shelf_area;;m^2;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+tendacabf;t;FL;Total SMB flux;tendency_of_land_ice_mass_due_to_surface_mass_balance;;kg s-1;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+tendlibmassbfgr;t;FL;Total BMB flux;tendency_of_land_ice_mass_due_to_basal_mass_balance;;kg s-1;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+tendlibmassbffl;t;FL;Total BMB flux beneath floating ice;tendency_of_land_ice_mass_due_to_basal_mass_balance;;kg s-1;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+tendlicalvf;t;FL;Total calving flux;tendency_of_land_ice_mass_due_to_calving;;kg s-1;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+tendlifmassbf;t;FL;Total calving and ice front melting flux;tendency_of_land_ice_mass_due_to_ice_front_melting;;kg s-1;1;0.0;10000000000000000000000000;0.0;10000000000000000000000000
+tendligroundf;t;FL;Total groudning line flux;;;kg s-1;1;0.0;1;0.0;1

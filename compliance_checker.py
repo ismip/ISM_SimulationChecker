@@ -12,23 +12,23 @@ from tqdm import tqdm
 
 
 DEFAULT_SOURCE_PATH = "./test"
-DEFAULT_EXPERIMENT_SET = "ismip6"
-EXPERIMENT_SET_CHOICES = ("ismip6", "ismip6_ext", "ismip7")
+DEFAULT_EXPERIMENT_SET = "ismip7_scalars"
+EXPERIMENT_SET_CHOICES = ("ismip7_scalars", "ismip7_vars", "ismip7", )
 
-CRITERIA_CSV_FILENAME = "ismip7_criteria.csv"
-EXPERIMENTS_ISMIP6_CSV_FILENAME = "experiments_ismip6.csv"
-EXPERIMENTS_ISMIP6_EXT_CSV_FILENAME = "experiments_ismip6_ext.csv"
+CRITERIA_ISMIP7_SCALARS_CSV_FILENAME = "criteria_ismip7_scalars.csv"
+CRITERIA_ISMIP7_VARS_CSV_FILENAME = "criteria_ismip7_vars.csv"
+CRITERIA_ISMIP7_CSV_FILENAME = "criteria_ismip7.csv"
+
 EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
 
 AIS_GRID_EXTENT = [-3040000, -3040000, 3040000, 3040000]
 GrIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
 AIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
-#GrIS_POSSIBLE_RESOLUTION = [1, 2, 4, 5, 10, 20]
 GrIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
 
 TIME_STEP_MIN_DAYS = 365
 TIME_STEP_MAX_DAYS = 366
-AVERAGE_YEAR_DAYS = 365
+AVERAGE_YEAR_DAYS = 365.2425
 
 
 def main() -> None:
@@ -38,44 +38,28 @@ def main() -> None:
     workdir = os.getcwd()
 
     commit_num = _get_commit_number()
-    ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir)
-
-    experiments_ismip6_ext = _load_experiments_csv(
-        os.path.join(workdir, EXPERIMENTS_ISMIP6_EXT_CSV_FILENAME)
-    )
-    experiments_ismip6 = _load_experiments_csv(
-        os.path.join(workdir, EXPERIMENTS_ISMIP6_CSV_FILENAME)
-    )
     experiments_ismip7 = _load_experiments_csv(
         os.path.join(workdir, EXPERIMENTS_ISMIP7_CSV_FILENAME)
     )
-
-    scalar_variables_ismip6 = [
-        "lim",
-        "limnsw",
-        "iareagr",
-        "iareafl",
-        "tendacabf",
-        "tendlibmassbf",
-        "tendlibmassbffl",
-        "tendlicalvf",
-        "tendlifmassbf",
-        "tendligroundf",
-    ]
-    scalar_variables = scalar_variables_ismip6
-
-    # Set up the experiment list: extension (2300) or ISMIP6 (2100).
-    if experiment_set == "ismip6_ext":
-        experiments = experiments_ismip6_ext
-    elif experiment_set == "ismip6":
-        experiments = experiments_ismip6
+    # Set up the experiment list and criteria
+    if experiment_set == "ismip7_scalars":
+        experiments = experiments_ismip7
+        criteria_file = CRITERIA_ISMIP7_SCALARS_CSV_FILENAME
+    elif experiment_set == "ismip7_vars":
+        experiments = experiments_ismip7
+        criteria_file = CRITERIA_ISMIP7_VARS_CSV_FILENAME
     elif experiment_set == "ismip7":
         experiments = experiments_ismip7
+        criteria_file = CRITERIA_ISMIP7_CSV_FILENAME
     else:
         raise ValueError(
-            "Experiment set not recognized. Please choose between 'ismip6' and 'ismip6_ext'."
+            "Experiment set not recognized. Please choose between 'ismip7', 'ismip7_vars' and 'ismip7_scalars'."
         )
+    
+    # read the criteria
+    ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir, criteria_file)
 
+    
     _run_compliance_checker(
         source_path=source_path,
         commit_num=commit_num,
@@ -84,8 +68,7 @@ def main() -> None:
         variables=ismip_var,
         mandatory_variables=mandatory_variables,
         experiments=experiments,
-        experiments_ismip6_ext=experiments_ismip6_ext,
-        scalar_variables=scalar_variables,
+        criteria_file=criteria_file,
     )
 
 
@@ -115,15 +98,15 @@ def _parse_args() -> argparse.Namespace:
         "--experiment-set",
         choices=EXPERIMENT_SET_CHOICES,
         default=DEFAULT_EXPERIMENT_SET,
-        help="Experiment set rules to apply: ismip6 or ismip6_ext or ismip7.",
+        help="Experiment set rules to apply: ismip7 or ismip7_scalars.",
     )
     return parser.parse_args()
 
 
-def _load_criteria(workdir: str):
+def _load_criteria(workdir: str, criteria_file: str):
     try:
         ismip = pd.read_csv(
-            os.path.join(workdir, CRITERIA_CSV_FILENAME),
+            os.path.join(workdir, criteria_file),
             delimiter=";",
             decimal=",",
         )
@@ -131,7 +114,7 @@ def _load_criteria(workdir: str):
         print(
             "ERROR: Unable to open the compliance criteria file (.csv required with ; as delimiter and , for decimal.). Is the path to the file correct ? "
             + workdir
-            + "ismip6_criteria_v0.csv"
+            + criteria_file
         )
         raise
 
@@ -166,10 +149,9 @@ def _run_compliance_checker(
     variables,
     mandatory_variables,
     experiments,
-    experiments_ismip6_ext,
-    scalar_variables,
+    criteria_file,
 ) -> None:
-    _ = (experiments_ismip6_ext, scalar_variables)
+    _ = (criteria_file)
 
     try:
         with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
@@ -179,7 +161,7 @@ def _run_compliance_checker(
             _ = files
             today = datetime.date.today()
 
-            _write_log_header(f, commit_num, source_path, today)
+            _write_log_header(f, commit_num, source_path, today, criteria_file)
 
             summary = _process_experiments(
                 log_file=f,
@@ -475,7 +457,12 @@ def _process_single_file(
     file_extention = file_name_split[len(file_name_split) - 1][-2:]
     print(considered_variable, region, group, model)
 
-    ds = xr.open_dataset(os.path.join(source_path, xp, file))
+    # Suppress SerializationWarning with 'use_cftime=True'
+    # This is for dates outside the range supported by numpy.datetime64,
+    # which is approximately the years 1678 AD to 2262 AD
+    #ds = xr.open_dataset(os.path.join(source_path, xp, file))
+    ds = xr.open_dataset(os.path.join(source_path, xp, file), use_cftime=True)
+    
     file_variables = list(ds.data_vars)
 
     if file_extention != "nc":
@@ -549,6 +536,7 @@ def _process_single_file(
         }
 
     if considered_variable in variables:
+        print("###", "Running variable check")
         var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors = (
             _run_variable_checks(
                 log_file=log_file,
@@ -626,6 +614,7 @@ def _run_variable_checks(
     var_spatial_errors = 0
     var_time_errors = 0
 
+    print("###", "in variable check")
     log_file.write(" \n")
     log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
     log_file.write(" \n")
@@ -633,22 +622,33 @@ def _run_variable_checks(
     header_ds = ds.to_dict(data=False)
     dim = set(list(header_ds["coords"].keys()))
 
-    if not set(["x", "y"]).issubset(dim):
-        log_file.write(
-            "- ERROR: Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing.\n"
-        )
-        log_file.write(
-            "                                   Only "
-            + str(list(header_ds["coords"].keys()))
-            + " has been detected.\n"
-        )
-        report_naming_issues.append(
-            "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing in "
-            + file_name
-        )
-        var_naming_errors += 1
-        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
+    index = ismip_var.index(considered_variable)
+    dim_meta = ismip_meta[index]["dim"]
+    isscalar = dim_meta == "t" # Switch for scalars
 
+    if isscalar:
+        # Do not complain about missing x,y for scalars
+        _ = (isscalar) 
+    else:
+        if not set(["x", "y"]).issubset(dim):
+            log_file.write(
+                "- ERROR: Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing.\n"
+            )
+            log_file.write(
+                "                                   Only "
+                + str(list(header_ds["coords"].keys()))
+                + " has been detected.\n"
+            )
+            report_naming_issues.append(
+                "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing in "
+                + file_name
+            )
+            var_naming_errors += 1
+            
+            return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
+        
+        
+    # print("###", "region name check")
     if region not in ["AIS", "GrIS"]:
         log_file.write(
             "- ERROR: Region "
@@ -670,6 +670,8 @@ def _run_variable_checks(
         grid_extent = GrIS_GRID_EXTENT
         possible_resolution = GrIS_POSSIBLE_RESOLUTION
 
+        
+    # print("###", "var tests")
     for ivar in file_variables:
         if ivar in ismip_var:
             log_file.write("** Tested Variable: " + ivar + "\n")
@@ -691,44 +693,47 @@ def _run_variable_checks(
                 )
                 var_num_errors += 1
 
-            if False in ds[ivar].isnull():
-                if (
-                    ds[ivar].min(skipna=True).item()
-                    >= ismip_meta[var_index[0]]["min_value_" + region.lower()]
-                ):
-                    log_file.write(" - The minimum value successfully verified.\n")
-                else:
-                    log_file.write(
-                        " - ERROR: The minimum value ("
-                        + str(ds[ivar].min(skipna=True).values.item(0))
-                        + ") is out of range. Min value accepted: "
-                        + str(ismip_meta[var_index[0]]["min_value_" + region.lower()])
-                        + "\n"
-                    )
-                    var_num_errors += 1
-
-                if (
-                    ds[ivar].max(skipna=True).item()
-                    <= ismip_meta[var_index[0]]["max_value_" + region.lower()]
-                ):
-                    log_file.write(" - The maximum value successfully verified.\n")
-                else:
-                    log_file.write(
-                        " - ERROR: The maximum value ("
-                        + str(ds[ivar].max(skipna=True).values.item(0))
-                        + ") is out of range. Max value accepted: "
-                        + str(ismip_meta[var_index[0]]["max_value_" + region.lower()])
-                        + "\n"
-                    )
-                    var_num_errors += 1
+            if isscalar:
+                # Do not test regions for scalars
+                _ = (isscalar) 
             else:
-                log_file.write(" - ERROR: The array only contains missing values.\n")
-                var_num_errors += 1
+                
+                if False in ds[ivar].isnull():
+                    if (
+                        ds[ivar].min(skipna=True).item()
+                        >= ismip_meta[var_index[0]]["min_value_" + region.lower()]
+                    ):
+                        log_file.write(" - The minimum value successfully verified.\n")
+                    else:
+                        log_file.write(
+                            " - ERROR: The minimum value ("
+                            + str(ds[ivar].min(skipna=True).values.item(0))
+                            + ") is out of range. Min value accepted: "
+                            + str(ismip_meta[var_index[0]]["min_value_" + region.lower()])
+                            + "\n"
+                        )
+                        var_num_errors += 1
+    
+                    if (
+                        ds[ivar].max(skipna=True).item()
+                        <= ismip_meta[var_index[0]]["max_value_" + region.lower()]
+                    ):
+                        log_file.write(" - The maximum value successfully verified.\n")
+                    else:
+                        log_file.write(
+                            " - ERROR: The maximum value ("
+                            + str(ds[ivar].max(skipna=True).values.item(0))
+                            + ") is out of range. Max value accepted: "
+                            + str(ismip_meta[var_index[0]]["max_value_" + region.lower()])
+                            + "\n"
+                        )
+                        var_num_errors += 1
+                else:
+                    log_file.write(" - ERROR: The array only contains missing values.\n")
+                    var_num_errors += 1
 
-            (
-                var_spatial_errors,
-                var_time_errors,
-            ) = _run_spatial_and_time_checks(
+                    
+            (var_spatial_errors, var_time_errors) = _run_spatial_and_time_checks(
                 log_file=log_file,
                 ds=ds,
                 dim=dim,
@@ -740,8 +745,10 @@ def _run_variable_checks(
                 grid_resolution=grid_resolution,
                 var_spatial_errors=var_spatial_errors,
                 var_time_errors=var_time_errors,
+                isscalar=isscalar,
             )
 
+            
     return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
 
 
@@ -757,75 +764,83 @@ def _run_spatial_and_time_checks(
     grid_resolution: int,
     var_spatial_errors: int,
     var_time_errors: int,
+    isscalar: bool,
 ):
-    log_file.write("SPATIAL Tests \n")
-    coords = ds.coords.to_dataset()
-    Xbottomleft = int(min(coords["x"]).values.item())
-    Ybottomleft = int(min(coords["y"]).values.item())
-    Xtopright = int(max(coords["x"]).values.item())
-    Ytopright = int(max(coords["y"]).values.item())
-    if (Xbottomleft == grid_extent[0] and Ybottomleft == grid_extent[1]):
-        log_file.write(" - Grid: Lowest left corner is well defined.\n")
-    else:
-        log_file.write(
-            " - ERROR: Lowest left corner of the grid ["
-            + str(Xbottomleft)
-            + ","
-            + str(Ybottomleft)
-            + "] is not correctly defined. ["
-            + str(grid_extent[0])
-            + ","
-            + str(grid_extent[1])
-            + "] Expected\n"
-        )
-        var_spatial_errors += 1
-    if (Xtopright == grid_extent[2] and Ytopright == grid_extent[3]):
-        log_file.write(" - Grid: Upper right corner is well defined.\n")
-    else:
-        log_file.write(
-            " - ERROR: Upper rigth corner of the grid ["
-            + str(Xtopright)
-            + ","
-            + str(Ytopright)
-            + "] is not correctly defined. ["
-            + str(grid_extent[2])
-            + ","
-            + str(grid_extent[3])
-            + "] Expected\n"
-        )
-        var_spatial_errors += 1
 
-    Xresolution = round((coords["x"][1].values - coords["x"][0].values) / 1000, 0)
-    Yresolution = round((coords["y"][1].values - coords["y"][0].values) / 1000, 0)
-    if Xresolution in set(possible_resolution) and Yresolution in set(
-        possible_resolution
-    ):
-        if Xresolution == grid_resolution and Yresolution == grid_resolution:
-            log_file.write(
-                " - The grid resolution ("
-                + str(Xresolution)
-                + ") was successfully verified.\n"
-            )
+    if isscalar:
+        # Do not test x,y for scalars
+        _ = (isscalar) 
+    else:
+        
+        log_file.write("SPATIAL Tests \n")
+        coords = ds.coords.to_dataset()
+        Xbottomleft = int(min(coords["x"]).values.item())
+        Ybottomleft = int(min(coords["y"]).values.item())
+        Xtopright = int(max(coords["x"]).values.item())
+        Ytopright = int(max(coords["y"]).values.item())
+        if (Xbottomleft == grid_extent[0] and Ybottomleft == grid_extent[1]):
+            log_file.write(" - Grid: Lowest left corner is well defined.\n")
         else:
             log_file.write(
-                " - ERROR: The grid resolution ( "
-                + str(Xresolution)
-                + " or "
-                + str(Yresolution)
-                + ") is different of "
-                + str(grid_resolution)
-                + "declared in the file name.\n"
+                " - ERROR: Lowest left corner of the grid ["
+                + str(Xbottomleft)
+                + ","
+                + str(Ybottomleft)
+                + "] is not correctly defined. ["
+                + str(grid_extent[0])
+                + ","
+                + str(grid_extent[1])
+                + "] Expected\n"
             )
             var_spatial_errors += 1
-    else:
-        log_file.write(
-            " - Error: x: "
-            + str(Xresolution)
-            + ",y: "
-            + str(Yresolution)
-            + " is not an authorized grid resolution.\n"
-        )
-        var_spatial_errors += 1
+        if (Xtopright == grid_extent[2] and Ytopright == grid_extent[3]):
+            log_file.write(" - Grid: Upper right corner is well defined.\n")
+        else:
+            log_file.write(
+                " - ERROR: Upper rigth corner of the grid ["
+                + str(Xtopright)
+                + ","
+                + str(Ytopright)
+                + "] is not correctly defined. ["
+                + str(grid_extent[2])
+                + ","
+                + str(grid_extent[3])
+                + "] Expected\n"
+            )
+            var_spatial_errors += 1
+    
+        Xresolution = round((coords["x"][1].values - coords["x"][0].values) / 1000, 0)
+        Yresolution = round((coords["y"][1].values - coords["y"][0].values) / 1000, 0)
+        if Xresolution in set(possible_resolution) and Yresolution in set(
+            possible_resolution
+        ):
+            if Xresolution == grid_resolution and Yresolution == grid_resolution:
+                log_file.write(
+                    " - The grid resolution ("
+                    + str(Xresolution)
+                    + ") was successfully verified.\n"
+                )
+            else:
+                log_file.write(
+                    " - ERROR: The grid resolution ( "
+                    + str(Xresolution)
+                    + " or "
+                    + str(Yresolution)
+                    + ") is different of "
+                    + str(grid_resolution)
+                    + "declared in the file name.\n"
+                )
+                var_spatial_errors += 1
+        else:
+            log_file.write(
+                " - Error: x: "
+                + str(Xresolution)
+                + ",y: "
+                + str(Yresolution)
+                + " is not an authorized grid resolution.\n"
+            )
+            var_spatial_errors += 1
+
 
     var_time_errors = _run_time_checks(
         log_file=log_file,
@@ -858,7 +873,7 @@ def _run_time_checks(
     end_exp = max(ds["time"]).values.astype("datetime64[D]")
     avgyear = AVERAGE_YEAR_DAYS
     duration_days = end_exp - start_exp
-    duration_years = duration_days.astype("timedelta64[Y]") / np.timedelta64(1, "Y")
+    duration_years = iteration # TODO, get from date objects instead
     _ = duration_years
 
     index_exp = [dic["experiment"] for dic in experiments].index(experiment_name)
@@ -898,8 +913,9 @@ def _run_time_checks(
         )
         var_time_errors += 1
 
-    duration_days = pd.to_timedelta(time_step * iteration, "D")
-    duration_years = round(pd.to_numeric(duration_days.days / avgyear))
+    # TODO revise the time check logic 
+    #duration_days = pd.to_timedelta(time_step * iteration, "D")
+    #duration_years = round(pd.to_numeric(duration_days.days / avgyear))
     if duration_years == experiments[index_exp]["duration"]:
         log_file.write(" - Experiment lasts " + str(duration_years) + " years.\n")
         dateformat_start_exp = datetime.datetime(
@@ -1017,7 +1033,7 @@ def _strictly_increasing(values) -> bool:
 
 
 def _write_log_header(
-    log_file, commit_num: str, source_path: str, today: datetime.date
+        log_file, commit_num: str, source_path: str, today: datetime.date, criteria_file: str,
 ) -> None:
     log_file.write(
         "************************************************************************************\n"
@@ -1029,7 +1045,7 @@ def _write_log_header(
         "************************************************************************************\n"
     )
     log_file.write(f"Commit Number: {commit_num} \n")
-    log_file.write("verification criteria: " + CRITERIA_CSV_FILENAME + "\n")
+    log_file.write("verification criteria: " + criteria_file + "\n")
     log_file.write("date: " + today.strftime("%Y/%m/%d") + "\n")
     log_file.write("source: https://github.com/ismip/ISM_SimulationChecker \n")
     log_file.write(" \n")
@@ -1077,7 +1093,7 @@ def _insert_synthesis(
     contents.insert(iline, str(exp_counter) + " experiments checked.\n")
     iline += 1
     contents.insert(
-        iline, str(file_counter) + " files checked (Scalar files are ignored).\n"
+        iline, str(file_counter) + " files checked.\n"
     )
     iline += 2
     contents.insert(iline, str(total_errors) + " error(s) detected.\n")
