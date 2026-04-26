@@ -11,10 +11,6 @@ The compliance criteria of output variables and experiments are defined in a sep
 
 => For ISMIP7 simulations, the criteria are following the conventions defined on the [ISMIP7 webpage](https://www.ismip.org/). The associated csv file is [ismip7_criteria.csv](https://github.com/ismip/ISM_SimulationChecker/blob/main/ismip7_criteria.csv)
 
-=> For ISMIP6 simulations, the criteria are following the conventions defined in the [ISMIP6 wiki](https://www.climate-cryosphere.org/wiki/index.php?title=ISMIP6-Projections-Antarctica#Appendix_1_.E2.80.93_Output_grid_definition_and_interpolation). The associated csv file is [ismip6_criteria.csv](https://github.com/jbbarre/ISM_SimulationChecker/blob/main/ismip6_criteria.csv)
-
-=> For ISMIP6 2300 file name convention: check carefully the section _A2.1 File name convention_ of the [ISMIP6 2300 wiki](https://www.climate-cryosphere.org/wiki/index.php?title=ISMIP6-Projections2300-Antarctica)
-
 *************************************************
 
 ### Python and dependencies
@@ -32,24 +28,30 @@ The code has been developed with python 3.9 and the following modules:
 => Conda users can install the **isscheck** environnment with the YML file [isschecker_env.yml](https://github.com/ismip/ISM_SimulationChecker/blob/main/isschecker_env.yml).
 `> conda env create -f isschecker_env.yml`
 
-*************************************************
-
-### Test the code
-
-1. Conda users: activate the isschecker environnement: `> conda activate isschecker`.
-   For others, be sure that the dependencies specified in the YML file [isschecker_env.yml] (https://github.com/ismip/ISM_SimulationChecker/blob/main/isschecker_env.yml) are installed.
-
-2. In a terminal, run the script: `> python compliance_checker.py`. A progression bar appears in the terminal and shows the progression.
-
-3. Without any changes, the script checks the `test` directory, which contains a single file. After processing the check, open the *compliance_checker_log.txt* file created in the `test` directory. The compliance checker raises errors because the test data is just a short extraction of a complete dataset.
 
 *************************************************
 
-### How to launch a compliance check ?
+### How to launch a compliance check
 
-1. In a terminal, run the script with the source path and experiment set:
-`> ./compliance_checker.py --source-path ./test --experiment-set ismip6`
+1. Conda users: activate the isschecker environment: `> conda activate isschecker`.
 
-2. Use `--experiment-set ismip6_ext` to test the ISMIP6 extension (2300) experiment set.
+2. Run the checker with the path to your CORE directory and an experiment set:
+   ```
+   python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --experiment-set ismip7_xyt
+   ```
+   Use `--experiment-set ismip7_scalars` for scalar-only variables, or `ismip7` for both.
 
-3. The script creates a *compliance_checker_log.txt* file in the source path, which reports the errors and warnings.
+3. The script creates a `compliance_checker_log.txt` file in the source path reporting all errors and warnings.
+
+
+*************************************************
+
+### Generate synthetic test files
+
+`test/generate_test_files.py` creates ISMIP7-style NetCDF test files with synthetic data. See [test/README.md](test/README.md) for full options and examples.
+
+Quick start:
+```bash
+conda activate isschecker
+python test/generate_test_files.py --grid GrIS_16000m --scenario ctrl --xyt --nyears 286 --start-year 2015
+```
