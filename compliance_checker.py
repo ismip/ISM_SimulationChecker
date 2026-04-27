@@ -1,4 +1,35 @@
 #!/usr/bin/env python3
+#
+# ISMIP7 Compliance Checker — check summary
+#
+# 1. Naming (_check_naming)
+#    - Variable name matches the expected ISMIP7 name from the data request.
+#    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
+#
+# 2. Numerical (_check_numerical)
+#    - Variable units match the data request.
+#    - All values lie within the allowed min/max range for the relevant region.
+#    - Array is not entirely fill/missing values.
+#
+# 3. Spatial (_check_spatial)  [xyt variables only]
+#    - Lower-left and upper-right grid corners lie within the expected AIS or GrIS extents.
+#    - Grid resolution is one of the allowed values (1, 2, 4, 8, 16, 32 km).
+#    - x and y resolution are equal (square cells).
+#
+# 4. Time (_check_time)
+#    - Time dimension is present, is an unlimited (record) dimension, and its values are monotonically increasing.
+#    - Time step matches the expected annual cadence (within tolerance).
+#    - Experiment start date, end date, and duration match experiments_ismip7.csv.
+#
+# 5. Attributes (_check_attributes)
+#    - Global attributes present: group, model, contact_name, contact_email, crs
+#      (epsg:3413 for GrIS, epsg:3031 for AIS).
+#    - Coordinate attributes: time has units, calendar, bounds (FL vars); x/y have units (xyt).
+#    - Variable standard_name matches data request (if specified).
+#    - _FillValue and missing_value are both present and equal the default netCDF4 fill value.
+#    - Main variable and time coordinate are single-precision float (float32 / f4).
+#    - scale_factor and add_offset are not allowed on the main variable.
+#
 import datetime
 import os
 import subprocess
@@ -7,6 +38,7 @@ import argparse
 import numpy as np
 import pandas as pd
 import xarray as xr
+import netCDF4
 from tqdm import tqdm
 
 
@@ -697,6 +729,16 @@ def _check_time(
         )
         return errors + 1
 
+    time_dim = "time" if "time" in ds.dims else "t"
+    unlimited_dims = ds.encoding.get("unlimited_dims", set())
+    if time_dim in unlimited_dims:
+        log_file.write(" - Time is a record (unlimited) dimension: OK\n")
+    else:
+        log_file.write(
+            f" - ERROR: dimension '{time_dim}' is not a record (unlimited) dimension.\n"
+        )
+        errors += 1
+
     start_exp = min(ds["time"]).values.astype("datetime64[D]")
     end_exp = max(ds["time"]).values.astype("datetime64[D]")
     duration_years = end_exp.item().year - start_exp.item().year + 1
@@ -827,6 +869,7 @@ def _check_attributes(
     var_index: int,
     isscalar: bool,
     var_type: str,
+    region: str,
 ) -> int:
     errors = 0
 
@@ -837,6 +880,17 @@ def _check_attributes(
         if attr not in ds.attrs:
             log_file.write(f" - ERROR (attributes): global attribute '{attr}' is missing.\n")
             global_errors += 1
+    expected_crs = "epsg:3413" if region == "GrIS" else "epsg:3031"
+    actual_crs = ds.attrs.get("crs")
+    if actual_crs is None:
+        log_file.write(" - ERROR (attributes): global attribute 'crs' is missing.\n")
+        global_errors += 1
+    elif actual_crs.lower() != expected_crs:
+        log_file.write(
+            f" - ERROR (attributes): global attribute 'crs' is '{actual_crs}',"
+            f" expected '{expected_crs}' (case-insensitive) for region {region}.\n"
+        )
+        global_errors += 1
     if global_errors == 0:
         log_file.write(" - Global attributes: OK\n")
     errors += global_errors
@@ -901,6 +955,79 @@ def _check_attributes(
         log_file.write(" - Variable attributes: OK\n")
     errors += var_errors
 
+    # Sub-test 4: _FillValue and missing_value must both equal the default netCDF4 fill value
+    fill_errors = 0
+    if ivar in ds:
+        dtype = ds[ivar].dtype
+        nc4_dtype_key = dtype.kind + str(dtype.itemsize)
+        default_fill = netCDF4.default_fillvals.get(nc4_dtype_key)
+        fill_value = ds[ivar].encoding.get("_FillValue")
+        # xarray moves missing_value from attrs to encoding on read (CF fill-value handling)
+        missing_value = ds[ivar].attrs.get("missing_value") or ds[ivar].encoding.get("missing_value")
+        if fill_value is None:
+            log_file.write(f" - ERROR (attributes): variable '{ivar}' missing '_FillValue'.\n")
+            fill_errors += 1
+        elif default_fill is not None and fill_value != default_fill:
+            log_file.write(
+                f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
+                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}.\n"
+            )
+            fill_errors += 1
+        if missing_value is None:
+            log_file.write(f" - ERROR (attributes): variable '{ivar}' missing 'missing_value'.\n")
+            fill_errors += 1
+        elif default_fill is not None and missing_value != default_fill:
+            log_file.write(
+                f" - ERROR (attributes): variable '{ivar}' missing_value {missing_value}"
+                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}.\n"
+            )
+            fill_errors += 1
+        if fill_value is not None and missing_value is not None and fill_value != missing_value:
+            log_file.write(
+                f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
+                f" and missing_value {missing_value} are not equal.\n"
+            )
+            fill_errors += 1
+    if fill_errors == 0:
+        log_file.write(" - Fill value attributes: OK\n")
+    errors += fill_errors
+
+    # Sub-test 5: main variable and time must be single-precision float (f4)
+    dtype_errors = 0
+    if ivar in ds and ds[ivar].dtype != np.float32:
+        log_file.write(
+            f" - ERROR (attributes): variable '{ivar}' dtype is {ds[ivar].dtype},"
+            f" expected float32 (f4).\n"
+        )
+        dtype_errors += 1
+    if time_coord is not None:
+        # xarray decodes CF time to datetime objects in memory; check the on-disk dtype from encoding
+        time_encoded_dtype = ds[time_coord].encoding.get("dtype", ds[time_coord].dtype)
+        if time_encoded_dtype != np.float32:
+            log_file.write(
+                f" - ERROR (attributes): coordinate '{time_coord}' on-disk dtype is {time_encoded_dtype},"
+                f" expected float32 (f4).\n"
+            )
+            dtype_errors += 1
+    if dtype_errors == 0:
+        log_file.write(" - Dtype attributes: OK\n")
+    errors += dtype_errors
+
+    # Sub-test 6: scale_factor and add_offset must not be present
+    pack_errors = 0
+    if ivar in ds:
+        # xarray moves these to .encoding on decode; check both locations
+        combined = {**ds[ivar].attrs, **ds[ivar].encoding}
+        for forbidden in ("scale_factor", "add_offset"):
+            if forbidden in combined:
+                log_file.write(
+                    f" - ERROR (attributes): variable '{ivar}' must not have '{forbidden}'.\n"
+                )
+                pack_errors += 1
+    if pack_errors == 0:
+        log_file.write(" - Packing attributes: OK\n")
+    errors += pack_errors
+
     return errors
 
 
@@ -954,7 +1081,7 @@ def _run_variable_checks(
 
             var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name)
 
-            var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, ismip_meta[var_index].get("type", ""))
+            var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, ismip_meta[var_index].get("type", ""), region)
 
     return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 

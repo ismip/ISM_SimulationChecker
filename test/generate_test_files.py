@@ -371,7 +371,6 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                         'long_name': var_info['description'],
                         'units': var_info['units'],
                         'standard_name': var_info['standard_name'],
-                        'missing_value': fillval,
                     }
                 )
             }
@@ -440,6 +439,10 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                 encoding['time_bounds'] = {'dtype': 'f4', '_FillValue': fillval}
 
             ds.to_netcdf(output_path, unlimited_dims=('time',), encoding=encoding)
+            # xarray drops missing_value from attrs when _FillValue is in encoding;
+            # write it explicitly via netCDF4 to guarantee the attribute is present.
+            with netCDF4.Dataset(output_path, 'a') as nc:
+                nc[var_name].missing_value = fillval
             created_files.append(str(output_path))
     else:
         print(f"Skipping x,y,t variables (include_xyt=False); {len(xyt_vars)} variables not written")
@@ -505,7 +508,6 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                         'long_name': var_info['description'],
                         'units': var_info['units'],
                         'standard_name': var_info['standard_name'],
-                        'missing_value': fillval,
                     }
                 )
             }
@@ -559,8 +561,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                 encoding[f'time_bounds'] = {'dtype': 'f4', '_FillValue': fillval}
 
             ds.to_netcdf(output_path, unlimited_dims=('time',), encoding=encoding)
+            # xarray drops missing_value from attrs when _FillValue is in encoding;
+            # write it explicitly via netCDF4 to guarantee the attribute is present.
+            with netCDF4.Dataset(output_path, 'a') as nc:
+                nc[var_name].missing_value = fillval
             created_files.append(str(output_path))
-    
+
     print(f"Created {len(created_files)} files in {output_dir}")
     print(f"  Grid: {grid_name} ({nx} x {ny})")
     print(f"  Years: {nyears}")
