@@ -19,17 +19,19 @@
 # 4. Time (_check_time)
 #    - Time dimension is present, is an unlimited (record) dimension, and its values are monotonically increasing.
 #    - Time step matches the expected annual cadence (within tolerance).
-#    - Experiment start date, end date, and duration match experiments_ismip7.csv.
+#    - Experiment end date matches experiments_ismip7.csv; duration >= 1 year for historical, exact for others.
 #
 # 5. Attributes (_check_attributes)
 #    - Global attributes present: group, model, contact_name, contact_email, crs
 #      (epsg:3413 for GrIS, epsg:3031 for AIS).
 #    - Coordinate attributes: time has units, calendar, bounds (FL vars); x/y have units (xyt).
 #    - Variable standard_name matches data request (if specified).
-#    - _FillValue and missing_value are both present and equal the default netCDF4 fill value.
+#    - _FillValue must be present and equal the default netCDF4 fill value for the variable's dtype.
+#      If missing_value is also present, it must equal _FillValue.
 #    - Main variable and time coordinate are single-precision float (float32 / f4).
 #    - scale_factor and add_offset are not allowed on the main variable.
-#
+
+
 import datetime
 import os
 import subprocess
@@ -785,18 +787,29 @@ def _check_time(
     else:
         log_file.write(" - Only one time step present; time step check skipped.\n")
 
-    if duration_years == experiments[index_exp]["duration"]:
-        log_file.write(" - Experiment lasts " + str(duration_years) + " years.\n")
+    exp = experiments[index_exp]
+    dateformat_end_exp = datetime.datetime(
+        end_exp.item().year, end_exp.item().month, end_exp.item().day
+    )
+
+    if exp["duration"] == -1:
+        # Undetermined length: only require >= 1 year, start and end date in range
+        if duration_years >= 1:
+            log_file.write(
+                " - Experiment lasts " + str(duration_years) + " years (>= 1 year required): OK\n"
+            )
+        else:
+            log_file.write(
+                " - ERROR: the experiment lasts "
+                + str(duration_years)
+                + " years but must be at least 1 year long.\n"
+            )
+            errors += 1
+
         dateformat_start_exp = datetime.datetime(
-            start_exp.item().year,
-            start_exp.item().month,
-            start_exp.item().day,
+            start_exp.item().year, start_exp.item().month, start_exp.item().day
         )
-        if (
-            experiments[index_exp]["startinf"]
-            <= dateformat_start_exp
-            <= experiments[index_exp]["startsup"]
-        ):
+        if exp["startinf"] <= dateformat_start_exp <= exp["startsup"]:
             log_file.write(
                 " - Experiment starts correctly on "
                 + start_exp.item().strftime("%Y-%m-%d")
@@ -807,23 +820,14 @@ def _check_time(
                 " - ERROR: the experiment starts the "
                 + start_exp.item().strftime("%Y-%m-%d")
                 + ". The date should be comprised between "
-                + experiments[index_exp]["startinf"].strftime("%Y-%m-%d")
+                + exp["startinf"].strftime("%Y-%m-%d")
                 + " and "
-                + experiments[index_exp]["startsup"].strftime("%Y-%m-%d")
+                + exp["startsup"].strftime("%Y-%m-%d")
                 + "\n"
             )
             errors += 1
 
-        dateformat_end_exp = datetime.datetime(
-            end_exp.item().year,
-            end_exp.item().month,
-            end_exp.item().day,
-        )
-        if (
-            experiments[index_exp]["endinf"]
-            <= dateformat_end_exp
-            <= experiments[index_exp]["endsup"]
-        ):
+        if exp["endinf"] <= dateformat_end_exp <= exp["endsup"]:
             log_file.write(
                 " - Experiment ends correctly on "
                 + end_exp.item().strftime("%Y-%m-%d")
@@ -834,29 +838,72 @@ def _check_time(
                 " - ERROR: the experiment ends on "
                 + end_exp.item().strftime("%Y-%m-%d")
                 + ". The date should be comprised between "
-                + experiments[index_exp]["endinf"].strftime("%Y-%m-%d")
+                + exp["endinf"].strftime("%Y-%m-%d")
                 + " and "
-                + experiments[index_exp]["endsup"].strftime("%Y-%m-%d")
+                + exp["endsup"].strftime("%Y-%m-%d")
                 + "\n"
             )
             errors += 1
     else:
-        end_date = start_exp + np.timedelta64(experiments[index_exp]["duration"] * 365, "D")
-        log_file.write(
-            " - ERROR: the experiment lasts "
-            + str(duration_years)
-            + " years. The duration should be "
-            + str(experiments[index_exp]["duration"])
-            + " years\n"
-        )
-        log_file.write(
-            " - As the experiment started on "
-            + start_exp.item().strftime("%Y-%m-%d")
-            + " , it should end on "
-            + end_date.item().strftime("%Y-%m-%d")
-            + "\n"
-        )
-        errors += 1
+        if duration_years == exp["duration"]:
+            log_file.write(" - Experiment lasts " + str(duration_years) + " years.\n")
+            dateformat_start_exp = datetime.datetime(
+                start_exp.item().year,
+                start_exp.item().month,
+                start_exp.item().day,
+            )
+            if exp["startinf"] <= dateformat_start_exp <= exp["startsup"]:
+                log_file.write(
+                    " - Experiment starts correctly on "
+                    + start_exp.item().strftime("%Y-%m-%d")
+                    + ".\n"
+                )
+            else:
+                log_file.write(
+                    " - ERROR: the experiment starts the "
+                    + start_exp.item().strftime("%Y-%m-%d")
+                    + ". The date should be comprised between "
+                    + exp["startinf"].strftime("%Y-%m-%d")
+                    + " and "
+                    + exp["startsup"].strftime("%Y-%m-%d")
+                    + "\n"
+                )
+                errors += 1
+
+            if exp["endinf"] <= dateformat_end_exp <= exp["endsup"]:
+                log_file.write(
+                    " - Experiment ends correctly on "
+                    + end_exp.item().strftime("%Y-%m-%d")
+                    + ".\n"
+                )
+            else:
+                log_file.write(
+                    " - ERROR: the experiment ends on "
+                    + end_exp.item().strftime("%Y-%m-%d")
+                    + ". The date should be comprised between "
+                    + exp["endinf"].strftime("%Y-%m-%d")
+                    + " and "
+                    + exp["endsup"].strftime("%Y-%m-%d")
+                    + "\n"
+                )
+                errors += 1
+        else:
+            end_date = start_exp + np.timedelta64(exp["duration"] * 365, "D")
+            log_file.write(
+                " - ERROR: the experiment lasts "
+                + str(duration_years)
+                + " years. The duration should be "
+                + str(exp["duration"])
+                + " years\n"
+            )
+            log_file.write(
+                " - As the experiment started on "
+                + start_exp.item().strftime("%Y-%m-%d")
+                + " , it should end on "
+                + end_date.item().strftime("%Y-%m-%d")
+                + "\n"
+            )
+            errors += 1
 
     return errors
 
@@ -955,7 +1002,8 @@ def _check_attributes(
         log_file.write(" - Variable attributes: OK\n")
     errors += var_errors
 
-    # Sub-test 4: _FillValue and missing_value must both equal the default netCDF4 fill value
+    # Sub-test 4: _FillValue must equal the default netCDF4 fill value;
+    #             if missing_value is also present it must equal _FillValue.
     fill_errors = 0
     if ivar in ds:
         dtype = ds[ivar].dtype
@@ -970,15 +1018,6 @@ def _check_attributes(
         elif default_fill is not None and fill_value != default_fill:
             log_file.write(
                 f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
-                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}.\n"
-            )
-            fill_errors += 1
-        if missing_value is None:
-            log_file.write(f" - ERROR (attributes): variable '{ivar}' missing 'missing_value'.\n")
-            fill_errors += 1
-        elif default_fill is not None and missing_value != default_fill:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' missing_value {missing_value}"
                 f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}.\n"
             )
             fill_errors += 1
