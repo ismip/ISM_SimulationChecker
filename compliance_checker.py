@@ -5,6 +5,11 @@
 # 1. Naming (_check_naming)
 #    - Variable name matches the expected ISMIP7 name from the data request.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
+#    - ISM member id (field 4) matches format mNNN (e.g. m001).
+#    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
+#    - Forcing member id (field 6) matches format fNNN (e.g. f001).
+#    - Set counter (field 8) matches format [C|E|P]NNN (e.g. C001, E041, P132).
+#    - Year range (field 9) matches format YYYY-YYYY; start <= end; both match the actual time axis.
 #
 # 2. Numerical (_check_numerical)
 #    - Variable units match the data request.
@@ -62,14 +67,67 @@ TIME_STEP_MIN_DAYS = 365
 TIME_STEP_MAX_DAYS = 366
 
 # ISMIP7 CORE file naming convention:
-# {var}_{region}_{project}_{submission}_{modelid}_{forcing}_{forcingid}_{experiment}_{configid}_{startyear}-{endyear}.nc
+# {var}_{region}_{group}_{model}_{modelid}_{ESM}_{forcingid}_{experiment}_{configid}_{startyear}-{endyear}.nc
 ISMIP7_FILENAME_PARTS = 10
 ISMIP7_FILENAME_VAR_IDX = 0
 ISMIP7_FILENAME_REGION_IDX = 1
 ISMIP7_FILENAME_ISM_MEMBER_IDX = 4
+ISMIP7_FILENAME_ESM_IDX = 5
 ISMIP7_FILENAME_FORCING_MEMBER_IDX = 6
-ISMIP7_FILENAME_SET_COUNTER_IDX = 8
 ISMIP7_FILENAME_EXPERIMENT_IDX = 7
+ISMIP7_FILENAME_SET_COUNTER_IDX = 8
+ISMIP7_FILENAME_YEAR_RANGE_IDX = 9
+
+# Known CMIP6 and CMIP7 model names valid as ESM forcing identifiers (field 5).
+VALID_ESM_NAMES: set[str] = {
+    # CMIP6
+    "ACCESS-CM2", "ACCESS-ESM1-5",
+    "AWI-CM-1-1-MR", "AWI-ESM-1-1-LR",
+    "BCC-CSM2-MR", "BCC-ESM1",
+    "CAMS-CSM1-0",
+    "CAS-ESM2-0",
+    "CESM2", "CESM2-FV2", "CESM2-WACCM", "CESM2-WACCM-FV2",
+    "CIESM",
+    "CMCC-CM2-HR4", "CMCC-CM2-SR5", "CMCC-ESM2",
+    "CNRM-CM6-1", "CNRM-CM6-1-HR", "CNRM-ESM2-1",
+    "CanESM5", "CanESM5-1", "CanESM5-CanOE",
+    "E3SM-1-0", "E3SM-1-1", "E3SM-1-1-ECA", "E3SM-2-0",
+    "EC-Earth3", "EC-Earth3-AerChem", "EC-Earth3-CC", "EC-Earth3-Veg", "EC-Earth3-Veg-LR",
+    "FGOALS-f3-L", "FGOALS-g3",
+    "FIO-ESM-2-0",
+    "GFDL-CM4", "GFDL-ESM4",
+    "GISS-E2-1-G", "GISS-E2-1-G-CC", "GISS-E2-1-H", "GISS-E2-2-G", "GISS-E2-2-H",
+    "HadGEM3-GC31-LL", "HadGEM3-GC31-MM",
+    "IITM-ESM",
+    "INM-CM4-8", "INM-CM5-0",
+    "IPSL-CM5A2-INCA", "IPSL-CM6A-LR", "IPSL-CM6A-LR-INCA",
+    "KACE-1-0-G",
+    "KIOST-ESM",
+    "MCM-UA-1-0",
+    "MIROC-ES2H", "MIROC-ES2L", "MIROC6",
+    "MPI-ESM-1-2-HAM", "MPI-ESM1-2-HR", "MPI-ESM1-2-LR",
+    "MRI-ESM2-0",
+    "NESM3",
+    "NorCPM1", "NorESM2-LM", "NorESM2-MM",
+    "SAM0-UNICON",
+    "TaiESM1",
+    "UKESM1-0-LL", "UKESM1-1-LL",
+    # CMIP7 (extend as models are registered)
+    "ACCESS-ESM2-0",
+    "CanESM6",
+    "CESM3",
+    "CNRM-CM7", "CNRM-ESM2-2",
+    "EC-Earth4",
+    "GFDL-ESM5",
+    "GISS-E3",
+    "HadGEM4-GC51-LL",
+    "IPSL-CM7A-LR",
+    "MIROC7",
+    "MPI-ESM2-0",
+    "MRI-ESM3-0",
+    "NorESM3-LM", "NorESM3-MM",
+    "UKESM2-0-LL",
+}
 
 
 def main() -> None:
@@ -102,9 +160,7 @@ def _get_commit_number() -> str:
         commit_num, _error = process.communicate()
         return commit_num.decode("UTF-8")
     except Exception:
-        print(
-            "Commit number associated with this code. Is there a .git in this directory ?"
-        )
+        print("Could not retrieve git commit number. Is there a .git directory here?")
         return "No commit number identified."
 
 
@@ -121,7 +177,7 @@ def _parse_args() -> argparse.Namespace:
         "--variable-list",
         choices=VARIABLE_LIST_CHOICES,
         default=DEFAULT_VARIABLE_LIST,
-        help="Variable list to apply: ismip7 or ismip7_scalars.",
+        help="Variable list to apply: ismip7_xyt, ismip7_scalars, or ismip7 (both).",
     )
     return parser.parse_args()
 
@@ -195,6 +251,10 @@ def _run_compliance_checker(
     experiments,
     criteria_file,
 ) -> None:
+    if not os.path.isdir(source_path):
+        print(f"ERROR: Directory not found: '{source_path}'. Please check your --source-path argument.")
+        return
+
     try:
         with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
             print("-> Checking " + source_path)
@@ -203,6 +263,11 @@ def _run_compliance_checker(
             _write_log_header(f, commit_num, source_path, today, criteria_file)
 
             experiment_groups = _group_files_by_experiment(source_path)
+            if not experiment_groups:
+                msg = f"No .nc files found in directory '{source_path}'. Please check your --source-path argument."
+                print(f"ERROR: {msg}")
+                f.write(f"ERROR: {msg}\n")
+                return
 
             summary = _process_experiments(
                 log_file=f,
@@ -230,7 +295,7 @@ def _run_compliance_checker(
 
     except TypeError as err:
         print(
-            "Something went wrong with your dataset. Please, check your file(s) carrefully. Error:",
+            "Something went wrong with your dataset. Please, check your file(s) carefully. Error:",
             err,
         )
 
@@ -462,8 +527,6 @@ def _process_single_file(
         }
     file_variables = list(ds.data_vars)
 
-    # ISMIP7 CORE naming convention:
-    # var_region_project_submission_modelid_forcing_forcingid_experiment_configid_startyear-endyear.nc
     if len(file_name_split) != ISMIP7_FILENAME_PARTS:
         log_file.write(
             " - ERROR: the file name "
@@ -557,6 +620,7 @@ def _process_single_file(
 
 def _check_naming(
     log_file,
+    ds,
     file_name: str,
     region: str,
     dim: set,
@@ -565,12 +629,14 @@ def _check_naming(
 ) -> int:
     errors = 0
 
+    log_file.write("NAMING Tests \n")
+
     if not isscalar and not {"x", "y"}.issubset(dim):
         log_file.write(
-            "- ERROR: Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing.\n"
+            " - ERROR: Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing.\n"
         )
         log_file.write(
-            "                                   Only " + str(list(dim)) + " has been detected.\n"
+            "                                    Only " + str(list(dim)) + " has been detected.\n"
         )
         report_naming_issues.append(
             "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing in "
@@ -580,7 +646,7 @@ def _check_naming(
 
     if region not in ["AIS", "GrIS"]:
         log_file.write(
-            "- ERROR: Region "
+            " - ERROR: Region "
             + region
             + " not recognized. It should be AIS or GrIS. The compliance check has been interrupted for this variable.\n"
         )
@@ -596,23 +662,63 @@ def _check_naming(
         ism_member = parts[ISMIP7_FILENAME_ISM_MEMBER_IDX]
         if not re.fullmatch(r"m\d{3}", ism_member):
             log_file.write(
-                f"- ERROR: ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001).\n"
+                f" - ERROR: ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001).\n"
+            )
+            errors += 1
+
+        esm_name = parts[ISMIP7_FILENAME_ESM_IDX]
+        if esm_name not in VALID_ESM_NAMES:
+            log_file.write(
+                f" - ERROR: ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is not a recognised CMIP6/CMIP7 model name.\n"
             )
             errors += 1
 
         forcing_member = parts[ISMIP7_FILENAME_FORCING_MEMBER_IDX]
         if not re.fullmatch(r"f\d{3}", forcing_member):
             log_file.write(
-                f"- ERROR: forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001).\n"
+                f" - ERROR: forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001).\n"
             )
             errors += 1
 
         set_counter = parts[ISMIP7_FILENAME_SET_COUNTER_IDX]
         if not re.fullmatch(r"[CEP]\d{3}", set_counter):
             log_file.write(
-                f"- ERROR: set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132).\n"
+                f" - ERROR: set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132).\n"
             )
             errors += 1
+
+        year_range_field = parts[ISMIP7_FILENAME_YEAR_RANGE_IDX].removesuffix(".nc")
+        year_range_match = re.fullmatch(r"(\d{4})-(\d{4})", year_range_field)
+        if not year_range_match:
+            log_file.write(
+                f" - ERROR: year range '{year_range_field}' (field {ISMIP7_FILENAME_YEAR_RANGE_IDX}) does not match expected format YYYY-YYYY (e.g. 2015-2300).\n"
+            )
+            errors += 1
+        else:
+            fn_start_year = int(year_range_match.group(1))
+            fn_end_year = int(year_range_match.group(2))
+            if fn_start_year > fn_end_year:
+                log_file.write(
+                    f" - ERROR: year range '{year_range_field}': start year {fn_start_year} is after end year {fn_end_year}.\n"
+                )
+                errors += 1
+            elif "time" in ds.coords:
+                actual_start = min(ds["time"]).values.astype("datetime64[D]").item().year
+                actual_end = max(ds["time"]).values.astype("datetime64[D]").item().year
+                if fn_start_year != actual_start:
+                    log_file.write(
+                        f" - ERROR: filename start year {fn_start_year} does not match first time step year {actual_start}.\n"
+                    )
+                    errors += 1
+                if fn_end_year != actual_end:
+                    log_file.write(
+                        f" - ERROR: filename end year {fn_end_year} does not match last time step year {actual_end}.\n"
+                    )
+                    errors += 1
+                if fn_start_year == actual_start and fn_end_year == actual_end:
+                    log_file.write(
+                        f" - Filename year range {fn_start_year}-{fn_end_year} matches time axis: OK\n"
+                    )
 
     return errors
 
@@ -711,7 +817,7 @@ def _check_spatial(
         log_file.write(" - Grid: Upper right corner is well defined.\n")
     else:
         log_file.write(
-            " - ERROR: Upper rigth corner of the grid ["
+            " - ERROR: Upper right corner of the grid ["
             + str(Xtopright) + "," + str(Ytopright)
             + "] is not correctly defined. ["
             + str(grid_extent[2]) + "," + str(grid_extent[3])
@@ -754,7 +860,7 @@ def _check_time(
     log_file.write("TIME Tests \n")
     if not ({"t"}.issubset(dim) or {"time"}.issubset(dim)):
         log_file.write(
-            " - ERROR: The time dimensions is missing. Time Tests have been ignored.\n"
+            " - ERROR: The time dimension is missing. Time Tests have been ignored.\n"
         )
         return errors + 1
 
@@ -784,7 +890,7 @@ def _check_time(
 
     if not _strictly_increasing(ds.coords["time"]):
         log_file.write(
-            " - ERROR: the time serie is not monotonous. Time segments have probably been concatenate in a wrong order.\n"
+            " - ERROR: the time series is not monotonically increasing. Time segments may have been concatenated in the wrong order.\n"
         )
         return errors + 1
 
@@ -946,6 +1052,8 @@ def _check_attributes(
     region: str,
 ) -> int:
     errors = 0
+
+    log_file.write("ATTRIBUTE Tests \n")
 
     # Sub-test 1: global attributes
     required_global = ["group", "model", "contact_name", "contact_email"]
@@ -1136,7 +1244,7 @@ def _run_variable_checks(
     index = ismip_var.index(considered_variable)
     isscalar = ismip_meta[index]["dim"] == "t"
 
-    n_err = _check_naming(log_file, file_name, region, dim, isscalar, report_naming_issues)
+    n_err = _check_naming(log_file, ds, file_name, region, dim, isscalar, report_naming_issues)
     var_naming_errors += n_err
     if n_err > 0:
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors

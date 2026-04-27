@@ -1,57 +1,63 @@
-# Ice Sheet Simulation compliance checker
+# Ice Sheet Simulation Compliance Checker
 
-The script checks the compliance of a simulation dataset according to criteria, which are related to:
+Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data request conventions](https://www.ismip.org/). The following categories are validated for every file:
 
-* naming conventions
-* admissible numerical values,
-* spatial definition of the grid (different for AIS vs GrIS),
-* time recording dependent of the experiments.
+1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (`YYYY-YYYY` matching the actual time axis).
+2. **Numerical** — units match the data request; all values lie within the allowed min/max range for the relevant region; array is not entirely fill values.
+3. **Spatial** *(xyt variables only)* — grid corners lie within the expected AIS or GrIS extents; resolution is one of the allowed values; x and y cell size are equal.
+4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence; experiment end date and duration match `experiments_ismip7.csv`.
+5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-The compliance criteria of output variables and experiments are defined in a separate csv files. 
+Compliance criteria are defined in `conventions/ISMIP7_variable_request.xlsx` (variable metadata) and `experiments_ismip7.csv` (valid experiment date ranges).
 
-=> For ISMIP7 simulations, the criteria are following the conventions defined on the [ISMIP7 webpage](https://www.ismip.org/). The associated csv file is [ismip7_criteria.csv](https://github.com/ismip/ISM_SimulationChecker/blob/main/ismip7_criteria.csv)
+---
 
-*************************************************
+## Setup
 
-### Python and dependencies
+```bash
+conda env create -f isschecker_env.yml
+conda activate isschecker
+```
 
-The code has been developed with python 3.9 and the following modules:
+Dependencies: Python 3.9, `numpy`, `pandas`, `xarray`, `cftime`, `netCDF4`, `tqdm`.
 
-* os
-* xarray
-* cftime
-* numpy
-* pandas
-* datetime
-* tqdm
+---
 
-=> Conda users can install the **isscheck** environnment with the YML file [isschecker_env.yml](https://github.com/ismip/ISM_SimulationChecker/blob/main/isschecker_env.yml).
-`> conda env create -f isschecker_env.yml`
+## Running the checker
 
+The script must be run from the repository root. It writes `compliance_checker_log.txt` into the `--source-path` directory.
 
-*************************************************
+```bash
+# Check x,y,t (3D spatial) variables
+python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --variable-list ismip7_xyt
 
-### How to launch a compliance check
+# Check scalar (time-only) variables
+python compliance_checker.py --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE --variable-list ismip7_scalars
 
-1. Conda users: activate the isschecker environment: `> conda activate isschecker`.
+# Check both
+python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --variable-list ismip7
+```
 
-2. Run the checker with the path to your CORE directory and an experiment set:
-   ```
-   python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --experiment-set ismip7_xyt
-   ```
-   Use `--experiment-set ismip7_scalars` for scalar-only variables, or `ismip7` for both.
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE` | Directory containing `.nc` files to check |
+| `--variable-list` | `ismip7_scalars` | `ismip7_xyt`, `ismip7_scalars`, or `ismip7` (both) |
 
-3. The script creates a `compliance_checker_log.txt` file in the source path reporting all errors and warnings.
+---
 
-
-*************************************************
-
-### Generate synthetic test files
+## Generating synthetic test files
 
 `test/generate_test_files.py` creates ISMIP7-style NetCDF test files with synthetic data. See [test/README.md](test/README.md) for full options and examples.
 
-Quick start:
 ```bash
 conda activate isschecker
+
+# Generate 286-year GrIS ctrl xyt variables
 python test/generate_test_files.py --grid GrIS_16000m --scenario ctrl --xyt --nyears 286 --start-year 2015
+
+# Generate 286-year AIS ctrl scalar variables
+python test/generate_test_files.py --grid AIS_16000m --scenario ctrl --scalars --nyears 286 --start-year 2015
+
+# List available grids
+python test/generate_test_files.py --list-grids
 ```
