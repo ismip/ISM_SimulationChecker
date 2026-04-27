@@ -113,6 +113,8 @@ def _load_criteria(workdir: str, variable_list: str):
             "dim": str(row["Dim"]),
             "units": str(row["units"]) if pd.notna(row["units"]) else "",
             "mandatory": 1 if str(row["Mandatory (yes/no)"]).lower() == "yes" else 0,
+            "standard_name": str(row["standard_name"]) if pd.notna(row["standard_name"]) else None,
+            "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -184,6 +186,7 @@ def _run_compliance_checker(
             total_num_errors=summary["total_num_errors"],
             total_spatial_errors=summary["total_spatial_errors"],
             total_time_errors=summary["total_time_errors"],
+            total_attr_errors=summary["total_attr_errors"],
             report_naming_issues=summary["report_naming_issues"],
         )
 
@@ -220,6 +223,7 @@ def _process_experiments(
     total_num_errors = 0
     total_spatial_errors = 0
     total_time_errors = 0
+    total_attr_errors = 0
     total_file_errors = 0
     report_naming_issues = []
 
@@ -245,6 +249,7 @@ def _process_experiments(
         total_num_errors += exp_summary["exp_num_errors"]
         total_spatial_errors += exp_summary["exp_spatial_errors"]
         total_time_errors += exp_summary["exp_time_errors"]
+        total_attr_errors += exp_summary["exp_attr_errors"]
         total_file_errors += exp_summary["exp_file_errors"]
 
         _print_experiment_summary(
@@ -257,6 +262,7 @@ def _process_experiments(
         + total_num_errors
         + total_spatial_errors
         + total_time_errors
+        + total_attr_errors
         + total_file_errors
     )
     _print_total_summary(source_path=source_path, total_errors=total_errors)
@@ -269,6 +275,7 @@ def _process_experiments(
         "total_num_errors": total_num_errors,
         "total_spatial_errors": total_spatial_errors,
         "total_time_errors": total_time_errors,
+        "total_attr_errors": total_attr_errors,
         "total_file_errors": total_file_errors,
         "report_naming_issues": report_naming_issues,
     }
@@ -289,6 +296,7 @@ def _process_single_experiment(
     exp_num_errors = 0
     exp_spatial_errors = 0
     exp_time_errors = 0
+    exp_attr_errors = 0
     exp_file_errors = 0
 
     temp_mandatory_var = list(mandatory_variables)
@@ -337,6 +345,7 @@ def _process_single_experiment(
             exp_num_errors += file_summary["var_num_errors"]
             exp_spatial_errors += file_summary["var_spatial_errors"]
             exp_time_errors += file_summary["var_time_errors"]
+            exp_attr_errors += file_summary["var_attr_errors"]
 
     else:
         log_file.write("\n ")
@@ -363,6 +372,7 @@ def _process_single_experiment(
         + exp_spatial_errors
         + exp_num_errors
         + exp_naming_errors
+        + exp_attr_errors
         + exp_file_errors
     )
     return {
@@ -373,6 +383,7 @@ def _process_single_experiment(
         "exp_num_errors": exp_num_errors,
         "exp_spatial_errors": exp_spatial_errors,
         "exp_time_errors": exp_time_errors,
+        "exp_attr_errors": exp_attr_errors,
         "exp_file_errors": exp_file_errors,
     }
 
@@ -391,6 +402,7 @@ def _process_single_file(
     var_num_errors = 0
     var_spatial_errors = 0
     var_time_errors = 0
+    var_attr_errors = 0
 
     file_name = os.path.basename(file)
     file_name_split = file_name.split("_")
@@ -408,6 +420,7 @@ def _process_single_file(
             "var_num_errors": var_num_errors,
             "var_spatial_errors": var_spatial_errors,
             "var_time_errors": var_time_errors,
+            "var_attr_errors": var_attr_errors,
         }
     file_variables = list(ds.data_vars)
 
@@ -432,6 +445,7 @@ def _process_single_file(
             "var_num_errors": var_num_errors,
             "var_spatial_errors": var_spatial_errors,
             "var_time_errors": var_time_errors,
+            "var_attr_errors": var_attr_errors,
         }
 
     experiment_varname = file_name_split[ISMIP7_FILENAME_EXPERIMENT_IDX]
@@ -460,10 +474,11 @@ def _process_single_file(
             "var_num_errors": var_num_errors,
             "var_spatial_errors": var_spatial_errors,
             "var_time_errors": var_time_errors,
+            "var_attr_errors": var_attr_errors,
         }
 
     if considered_variable in ismip_var:
-        var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors = (
+        var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors = (
             _run_variable_checks(
                 log_file=log_file,
                 ds=ds,
@@ -479,7 +494,7 @@ def _process_single_file(
             )
         )
 
-    var_errors = var_naming_errors + var_num_errors + var_spatial_errors + var_time_errors
+    var_errors = var_naming_errors + var_num_errors + var_spatial_errors + var_time_errors + var_attr_errors
 
     log_file.write("\n")
     log_file.write("----------------------------------------------------------\n")
@@ -498,6 +513,7 @@ def _process_single_file(
         "var_num_errors": var_num_errors,
         "var_spatial_errors": var_spatial_errors,
         "var_time_errors": var_time_errors,
+        "var_attr_errors": var_attr_errors,
     }
 
 
@@ -803,6 +819,91 @@ def _check_time(
     return errors
 
 
+def _check_attributes(
+    log_file,
+    ds,
+    ivar: str,
+    ismip_meta: list,
+    var_index: int,
+    isscalar: bool,
+    var_type: str,
+) -> int:
+    errors = 0
+
+    # Sub-test 1: global attributes
+    required_global = ["group", "model", "contact_name", "contact_email"]
+    global_errors = 0
+    for attr in required_global:
+        if attr not in ds.attrs:
+            log_file.write(f" - ERROR (attributes): global attribute '{attr}' is missing.\n")
+            global_errors += 1
+    if global_errors == 0:
+        log_file.write(" - Global attributes: OK\n")
+    errors += global_errors
+
+    # Sub-test 2: coordinate attributes
+    coord_errors = 0
+    time_coord = None
+    for name in ("time", "t"):
+        if name in ds.coords:
+            time_coord = name
+            break
+    if time_coord is None:
+        log_file.write(" - ERROR (attributes): coordinate 'time' not found.\n")
+        coord_errors += 1
+    else:
+        # xarray decodes 'units' and 'calendar' into .encoding; 'bounds' stays in .attrs
+        time_var = ds[time_coord]
+        combined = {**time_var.encoding, **time_var.attrs}
+        time_attrs_required = ["units", "calendar"]
+        if var_type != "ST":
+            time_attrs_required.append("bounds")
+        for attr in time_attrs_required:
+            if attr not in combined:
+                log_file.write(
+                    f" - ERROR (attributes): coordinate '{time_coord}' missing attribute '{attr}'.\n"
+                )
+                coord_errors += 1
+    if not isscalar:
+        for coord in ("x", "y"):
+            if coord in ds.coords:
+                if "units" not in ds[coord].attrs:
+                    log_file.write(
+                        f" - ERROR (attributes): coordinate '{coord}' missing attribute 'units'.\n"
+                    )
+                    coord_errors += 1
+            else:
+                log_file.write(
+                    f" - ERROR (attributes): coordinate '{coord}' not found.\n"
+                )
+                coord_errors += 1
+    if coord_errors == 0:
+        log_file.write(" - Coordinate attributes: OK\n")
+    errors += coord_errors
+
+    # Sub-test 3: variable standard_name
+    var_errors = 0
+    expected_standard_name = ismip_meta[var_index].get("standard_name")
+    if expected_standard_name is not None and ivar in ds:
+        if "standard_name" not in ds[ivar].attrs:
+            log_file.write(
+                f" - ERROR (attributes): variable '{ivar}' missing 'standard_name' attribute.\n"
+            )
+            var_errors += 1
+        elif ds[ivar].attrs["standard_name"] != expected_standard_name:
+            log_file.write(
+                f" - ERROR (attributes): variable '{ivar}' standard_name"
+                f" '{ds[ivar].attrs['standard_name']}'"
+                f" does not match expected '{expected_standard_name}'.\n"
+            )
+            var_errors += 1
+    if var_errors == 0:
+        log_file.write(" - Variable attributes: OK\n")
+    errors += var_errors
+
+    return errors
+
+
 def _run_variable_checks(
     log_file,
     ds,
@@ -820,6 +921,7 @@ def _run_variable_checks(
     var_num_errors = 0
     var_spatial_errors = 0
     var_time_errors = 0
+    var_attr_errors = 0
 
     log_file.write(" \n")
     log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
@@ -834,7 +936,7 @@ def _run_variable_checks(
     n_err = _check_naming(log_file, file_name, region, dim, isscalar, report_naming_issues)
     var_naming_errors += n_err
     if n_err > 0:
-        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
+        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
     grid_extent = AIS_GRID_EXTENT if region == "AIS" else GrIS_GRID_EXTENT
     possible_resolution = AIS_POSSIBLE_RESOLUTION if region == "AIS" else GrIS_POSSIBLE_RESOLUTION
@@ -852,7 +954,9 @@ def _run_variable_checks(
 
             var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name)
 
-    return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors
+            var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, ismip_meta[var_index].get("type", ""))
+
+    return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
 
 def _print_experiment_summary(experiment_name: str, exp_errors: int) -> None:
@@ -935,6 +1039,7 @@ def _insert_synthesis(
     total_num_errors: int,
     total_spatial_errors: int,
     total_time_errors: int,
+    total_attr_errors: int,
     report_naming_issues,
 ) -> None:
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "r") as f:
@@ -956,6 +1061,8 @@ def _insert_synthesis(
     contents.insert(iline, "  - Spatial Tests      : " + str(total_spatial_errors) + " error(s)\n")
     iline += 1
     contents.insert(iline, "  - Time Tests         : " + str(total_time_errors) + " error(s)\n")
+    iline += 1
+    contents.insert(iline, "  - Attribute Tests    : " + str(total_attr_errors) + " error(s)\n")
     iline += 2
     contents.insert(iline, "0 warning(s) detected.\n")
     iline += 2
