@@ -34,6 +34,7 @@
 
 import datetime
 import os
+import re
 import subprocess
 import argparse
 
@@ -54,7 +55,7 @@ EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
 
 AIS_GRID_EXTENT = [-3040000, -3040000, 3040000, 3040000]
 GrIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
-AIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
+AIS_POSSIBLE_RESOLUTION = [2, 4, 8, 16, 32]
 GrIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
 
 TIME_STEP_MIN_DAYS = 365
@@ -65,6 +66,9 @@ TIME_STEP_MAX_DAYS = 366
 ISMIP7_FILENAME_PARTS = 10
 ISMIP7_FILENAME_VAR_IDX = 0
 ISMIP7_FILENAME_REGION_IDX = 1
+ISMIP7_FILENAME_ISM_MEMBER_IDX = 4
+ISMIP7_FILENAME_FORCING_MEMBER_IDX = 6
+ISMIP7_FILENAME_SET_COUNTER_IDX = 8
 ISMIP7_FILENAME_EXPERIMENT_IDX = 7
 
 
@@ -587,6 +591,29 @@ def _check_naming(
         )
         errors += 1
 
+    parts = file_name.split("_")
+    if len(parts) == ISMIP7_FILENAME_PARTS:
+        ism_member = parts[ISMIP7_FILENAME_ISM_MEMBER_IDX]
+        if not re.fullmatch(r"m\d{3}", ism_member):
+            log_file.write(
+                f"- ERROR: ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001).\n"
+            )
+            errors += 1
+
+        forcing_member = parts[ISMIP7_FILENAME_FORCING_MEMBER_IDX]
+        if not re.fullmatch(r"f\d{3}", forcing_member):
+            log_file.write(
+                f"- ERROR: forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001).\n"
+            )
+            errors += 1
+
+        set_counter = parts[ISMIP7_FILENAME_SET_COUNTER_IDX]
+        if not re.fullmatch(r"[CEP]\d{3}", set_counter):
+            log_file.write(
+                f"- ERROR: set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132).\n"
+            )
+            errors += 1
+
     return errors
 
 
@@ -965,6 +992,16 @@ def _check_attributes(
                     f" - ERROR (attributes): coordinate '{time_coord}' missing attribute '{attr}'.\n"
                 )
                 coord_errors += 1
+        if "units" in combined and combined["units"] != "days since 1850-01-01":
+            log_file.write(
+                f" - ERROR (attributes): time 'units' is '{combined['units']}', expected 'days since 1850-01-01'.\n"
+            )
+            coord_errors += 1
+        if "calendar" in combined and combined["calendar"] != "standard":
+            log_file.write(
+                f" - ERROR (attributes): time 'calendar' is '{combined['calendar']}', expected 'standard'.\n"
+            )
+            coord_errors += 1
     if not isscalar:
         for coord in ("x", "y"):
             if coord in ds.coords:
