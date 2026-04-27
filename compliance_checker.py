@@ -11,12 +11,10 @@ from tqdm import tqdm
 
 
 DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE"
-DEFAULT_EXPERIMENT_SET = "ismip7_scalars"
-EXPERIMENT_SET_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
+DEFAULT_VARIABLE_LIST = "ismip7_scalars"
+VARIABLE_LIST_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
 
-CRITERIA_ISMIP7_SCALARS_CSV_FILENAME = "criteria_ismip7_scalars.csv"
-CRITERIA_ISMIP7_XYT_CSV_FILENAME = "criteria_ismip7_xyt.csv"
-CRITERIA_ISMIP7_CSV_FILENAME = "criteria_ismip7.csv"
+VARIABLE_REQUEST_XLSX = os.path.join("conventions", "ISMIP7_variable_request.xlsx")
 
 EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
 
@@ -39,28 +37,14 @@ ISMIP7_FILENAME_EXPERIMENT_IDX = 7
 def main() -> None:
     args = _parse_args()
     source_path = args.source_path
-    experiment_set = args.experiment_set
+    variable_list = args.variable_list
     workdir = os.getcwd()
 
     commit_num = _get_commit_number()
     experiments_ismip7 = _load_experiments_csv(
         os.path.join(workdir, EXPERIMENTS_ISMIP7_CSV_FILENAME)
     )
-    if experiment_set == "ismip7_scalars":
-        experiments = experiments_ismip7
-        criteria_file = CRITERIA_ISMIP7_SCALARS_CSV_FILENAME
-    elif experiment_set == "ismip7_xyt":
-        experiments = experiments_ismip7
-        criteria_file = CRITERIA_ISMIP7_XYT_CSV_FILENAME
-    elif experiment_set == "ismip7":
-        experiments = experiments_ismip7
-        criteria_file = CRITERIA_ISMIP7_CSV_FILENAME
-    else:
-        raise ValueError(
-            "Experiment set not recognized. Please choose between 'ismip7', 'ismip7_xyt' and 'ismip7_scalars'."
-        )
-
-    ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir, criteria_file)
+    ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir, variable_list)
 
     _run_compliance_checker(
         source_path=source_path,
@@ -68,8 +52,8 @@ def main() -> None:
         ismip_meta=ismip_meta,
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
-        experiments=experiments,
-        criteria_file=criteria_file,
+        experiments=experiments_ismip7,
+        criteria_file=VARIABLE_REQUEST_XLSX,
     )
 
 
@@ -96,32 +80,52 @@ def _parse_args() -> argparse.Namespace:
         help="Path to the directory containing the CORE NetCDF files.",
     )
     parser.add_argument(
-        "--experiment-set",
-        choices=EXPERIMENT_SET_CHOICES,
-        default=DEFAULT_EXPERIMENT_SET,
-        help="Experiment set rules to apply: ismip7 or ismip7_scalars.",
+        "--variable-list",
+        choices=VARIABLE_LIST_CHOICES,
+        default=DEFAULT_VARIABLE_LIST,
+        help="Variable list to apply: ismip7 or ismip7_scalars.",
     )
     return parser.parse_args()
 
 
-def _load_criteria(workdir: str, criteria_file: str):
+def _load_criteria(workdir: str, variable_list: str):
+    excel_path = os.path.join(workdir, VARIABLE_REQUEST_XLSX)
     try:
-        ismip = pd.read_csv(
-            os.path.join(workdir, criteria_file),
-            delimiter=";",
-            decimal=",",
-        )
+        df = pd.read_excel(excel_path, sheet_name="ISM")
     except IOError:
         print(
-            "ERROR: Unable to open the compliance criteria file (.csv required with ; as delimiter and , for decimal.). Is the path to the file correct ? "
-            + workdir
-            + criteria_file
+            "ERROR: Unable to open the variable request file. Is the path correct? "
+            + excel_path
         )
         raise
 
-    ismip_meta = ismip.to_dict("records")
-    ismip_var = [dic["variable"] for dic in ismip_meta]
-    ismip_mandatory_var = ismip["variable"][ismip.mandatory == 1].tolist()
+    df = df.dropna(subset=["Variable Name"])
+
+    if variable_list == "ismip7_xyt":
+        df = df[df["Dim"] == "x,y,t"]
+    elif variable_list == "ismip7_scalars":
+        df = df[df["Dim"] == "t"]
+
+    ismip_meta = []
+    for _, row in df.iterrows():
+        entry = {
+            "variable": row["Variable Name"],
+            "dim": str(row["Dim"]),
+            "units": str(row["units"]) if pd.notna(row["units"]) else "",
+            "mandatory": 1 if str(row["Mandatory (yes/no)"]).lower() == "yes" else 0,
+        }
+        for col in df.columns:
+            lc = str(col).lower()
+            if lc.startswith("min_") or lc.startswith("max_"):
+                try:
+                    val = row[col]
+                    entry[lc] = None if pd.isna(val) else float(val)
+                except Exception:
+                    entry[lc] = None
+        ismip_meta.append(entry)
+
+    ismip_var = [d["variable"] for d in ismip_meta]
+    ismip_mandatory_var = [d["variable"] for d in ismip_meta if d["mandatory"] == 1]
     return ismip_meta, ismip_var, ismip_mandatory_var
 
 
