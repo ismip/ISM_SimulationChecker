@@ -19,7 +19,7 @@ conda env create -f isschecker_env.yml
 conda activate isschecker
 ```
 
-Dependencies: Python 3.9, `numpy`, `pandas`, `xarray`, `cftime`, `netCDF4`, `tqdm`.
+Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `openpyxl` 3.1, `xarray` 2026.4, `cftime` 1.6, `netCDF4` 1.7, `tqdm` 4.67.
 
 ---
 

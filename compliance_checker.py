@@ -514,7 +514,8 @@ def _process_single_file(
     region = file_name_split[ISMIP7_FILENAME_REGION_IDX]
 
     try:
-        ds = xr.open_dataset(os.path.join(source_path, file), use_cftime=True)
+        ds = xr.open_dataset(os.path.join(source_path, file),
+                             decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
     except (ValueError, TypeError) as e:
         log_file.write(" - ERROR: Cannot open " + file_name + ": " + str(e) + "\n")
         var_naming_errors += 1
