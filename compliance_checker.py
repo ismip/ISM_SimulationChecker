@@ -875,6 +875,16 @@ def _check_time(
         )
         errors += 1
 
+    try:
+        ds = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
+    except Exception as err:
+        log_file.write(
+            " - ERROR: The time coordinate could not be decoded.  Time checks cannot proceed.\n"
+        )
+        errors += 1
+        # we can't proceed because the next steps will crash
+        return errors
+      
     start_exp = min(ds["time"]).values.astype("datetime64[D]")
     end_exp = max(ds["time"]).values.astype("datetime64[D]")
     duration_years = end_exp.item().year - start_exp.item().year + 1
