@@ -1,7 +1,6 @@
 name: isschecker
 channels: 
   - conda-forge 
-  - defaults 
 dependencies: 
   - python=3.14
   - pip=26.0.1
