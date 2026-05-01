@@ -155,7 +155,7 @@ def read_variable_criteria(excel_file, include_non_mandatory=False):
     return variables
 
 
-def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32):
+def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6):
     """
     Generate synthetic data within specified range.
     
