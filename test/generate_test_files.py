@@ -178,7 +178,8 @@ def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6)
     np.ndarray
         Random data within the specified range
     """
-    data = np.random.uniform(min_val, max_val, shape).astype(dtype)
+    delta = eps * (max_val - min_val)
+    data = np.random.uniform(min_val + delta, max_val - delta, shape).astype(dtype)
     return data
 
 
