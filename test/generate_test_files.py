@@ -169,6 +169,9 @@ def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6)
         Maximum value
     dtype : type
         Data type for the array
+    eps : float, optional
+        A small fraction by which `min_val` and `max_val` move toward one another to avoid
+        synthetic data that violates numerical checks because of roundoff.
         
     Returns
     -------
