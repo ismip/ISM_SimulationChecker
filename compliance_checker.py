@@ -704,8 +704,9 @@ def _check_naming(
                 )
                 errors += 1
             elif "time" in ds.coords:
-                actual_start = min(ds["time"]).values.astype("datetime64[D]").item().year
-                actual_end = max(ds["time"]).values.astype("datetime64[D]").item().year
+                _decoded_time = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))["time"]
+                actual_start = min(_decoded_time).item().year
+                actual_end = max(_decoded_time).item().year
                 if fn_start_year != actual_start:
                     log_file.write(
                         f" - ERROR: filename start year {fn_start_year} does not match first time step year {actual_start}.\n"
