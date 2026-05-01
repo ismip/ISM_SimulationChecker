@@ -515,7 +515,7 @@ def _process_single_file(
 
     try:
         ds = xr.open_dataset(os.path.join(source_path, file),
-                             decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
+                             decode_times=False)
     except (ValueError, TypeError) as e:
         log_file.write(" - ERROR: Cannot open " + file_name + ": " + str(e) + "\n")
         var_naming_errors += 1
