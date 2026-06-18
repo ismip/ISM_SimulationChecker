@@ -154,8 +154,8 @@ def test_checker_reports_historical_time_range_violation(case_dir):
     set_time_values(
         target_file,
         [
-            datetime(2015, 12, 31),
-            datetime(2016, 12, 31),
+            datetime(2016, 1, 1),
+            datetime(2017, 1, 1),
         ],
     )
     rename_file_part(

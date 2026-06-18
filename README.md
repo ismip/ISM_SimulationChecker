@@ -5,10 +5,29 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (`YYYY-YYYY` matching the actual time axis).
 2. **Numerical** — units match the data request; all values lie within the allowed min/max range for the relevant region; array is not entirely fill values.
 3. **Spatial** *(xyt variables only)* — grid corners lie within the expected AIS or GrIS extents; resolution is one of the allowed values; x and y cell size are equal.
-4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence; experiment end date and duration match `experiments_ismip7.csv`.
+4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence; experiment start/end dates and duration match `experiments_ismip7.csv`, accounting for the variable type (ST or FL, see [Time encoding](#time-encoding)).
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-Compliance criteria are defined in `conventions/ISMIP7_variable_request.xlsx` (variable metadata) and `experiments_ismip7.csv` (valid experiment date ranges).
+Compliance criteria are defined in `conventions/ISMIP7_variable_request.xlsx` (variable metadata) and `experiments_ismip7.csv` (valid experiment year ranges and durations).
+
+---
+
+## Time encoding
+
+ISMIP7 uses the standard (Gregorian) CF calendar with time recorded as **days since 1850-01-01 00:00:00**. The encoding convention differs by variable type:
+
+| Variable type | Time coordinate | Time bounds |
+|---|---|---|
+| **State (ST)** — snapshots | Jan 1 of year N+1 (= end of year N) | none |
+| **Flux (FL)** — annual averages | Jul 1 of year N (mid-year) | Jan 1 of year N → Jan 1 of year N+1 |
+
+For example, a 286-year `ctrl` simulation covering nominal years 2015–2300:
+- ST files carry timestamps `2016-01-01` … `2301-01-01`
+- FL files carry timestamps `2015-07-01` … `2300-07-01`, with bounds `[2015-01-01, 2016-01-01]` … `[2300-01-01, 2301-01-01]`
+
+The filename year range (`YYYY-YYYY`) always refers to the **nominal simulation years** (2015–2300 in the example above), regardless of variable type. The checker accounts for this when validating the filename against the time axis.
+
+Reference lookup tables are available in the companion repository [`ismip7-time-encoding`](https://github.com/ismip/ismip7-time-encoding).
 
 ---
 
@@ -42,6 +61,8 @@ python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --va
 |--------|---------|-------------|
 | `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE` | Directory containing `.nc` files to check |
 | `--variable-list` | `ismip7_scalars` | `ismip7_xyt`, `ismip7_scalars`, or `ismip7` (both) |
+
+`experiments_ismip7.csv` defines the allowed nominal year ranges and durations for each experiment. The checker derives the expected FL and ST timestamps from these year values at runtime (see [Time encoding](#time-encoding)).
 
 ---
 
