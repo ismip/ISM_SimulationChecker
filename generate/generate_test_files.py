@@ -319,12 +319,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             # Select appropriate time coordinate (days since 1850, calendar: standard)
             origin = datetime(1850, 1, 1).date()
             if var_type == 'ST':
-                # End of year (Dec 31)
+                # End of year: Jan 1 of next year (ISMIP7 convention)
                 time_days = []
                 time_bounds = None
                 for i in range(nyears):
                     year = start_year + i
-                    dt = datetime(year, 12, 31).date()
+                    dt = datetime(year + 1, 1, 1).date()
                     time_days.append(float((dt - origin).days))
                 time_coord = np.array(time_days, dtype=np.float32)
             elif var_type == 'FL':
@@ -341,12 +341,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                     time_bounds[i, 1] = float((t1 - origin).days)
                 time_coord = np.array(time_days, dtype=np.float32)
             else:
-                # Default to state variable timing (end of year)
+                # Default to state variable timing (Jan 1 of next year)
                 time_days = []
                 time_bounds = None
                 for i in range(nyears):
                     year = start_year + i
-                    dt = datetime(year, 12, 31).date()
+                    dt = datetime(year + 1, 1, 1).date()
                     time_days.append(float((dt - origin).days))
                 time_coord = np.array(time_days, dtype=np.float32)
 
@@ -459,11 +459,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             # Select appropriate time coordinate (days since 1850)
             origin = datetime(1850, 1, 1).date()
             if var_type == 'ST':
+                # End of year: Jan 1 of next year (ISMIP7 convention)
                 time_days = []
                 time_bounds = None
                 for i in range(nyears):
                     year = start_year + i
-                    dt = datetime(year, 12, 31).date()
+                    dt = datetime(year + 1, 1, 1).date()
                     time_days.append(float((dt - origin).days))
                 time_coord = np.array(time_days, dtype=np.float32)
             elif var_type == 'FL':
@@ -479,11 +480,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                     time_bounds[i, 1] = float((t1 - origin).days)
                 time_coord = np.array(time_days, dtype=np.float32)
             else:
+                # Default to state variable timing (Jan 1 of next year)
                 time_days = []
                 time_bounds = None
                 for i in range(nyears):
                     year = start_year + i
-                    dt = datetime(year, 12, 31).date()
+                    dt = datetime(year + 1, 1, 1).date()
                     time_days.append(float((dt - origin).days))
                 time_coord = np.array(time_days, dtype=np.float32)
 

@@ -254,15 +254,25 @@ def _load_experiments_csv(file_path: str):
     for _, row in frame.iterrows():
         experiments.append(
             {
-                "experiment": row["experiment"],
-                "startinf": datetime.datetime.strptime(row["startinf"], "%Y-%m-%d"),
-                "startsup": datetime.datetime.strptime(row["startsup"], "%Y-%m-%d"),
-                "endinf": datetime.datetime.strptime(row["endinf"], "%Y-%m-%d"),
-                "endsup": datetime.datetime.strptime(row["endsup"], "%Y-%m-%d"),
-                "duration": int(row["duration"]),
+                "experiment":    row["experiment"],
+                "start_year_min": int(row["start_year_min"]),
+                "start_year_max": int(row["start_year_max"]),
+                "end_year":      int(row["end_year"]),
+                "duration":      int(row["duration"]),
             }
         )
     return experiments
+
+
+def _nominal_to_timestamp(year: int, var_type: str) -> datetime.datetime:
+    """Return the expected encoded timestamp for a nominal simulation year.
+
+    ST variables: Jan 1 of the following year (end-of-year snapshot).
+    FL variables: Jul 1 of the same year (mid-year average).
+    """
+    if var_type == "ST":
+        return datetime.datetime(year + 1, 1, 1)
+    return datetime.datetime(year, 7, 1)
 
 
 def _run_compliance_checker(
@@ -667,6 +677,7 @@ def _check_naming(
     dim: set,
     isscalar: bool,
     report_naming_issues: list,
+    var_type: str = "",
 ) -> int:
     errors = 0
 
@@ -745,8 +756,10 @@ def _check_naming(
                 errors += 1
             elif "time" in ds.coords:
                 _decoded_time = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))["time"]
-                actual_start = min(_decoded_time).item().year
-                actual_end = max(_decoded_time).item().year
+                # ST timestamps are Jan 1 of year+1; subtract 1 to recover the nominal simulation year.
+                _yr_offset = 1 if var_type == "ST" else 0
+                actual_start = min(_decoded_time).item().year - _yr_offset
+                actual_end = max(_decoded_time).item().year - _yr_offset
                 if fn_start_year != actual_start:
                     log_file.write(
                         f" - ERROR: filename start year {fn_start_year} does not match first time step year {actual_start}.\n"
@@ -896,6 +909,7 @@ def _check_time(
     dim: set,
     experiments: list,
     experiment_name: str,
+    var_type: str = "",
 ) -> int:
     errors = 0
 
@@ -977,6 +991,13 @@ def _check_time(
         end_exp.item().year, end_exp.item().month, end_exp.item().day
     )
 
+    # Compute expected timestamp windows from nominal years + var_type (±1 day tolerance).
+    _tol = datetime.timedelta(days=1)
+    startinf = _nominal_to_timestamp(exp["start_year_min"], var_type) - _tol
+    startsup  = _nominal_to_timestamp(exp["start_year_max"], var_type) + _tol
+    endinf    = _nominal_to_timestamp(exp["end_year"],       var_type) - _tol
+    endsup    = _nominal_to_timestamp(exp["end_year"],       var_type) + _tol
+
     if exp["duration"] == -1:
         # Undetermined length: only require >= 1 year, start and end date in range
         if duration_years >= 1:
@@ -994,7 +1015,7 @@ def _check_time(
         dateformat_start_exp = datetime.datetime(
             start_exp.item().year, start_exp.item().month, start_exp.item().day
         )
-        if exp["startinf"] <= dateformat_start_exp <= exp["startsup"]:
+        if startinf <= dateformat_start_exp <= startsup:
             log_file.write(
                 " - Experiment starts correctly on "
                 + start_exp.item().strftime("%Y-%m-%d")
@@ -1005,14 +1026,14 @@ def _check_time(
                 " - ERROR: the experiment starts the "
                 + start_exp.item().strftime("%Y-%m-%d")
                 + ". The date should be comprised between "
-                + exp["startinf"].strftime("%Y-%m-%d")
+                + startinf.strftime("%Y-%m-%d")
                 + " and "
-                + exp["startsup"].strftime("%Y-%m-%d")
+                + startsup.strftime("%Y-%m-%d")
                 + "\n"
             )
             errors += 1
 
-        if exp["endinf"] <= dateformat_end_exp <= exp["endsup"]:
+        if endinf <= dateformat_end_exp <= endsup:
             log_file.write(
                 " - Experiment ends correctly on "
                 + end_exp.item().strftime("%Y-%m-%d")
@@ -1023,9 +1044,9 @@ def _check_time(
                 " - ERROR: the experiment ends on "
                 + end_exp.item().strftime("%Y-%m-%d")
                 + ". The date should be comprised between "
-                + exp["endinf"].strftime("%Y-%m-%d")
+                + endinf.strftime("%Y-%m-%d")
                 + " and "
-                + exp["endsup"].strftime("%Y-%m-%d")
+                + endsup.strftime("%Y-%m-%d")
                 + "\n"
             )
             errors += 1
@@ -1037,7 +1058,7 @@ def _check_time(
                 start_exp.item().month,
                 start_exp.item().day,
             )
-            if exp["startinf"] <= dateformat_start_exp <= exp["startsup"]:
+            if startinf <= dateformat_start_exp <= startsup:
                 log_file.write(
                     " - Experiment starts correctly on "
                     + start_exp.item().strftime("%Y-%m-%d")
@@ -1048,14 +1069,14 @@ def _check_time(
                     " - ERROR: the experiment starts the "
                     + start_exp.item().strftime("%Y-%m-%d")
                     + ". The date should be comprised between "
-                    + exp["startinf"].strftime("%Y-%m-%d")
+                    + startinf.strftime("%Y-%m-%d")
                     + " and "
-                    + exp["startsup"].strftime("%Y-%m-%d")
+                    + startsup.strftime("%Y-%m-%d")
                     + "\n"
                 )
                 errors += 1
 
-            if exp["endinf"] <= dateformat_end_exp <= exp["endsup"]:
+            if endinf <= dateformat_end_exp <= endsup:
                 log_file.write(
                     " - Experiment ends correctly on "
                     + end_exp.item().strftime("%Y-%m-%d")
@@ -1066,9 +1087,9 @@ def _check_time(
                     " - ERROR: the experiment ends on "
                     + end_exp.item().strftime("%Y-%m-%d")
                     + ". The date should be comprised between "
-                    + exp["endinf"].strftime("%Y-%m-%d")
+                    + endinf.strftime("%Y-%m-%d")
                     + " and "
-                    + exp["endsup"].strftime("%Y-%m-%d")
+                    + endsup.strftime("%Y-%m-%d")
                     + "\n"
                 )
                 errors += 1
@@ -1295,8 +1316,9 @@ def _run_variable_checks(
 
     index = ismip_var.index(considered_variable)
     isscalar = ismip_meta[index]["dim"] == "t"
+    var_type = ismip_meta[index].get("type", "")
 
-    n_err = _check_naming(log_file, ds, file_name, region, dim, isscalar, report_naming_issues)
+    n_err = _check_naming(log_file, ds, file_name, region, dim, isscalar, report_naming_issues, var_type)
     var_naming_errors += n_err
     if n_err > 0:
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
@@ -1315,7 +1337,7 @@ def _run_variable_checks(
             if not isscalar:
                 var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
 
-            var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name)
+            var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name, ismip_meta[var_index].get("type", ""))
 
             var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, ismip_meta[var_index].get("type", ""), region)
 
