@@ -84,14 +84,14 @@ def parse_grid_file(gdf_file):
     return grid_params
 
 
-def read_variable_criteria(excel_file, include_non_mandatory=False):
+def read_variable_criteria(csv_file, include_non_mandatory=False):
     """
-    Read variable criteria from Excel file.
+    Read variable criteria from CSV file.
 
     Parameters
     ----------
-    excel_file : str
-        Path to the Excel file
+    csv_file : str
+        Path to the CSV file
     include_non_mandatory : bool
         Whether to include non-mandatory variables
 
@@ -104,8 +104,8 @@ def read_variable_criteria(excel_file, include_non_mandatory=False):
 
     variables = {}
 
-    # Read the Excel file
-    df = pd.read_excel(excel_file, sheet_name='ISM')
+    # Read the CSV file
+    df = pd.read_csv(csv_file)
 
     # Filter out rows that don't have variable names
     df = df.dropna(subset=['Variable Name'])
@@ -128,13 +128,13 @@ def read_variable_criteria(excel_file, include_non_mandatory=False):
         variables[var_name] = {
             'dimensions': dimensions,
             'type': row['Type'],
-            'description': row['long_name'],  # Use long_name from Excel
+            'description': row['long_name'],  # Use long_name from CSV
             'standard_name': row['standard_name'] if pd.notna(row['standard_name']) else '',
             'units': str(row['units']) if pd.notna(row['units']) else '',
             'mandatory': row['Mandatory (yes/no)'].lower() == 'yes',
         }
 
-        # Collect any min_/max_ columns (case-insensitive) from the Excel sheet
+        # Collect any min_/max_ columns (case-insensitive) from the CSV
         # Normalize keys to lowercase (e.g., 'min_gris', 'max_ais') and store
         for col in df.columns:
             try:
@@ -261,13 +261,13 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     xinc = grid_params['xinc']
     yinc = grid_params['yinc']
 
-    # Read variable criteria from Excel file
-    excel_file = conventions_dir / 'ISMIP7_variable_request.xlsx'
-    if not excel_file.exists():
-        print(f"Warning: {excel_file} not found")
+    # Read variable criteria from CSV file
+    csv_file = conventions_dir / 'ISMIP7_variable_request.csv'
+    if not csv_file.exists():
+        print(f"Warning: {csv_file} not found")
         variables = {}
     else:
-        variables = read_variable_criteria(str(excel_file), include_non_mandatory)
+        variables = read_variable_criteria(str(csv_file), include_non_mandatory)
 
     # Create coordinate arrays
     x = np.arange(nx, dtype=np.float32) * xinc + xfirst
@@ -688,7 +688,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--include-non-mandatory',
         action='store_true',
-        help='Include non-mandatory variables from the ISM Excel variable list'
+        help='Include non-mandatory variables from the ISM CSV variable list'
     )
     parser.add_argument(
         '--multiple',

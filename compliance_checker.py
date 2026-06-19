@@ -54,7 +54,7 @@ DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE"
 DEFAULT_VARIABLE_LIST = "ismip7_scalars"
 VARIABLE_LIST_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
 
-VARIABLE_REQUEST_XLSX = os.path.join("conventions", "ISMIP7_variable_request.xlsx")
+VARIABLE_REQUEST_CSV = os.path.join("conventions", "ISMIP7_variable_request.csv")
 
 EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
 
@@ -162,7 +162,7 @@ def run_checker(
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
         experiments=experiments_ismip7,
-        criteria_file=VARIABLE_REQUEST_XLSX,
+        criteria_file=VARIABLE_REQUEST_CSV,
     )
 
     log_path = os.path.join(source_path, "compliance_checker_log.txt")
@@ -206,13 +206,13 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _load_criteria(workdir: str, variable_list: str):
-    excel_path = os.path.join(workdir, VARIABLE_REQUEST_XLSX)
+    csv_path = os.path.join(workdir, VARIABLE_REQUEST_CSV)
     try:
-        df = pd.read_excel(excel_path, sheet_name="ISM")
+        df = pd.read_csv(csv_path)
     except IOError:
         print(
             "ERROR: Unable to open the variable request file. Is the path correct? "
-            + excel_path
+            + csv_path
         )
         raise
 

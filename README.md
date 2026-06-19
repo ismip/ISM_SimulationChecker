@@ -8,7 +8,7 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence; experiment start/end dates and duration match `experiments_ismip7.csv`, accounting for the variable type (ST or FL, see [Time encoding](#time-encoding)).
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-Compliance criteria are defined in `conventions/ISMIP7_variable_request.xlsx` (variable metadata) and `experiments_ismip7.csv` (valid experiment year ranges and durations).
+Compliance criteria are defined in `conventions/ISMIP7_variable_request.csv` (variable metadata) and `experiments_ismip7.csv` (valid experiment year ranges and durations).
 
 ---
 
@@ -38,7 +38,7 @@ conda env create -f isschecker_env.yml
 conda activate isschecker
 ```
 
-Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `openpyxl` 3.1, `xarray` 2026.4, `cftime` 1.6, `netCDF4` 1.7, `tqdm` 4.67.
+Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `xarray` 2026.4, `cftime` 1.6, `netCDF4` 1.7, `tqdm` 4.67.
 
 ---
 

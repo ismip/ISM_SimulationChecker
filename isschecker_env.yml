@@ -8,7 +8,6 @@ dependencies:
 # Core scientific python
   - numpy=2.4.3
   - pandas=3.0.2
-  - openpyxl=3.1.5
   - pytest=8.4.2
   - tqdm=4.67.3
 
