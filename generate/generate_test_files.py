@@ -122,6 +122,10 @@ def read_variable_criteria(csv_file, include_non_mandatory=False):
             dimensions = ['x', 'y', 't']
         elif dim_str == 't':
             dimensions = ['t']
+        elif dim_str == 'x,y,z,t':
+            dimensions = ['x', 'y', 'z', 't']
+        elif dim_str == 'x,y':
+            dimensions = ['x', 'y']
         else:
             dimensions = ['x', 'y', 't']  # Default
 
@@ -185,7 +189,7 @@ def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6)
 
 def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', start_year=2015, nyears=5,
                        conventions_dir=None, include_non_mandatory=False, include_scalars=False,
-                       include_xyt=False, output_root=None,
+                       include_xyt=False, output_root=None, nz=5,
                        ism_member_id='m001', esm_id='CESM2-WACCM', forcing_member_id='f001', set_counter='C001'):
     """
     Create NetCDF files with ISMIP7 variables (one file per variable).
@@ -289,6 +293,14 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     # Create variables with x-y-t dimensions
     xyt_vars = {var: info for var, info in variables.items()
                if info['dimensions'] == ['x', 'y', 't']}
+
+    # 4D variables with vertical z axis (e.g. litemp)
+    xyzt_vars = {var: info for var, info in variables.items()
+                if info['dimensions'] == ['x', 'y', 'z', 't']}
+
+    # Static 2D spatial variables (e.g. ref_geoid)
+    static_vars = {var: info for var, info in variables.items()
+                  if info['dimensions'] == ['x', 'y']}
 
     # Create scalar time-series variables (t dimension only)
     scalar_vars = {var: info for var, info in variables.items()
@@ -450,6 +462,150 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             created_files.append(str(output_path))
     else:
         print(f"Skipping x,y,t variables (include_xyt=False); {len(xyt_vars)} variables not written")
+
+    # Process x,y,z,t variables (4D snapshots, e.g. litemp)
+    if include_xyt:
+        _SNAPSHOT_NOMINAL_YEARS = {1900, 2014, 2100, 2200, 2300}
+        end_year = start_year + nyears - 1
+        snapshot_years = sorted(
+            {start_year} | {y for y in _SNAPSHOT_NOMINAL_YEARS if start_year <= y <= end_year}
+        )
+        origin = datetime(1850, 1, 1).date()
+
+        for var_name, var_info in xyzt_vars.items():
+            # ST only for x,y,z,t variables per ISMIP7 spec
+            time_days = [float((datetime(y + 1, 1, 1).date() - origin).days) for y in snapshot_years]
+            time_coord = np.array(time_days, dtype=np.float32)
+            n_snapshots = len(snapshot_years)
+
+            min_val = var_info.get(val_key_min)
+            max_val = var_info.get(val_key_max)
+            if min_val is None and max_val is None:
+                min_val, max_val = -1e6, 1e6
+            else:
+                if min_val is None:
+                    min_val = max_val - 1.0
+                if max_val is None:
+                    max_val = min_val + 1.0
+            if min_val >= max_val:
+                max_val = min_val + 1.0
+
+            data = generate_synthetic_data((n_snapshots, nz, ny, nx), min_val, max_val)
+
+            data_vars = {
+                var_name: (
+                    ('time', 'z', 'y', 'x'),
+                    data.astype(np.float32),
+                    {
+                        'long_name': var_info['description'],
+                        'units': var_info['units'],
+                        'standard_name': var_info['standard_name'],
+                    }
+                )
+            }
+
+            z = np.arange(nz, dtype=np.float32)
+            coords = {
+                'x': ('x', x, {'long_name': 'x-coordinate', 'units': 'm'}),
+                'y': ('y', y, {'long_name': 'y-coordinate', 'units': 'm'}),
+                'z': ('z', z, {'long_name': 'z-coordinate', 'units': '1'}),
+                'time': ('time', time_coord, {'long_name': 'time', 'units': 'days since 1850-01-01', 'calendar': 'standard'}),
+            }
+
+            ds = xr.Dataset(data_vars, coords=coords)
+            ds.attrs.update({
+                'title': f'ISMIP7 synthetic data - {var_name}',
+                'history': f'Generated on {datetime.now().isoformat()}',
+                'Conventions': 'CF-1.7',
+                'grid_type': grid_type,
+                'grid_resolution': resolution,
+                'group': group,
+                'model': model,
+                'contact_name': contact_names,
+                'contact_email': contact_emails,
+                'crs': domain_crs,
+            })
+
+            snap_time_range = f"{snapshot_years[0]}-{snapshot_years[-1]}"
+            snap_filename_template = (
+                f"{domain_id}_{source_id}_{ism_id}_{ism_member_id}_{esm_id}_{forcing_member_id}_"
+                f"{experiment_id}_{set_counter}_{snap_time_range}.nc"
+            )
+            filename = f"{var_name}_{snap_filename_template}"
+            output_path = output_dir / filename
+
+            encoding = {
+                var_name: {'dtype': 'f4', '_FillValue': fillval},
+                'time': {'dtype': 'f4', '_FillValue': fillval},
+            }
+
+            ds.to_netcdf(output_path, unlimited_dims=('time',), encoding=encoding)
+            with netCDF4.Dataset(output_path, 'a') as nc:
+                nc[var_name].missing_value = fillval
+            created_files.append(str(output_path))
+
+    # Process static x,y variables (e.g. ref_geoid)
+    if include_xyt:
+        for var_name, var_info in static_vars.items():
+            min_val = var_info.get(val_key_min)
+            max_val = var_info.get(val_key_max)
+            if min_val is None and max_val is None:
+                min_val, max_val = -1e6, 1e6
+            else:
+                if min_val is None:
+                    min_val = max_val - 1.0
+                if max_val is None:
+                    max_val = min_val + 1.0
+            if min_val >= max_val:
+                max_val = min_val + 1.0
+
+            data = generate_synthetic_data((ny, nx), min_val, max_val)
+
+            data_vars = {
+                var_name: (
+                    ('y', 'x'),
+                    data.astype(np.float32),
+                    {
+                        'long_name': var_info['description'],
+                        'units': var_info['units'],
+                        'standard_name': var_info['standard_name'],
+                    }
+                )
+            }
+
+            coords = {
+                'x': ('x', x, {'long_name': 'x-coordinate', 'units': 'm'}),
+                'y': ('y', y, {'long_name': 'y-coordinate', 'units': 'm'}),
+            }
+
+            ds = xr.Dataset(data_vars, coords=coords)
+            ds.attrs.update({
+                'title': f'ISMIP7 synthetic data - {var_name}',
+                'history': f'Generated on {datetime.now().isoformat()}',
+                'Conventions': 'CF-1.7',
+                'grid_type': grid_type,
+                'grid_resolution': resolution,
+                'group': group,
+                'model': model,
+                'contact_name': contact_names,
+                'contact_email': contact_emails,
+                'crs': domain_crs,
+            })
+
+            # Static field: use 0000-0000 as year-range placeholder (checker skips this check)
+            static_filename_template = (
+                f"{domain_id}_{source_id}_{ism_id}_{ism_member_id}_{esm_id}_{forcing_member_id}_"
+                f"{experiment_id}_{set_counter}_0000-0000.nc"
+            )
+            filename = f"{var_name}_{static_filename_template}"
+            output_path = output_dir / filename
+
+            encoding = {var_name: {'dtype': 'f4', '_FillValue': fillval}}
+
+            ds.to_netcdf(output_path, unlimited_dims=(), encoding=encoding)
+            with netCDF4.Dataset(output_path, 'a') as nc:
+                nc[var_name].missing_value = fillval
+            created_files.append(str(output_path))
 
     # Process scalar variables
     if include_scalars:
@@ -683,7 +839,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '--xyt',
         action='store_true',
-        help='Write x,y,t variables'
+        help='Write spatial variables: x,y,t (3D), x,y,z,t (4D snapshot), and x,y (static)'
     )
     parser.add_argument(
         '--include-non-mandatory',
