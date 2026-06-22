@@ -245,9 +245,9 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     # Determine output directory
     models_dir = Path(output_root) if output_root is not None else Path(__file__).parent.parent / 'Models'
     if grid_type == 'AIS':
-        output_dir = models_dir / 'AIS' / group / model / 'CORE'
+        output_dir = models_dir / 'AIS' / group / model / 'CORE' / set_counter
     else:  # GrIS
-        output_dir = models_dir / 'GrIS' / group / model / 'CORE'
+        output_dir = models_dir / 'GrIS' / group / model / 'CORE' / set_counter
 
     output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -465,11 +465,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
 
     # Process x,y,z,t variables (4D snapshots, e.g. litemp)
     if include_xyt:
-        _SNAPSHOT_NOMINAL_YEARS = {1900, 2014, 2100, 2200, 2300}
+        _SNAPSHOT_NOMINAL_YEARS = {1900, 2000, 2100, 2200, 2300}
         end_year = start_year + nyears - 1
-        snapshot_years = sorted(
-            {start_year} | {y for y in _SNAPSHOT_NOMINAL_YEARS if start_year <= y <= end_year}
-        )
+        snap_set = {end_year} | {y for y in _SNAPSHOT_NOMINAL_YEARS if start_year <= y <= end_year}
+        if scenario == 'historical':
+            snap_set.add(start_year)
+        snapshot_years = sorted(snap_set)
         origin = datetime(1850, 1, 1).date()
 
         for var_name, var_info in xyzt_vars.items():
@@ -526,7 +527,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                 'crs': domain_crs,
             })
 
-            snap_time_range = f"{snapshot_years[0]}-{snapshot_years[-1]}"
+            snap_time_range = f"{start_year}-{end_year}"
             snap_filename_template = (
                 f"{domain_id}_{source_id}_{ism_id}_{ism_member_id}_{esm_id}_{forcing_member_id}_"
                 f"{experiment_id}_{set_counter}_{snap_time_range}.nc"

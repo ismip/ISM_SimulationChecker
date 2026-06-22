@@ -5,7 +5,7 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (`YYYY-YYYY` matching the actual time axis).
 2. **Numerical** — units match the data request; all values lie within the allowed min/max range for the relevant region; array is not entirely fill values.
 3. **Spatial** *(xyt variables only)* — grid corners lie within the expected AIS or GrIS extents; resolution is one of the allowed values; x and y cell size are equal.
-4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence; experiment start/end dates and duration match `experiments_ismip7.csv`, accounting for the variable type (ST or FL, see [Time encoding](#time-encoding)).
+4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence for `x,y,t` and `t` variables; sparse snapshot timestamps for `x,y,z,t` variables (see [Time encoding](#time-encoding)); experiment start/end dates and duration match `experiments_ismip7.csv` for `x,y,t` and `t` variables.
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
 Compliance criteria are defined in `conventions/ISMIP7_variable_request.csv` (variable metadata) and `experiments_ismip7.csv` (valid experiment year ranges and durations).
@@ -26,6 +26,17 @@ For example, a 286-year `ctrl` simulation covering nominal years 2015–2300:
 - FL files carry timestamps `2015-07-01` … `2300-07-01`, with bounds `[2015-01-01, 2016-01-01]` … `[2300-01-01, 2301-01-01]`
 
 The filename year range (`YYYY-YYYY`) always refers to the **nominal simulation years** (2015–2300 in the example above), regardless of variable type. The checker accounts for this when validating the filename against the time axis.
+
+### Snapshot variables (`x,y,z,t`, e.g. `litemp`)
+
+`x,y,z,t` variables carry a sparse set of ST snapshots rather than a full annual time series. The required snapshot nominal years depend on the experiment type:
+
+| Experiment | Required snapshots |
+|---|---|
+| `historical` | first year of run, 1900 (if in range), 2000 (if in range), last year of run |
+| projection (e.g. `ssp585`, `ctrl`) | 2100, 2200, 2300 (each if within the experiment's year range) |
+
+Together, a `historical` run ending at 2014 and a projection starting at 2015 provide snapshots at 100-year intervals (1900, 2000, 2100, 2200, 2300) as well as at the first and last years of the historical run. The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year. Duration and start/end timestamp checks are not applied to snapshot variables.
 
 Reference lookup tables are available in the companion repository [`ismip7-time-encoding`](https://github.com/ismip/ismip7-time-encoding).
 
@@ -48,18 +59,18 @@ The script must be run from the repository root. It writes `compliance_checker_l
 
 ```bash
 # Check x,y,t (3D spatial) variables
-python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --variable-list ismip7_xyt
+python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_xyt
 
 # Check scalar (time-only) variables
-python compliance_checker.py --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE --variable-list ismip7_scalars
+python compliance_checker.py --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_scalars
 
 # Check both
-python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE --variable-list ismip7
+python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
-| `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE` | Directory containing `.nc` files to check |
+| `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE/C001` | Set-counter subdirectory containing `.nc` files to check |
 | `--variable-list` | `ismip7_scalars` | `ismip7_xyt`, `ismip7_scalars`, or `ismip7` (both) |
 
 `experiments_ismip7.csv` defines the allowed nominal year ranges and durations for each experiment. The checker derives the expected FL and ST timestamps from these year values at runtime (see [Time encoding](#time-encoding)).
