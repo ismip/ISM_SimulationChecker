@@ -52,13 +52,13 @@ python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
 
 # Generate testdata for ismip7-scalar-processing
 python generate/generate_test_files.py --grid AIS_16000m --scenario historical \
-  --set-counter C001 --xyt --include-non-mandatory --nyears 1  --start-year 2014 
-python generate/generate_test_files.py --grid AIS_16000m --scenario ssp585 \ 
-  --set-counter C007 --xyt --include-non-mandatory --nyears 286 --start-year 2015
-python generate/generate_test_files.py --grid GrIS_16000m --scenario historical \ 
-  --set-counter C001 --xyt --include-non-mandatory --nyears 55  --start-year 1960
+   --set-counter C001 --xyt --include-non-mandatory --nyears 1  --start-year 2014 
+python generate/generate_test_files.py --grid AIS_16000m --scenario ssp585 \
+   --set-counter C007 --xyt --include-non-mandatory --nyears 286 --start-year 2015
+python generate/generate_test_files.py --grid GrIS_16000m --scenario historical \
+   --set-counter C001 --xyt --include-non-mandatory --nyears 55  --start-year 1960
 python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
-  --set-counter C009 --xyt --include-non-mandatory --nyears 286 --start-year 2015
+   --set-counter C009 --xyt --include-non-mandatory --nyears 286 --start-year 2015
 ```
 
 ## Implemented conventions
