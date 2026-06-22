@@ -2,7 +2,7 @@
 
 `generate/generate_test_files.py` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker.
 
-Files are written to `Models/{GrIS|AIS}/ISMIP7/SYNTH1/CORE/`.
+Files are written to `Models/{GrIS|AIS}/ISMIP7/SYNTH1/CORE/{set_counter}/` (default `C001`).
 
 ## Usage
 
@@ -49,14 +49,25 @@ python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
 # Generate both 3D and scalar variables, including non-mandatory ones
 python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
   --xyt --scalars --include-non-mandatory --nyears 286 --start-year 2015
+
+# Generate testdata for ismip7-scalar-processing
+python generate/generate_test_files.py --grid AIS_16000m --scenario historical \
+  --set-counter C001 --xyt --include-non-mandatory --nyears 1  --start-year 2014 
+python generate/generate_test_files.py --grid AIS_16000m --scenario ssp585 \ 
+  --set-counter C007 --xyt --include-non-mandatory --nyears 286 --start-year 2015
+python generate/generate_test_files.py --grid GrIS_16000m --scenario historical \ 
+  --set-counter C001 --xyt --include-non-mandatory --nyears 55  --start-year 1960
+python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
+  --set-counter C009 --xyt --include-non-mandatory --nyears 286 --start-year 2015
 ```
 
 ## Implemented conventions
 
 - CF-1.7 as baseline.
 - Time encoding: `days since 1850-01-01`, `calendar='standard'`.
-  - State (ST) variables: snapshot at year end (Dec 31).
-  - Flux (FL) variables: mid-year (Jul 1) with bounds from Jan 1 to Jan 1 next year.
+  - State (ST) variables: timestamp is Jan 1 of year N+1 (end-of-year snapshot). No `time_bounds`.
+  - Flux (FL) variables: timestamp is Jul 1 of year N (mid-year), with `time_bounds` = [Jan 1 of N, Jan 1 of N+1].
+  - `x,y,z,t` variables (e.g. `litemp`): ST snapshots at a sparse set of nominal years. For `historical`: first year of run, 1900 (if in range), 2000 (if in range), last year of run. For projection scenarios: 2100, 2200, 2300 (each if within the simulation year range). The filename year range reflects the full simulation period, not the first/last snapshot year.
 - Single precision (`float32`) for all variables and time.
 - `_FillValue` and `missing_value` set to NetCDF4 default `f4` fill value.
 - `time` is an unlimited (record) dimension.

@@ -44,7 +44,7 @@ def baseline_core_dir(tmp_path_factory):
     )
     assert created_files, "Synthetic baseline generation did not create any files."
 
-    core_dir = baseline_root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE"
+    core_dir = baseline_root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "C001"
     baseline_summary = compliance_checker.run_checker(
         source_path=str(core_dir),
         variable_list="ismip7_scalars",
@@ -60,7 +60,7 @@ def baseline_core_dir(tmp_path_factory):
 
 @pytest.fixture
 def case_dir(tmp_path, baseline_core_dir):
-    case_root = tmp_path / "CORE"
+    case_root = tmp_path / "CORE" / "C001"
     shutil.copytree(baseline_core_dir, case_root)
     return case_root
 

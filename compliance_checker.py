@@ -50,7 +50,7 @@ import netCDF4
 from tqdm import tqdm
 
 
-DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE"
+DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE/C001"
 DEFAULT_VARIABLE_LIST = "ismip7_scalars"
 VARIABLE_LIST_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
 
@@ -219,7 +219,7 @@ def _load_criteria(workdir: str, variable_list: str):
     df = df.dropna(subset=["Variable Name"])
 
     if variable_list == "ismip7_xyt":
-        df = df[df["Dim"] == "x,y,t"]
+        df = df[df["Dim"].isin(["x,y,t", "x,y,z,t", "x,y"])]
     elif variable_list == "ismip7_scalars":
         df = df[df["Dim"] == "t"]
 
@@ -739,9 +739,11 @@ def _check_naming(
             )
             errors += 1
 
+        is_static = not ({"time", "t"} & dim)
         year_range_field = parts[ISMIP7_FILENAME_YEAR_RANGE_IDX].removesuffix(".nc")
-        year_range_match = re.fullmatch(r"(\d{4})-(\d{4})", year_range_field)
-        if not year_range_match:
+        if is_static:
+            log_file.write(f" - Filename year range: N/A (static spatial variable)\n")
+        elif not (year_range_match := re.fullmatch(r"(\d{4})-(\d{4})", year_range_field)):
             log_file.write(
                 f" - ERROR: year range '{year_range_field}' (field {ISMIP7_FILENAME_YEAR_RANGE_IDX}) does not match expected format YYYY-YYYY (e.g. 2015-2300).\n"
             )
@@ -760,17 +762,23 @@ def _check_naming(
                 _yr_offset = 1 if var_type == "ST" else 0
                 actual_start = min(_decoded_time).item().year - _yr_offset
                 actual_end = max(_decoded_time).item().year - _yr_offset
-                if fn_start_year != actual_start:
-                    log_file.write(
-                        f" - ERROR: filename start year {fn_start_year} does not match first time step year {actual_start}.\n"
-                    )
-                    errors += 1
+                is_snapshot = "z" in dim
+                yr_range_ok = True
+                if not is_snapshot:
+                    # For regular time-series variables the filename start year must match the first time step.
+                    if fn_start_year != actual_start:
+                        log_file.write(
+                            f" - ERROR: filename start year {fn_start_year} does not match first time step year {actual_start}.\n"
+                        )
+                        errors += 1
+                        yr_range_ok = False
                 if fn_end_year != actual_end:
                     log_file.write(
                         f" - ERROR: filename end year {fn_end_year} does not match last time step year {actual_end}.\n"
                     )
                     errors += 1
-                if fn_start_year == actual_start and fn_end_year == actual_end:
+                    yr_range_ok = False
+                if yr_range_ok:
                     log_file.write(
                         f" - Filename year range {fn_start_year}-{fn_end_year} matches time axis: OK\n"
                     )
@@ -915,6 +923,10 @@ def _check_time(
 
     log_file.write("TIME Tests \n")
     if not ({"t"}.issubset(dim) or {"time"}.issubset(dim)):
+        if {"x", "y"}.issubset(dim):
+            # Static spatial variable (x,y) — no time axis is expected.
+            log_file.write(" - Time axis: N/A (static spatial variable)\n")
+            return errors
         log_file.write(
             " - ERROR: The time dimension is missing. Time Tests have been ignored.\n"
         )
@@ -960,7 +972,34 @@ def _check_time(
         )
         return errors + 1
 
-    if len(ds["time"].values) > 1:
+    is_snapshot_var = "z" in dim
+    if is_snapshot_var:
+        # x,y,z,t variable (e.g. litemp): sparse snapshot time axis.
+        # Each time value must be an ST-encoded timestamp for one of the known snapshot nominal years.
+        _LITEMP_SNAPSHOT_NOMINAL_YEARS = {1900, 2000, 2100, 2200, 2300}
+        _yr_offset = 1 if var_type == "ST" else 0
+        nominal_years = [t.year - _yr_offset for t in ds["time"].values]
+        exp_for_snaps = experiments[index_exp]
+        valid_snapshot_years = {nominal_years[-1]} | {
+            y for y in _LITEMP_SNAPSHOT_NOMINAL_YEARS
+            if exp_for_snaps["start_year_min"] <= y <= exp_for_snaps["end_year"]
+        }
+        if exp_for_snaps["experiment"] == "historical":
+            valid_snapshot_years.add(nominal_years[0])
+        snap_errors = 0
+        for ny in nominal_years:
+            if ny not in valid_snapshot_years:
+                log_file.write(
+                    f" - ERROR: time snapshot nominal year {ny} is not in the valid"
+                    f" snapshot set {sorted(valid_snapshot_years)}.\n"
+                )
+                snap_errors += 1
+        if snap_errors == 0:
+            log_file.write(
+                f" - Snapshot time axis nominal years {nominal_years} are all valid: OK\n"
+            )
+        errors += snap_errors
+    elif len(ds["time"].values) > 1:
         if isinstance(ds["time"].values[1] - ds["time"].values[0], datetime.timedelta):
             time_step = (ds["time"].values[1] - ds["time"].values[0]).days
         elif isinstance(ds["time"].values[1] - ds["time"].values[0], np.timedelta64):
@@ -991,6 +1030,12 @@ def _check_time(
         end_exp.item().year, end_exp.item().month, end_exp.item().day
     )
 
+    if is_snapshot_var:
+        log_file.write(
+            " - Duration / start / end timestamp checks: N/A (snapshot variable — time axis holds sparse snapshots only).\n"
+        )
+        return errors
+
     # Compute expected timestamp windows from nominal years + var_type (±1 day tolerance).
     _tol = datetime.timedelta(days=1)
     startinf = _nominal_to_timestamp(exp["start_year_min"], var_type) - _tol
@@ -1012,14 +1057,15 @@ def _check_time(
             )
             errors += 1
 
+        _yr_off = 1 if var_type == "ST" else 0
         dateformat_start_exp = datetime.datetime(
             start_exp.item().year, start_exp.item().month, start_exp.item().day
         )
         if startinf <= dateformat_start_exp <= startsup:
             log_file.write(
-                " - Experiment starts correctly on "
+                " - First time stamp correctly set to "
                 + start_exp.item().strftime("%Y-%m-%d")
-                + ".\n"
+                + f" (nominal year {start_exp.item().year - _yr_off}).\n"
             )
         else:
             log_file.write(
@@ -1035,9 +1081,9 @@ def _check_time(
 
         if endinf <= dateformat_end_exp <= endsup:
             log_file.write(
-                " - Experiment ends correctly on "
+                " - Last time stamp correctly set to "
                 + end_exp.item().strftime("%Y-%m-%d")
-                + ".\n"
+                + f" (nominal year {end_exp.item().year - _yr_off}).\n"
             )
         else:
             log_file.write(
@@ -1053,6 +1099,7 @@ def _check_time(
     else:
         if duration_years == exp["duration"]:
             log_file.write(" - Experiment lasts " + str(duration_years) + " years.\n")
+            _yr_off = 1 if var_type == "ST" else 0
             dateformat_start_exp = datetime.datetime(
                 start_exp.item().year,
                 start_exp.item().month,
@@ -1060,9 +1107,9 @@ def _check_time(
             )
             if startinf <= dateformat_start_exp <= startsup:
                 log_file.write(
-                    " - Experiment starts correctly on "
+                    " - First time stamp correctly set to "
                     + start_exp.item().strftime("%Y-%m-%d")
-                    + ".\n"
+                    + f" (nominal year {start_exp.item().year - _yr_off}).\n"
                 )
             else:
                 log_file.write(
@@ -1078,9 +1125,9 @@ def _check_time(
 
             if endinf <= dateformat_end_exp <= endsup:
                 log_file.write(
-                    " - Experiment ends correctly on "
+                    " - Last time stamp correctly set to "
                     + end_exp.item().strftime("%Y-%m-%d")
-                    + ".\n"
+                    + f" (nominal year {end_exp.item().year - _yr_off}).\n"
                 )
             else:
                 log_file.write(
@@ -1157,9 +1204,12 @@ def _check_attributes(
         if name in ds.coords:
             time_coord = name
             break
-    if time_coord is None:
+    is_static_spatial = time_coord is None and {"x", "y"}.issubset(set(ds.coords))
+    if time_coord is None and not is_static_spatial:
         log_file.write(" - ERROR (attributes): coordinate 'time' not found.\n")
         coord_errors += 1
+    elif time_coord is None and is_static_spatial:
+        log_file.write(" - Time coordinate: N/A (static spatial variable)\n")
     else:
         # xarray decodes 'units' and 'calendar' into .encoding; 'bounds' stays in .attrs
         time_var = ds[time_coord]
@@ -1184,7 +1234,8 @@ def _check_attributes(
             )
             coord_errors += 1
     if not isscalar:
-        for coord in ("x", "y"):
+        spatial_coords = ("x", "y", "z") if "z" in ds.coords else ("x", "y")
+        for coord in spatial_coords:
             if coord in ds.coords:
                 if "units" not in ds[coord].attrs:
                     log_file.write(
