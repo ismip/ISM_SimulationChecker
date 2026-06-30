@@ -14,8 +14,8 @@ Surface velocity in z,"x,y,t",ST,zvelsurf,land_ice_surface_upward_velocity,m s-1
 Basal velocity in x,"x,y,t",ST,xvelbase,land_ice_basal_x_velocity,m s-1,no,u-velocity at land ice base,-0.0004,0.0004,-0.0008,0.0008
 Basal velocity in y,"x,y,t",ST,yvelbase,land_ice_basal_y_velocity,m s-1,no,v-velocity at land ice base,-0.0004,0.0004,-0.0008,0.0008
 Basal velocity in z,"x,y,t",ST,zvelbase,land_ice_basal_upward_velocity,m s-1,no,w-velocity at land ice base,-5.00E-06,5.00E-06,-8.00E-06,8.00E-06
-Mean velocity in x,"x,y,t",ST,xvelmean,land_ice_vertical_mean_x_velocity,m s-1,yes,Vertical mean land ice velocity ,-0.0004,0.0004,-0.0008,0.0008
-Mean velocity in y,"x,y,t",ST,yvelmean,land_ice_vertical_mean_y_velocity,m s-1,yes,The vertical mean land ice velocity is the average from the bedrock to the surface of the ice,-0.0004,0.0004,-0.0008,0.0008
+Mean velocity in x,"x,y,t",ST,xvelmean,land_ice_vertical_mean_x_velocity,m s-1,yes,Vertical mean land ice velocity ,-0.0008,0.0008,-0.0008,0.0008
+Mean velocity in y,"x,y,t",ST,yvelmean,land_ice_vertical_mean_y_velocity,m s-1,yes,The vertical mean land ice velocity is the average from the bedrock to the surface of the ice,-0.0008,0.0008,-0.0008,0.0008
 Surface temperature,"x,y,t",ST,litemptop,temperature_at_top_of_ice_sheet_model,K,no,Ice temperature at surface,183,290,183,290
 Depth average temperature,"x,y,t",ST,litempavg,,K,no,Should get standard name land_ice_temperature,183,290,183,290
 Basal temperature beneath grounded ice sheet,"x,y,t",ST,litempbotgr,temperature_at_base_of_ice_sheet_model,K,no,Ice temperature at base of grounded ice sheet,183,290,183,290
