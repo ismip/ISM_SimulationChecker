@@ -20,7 +20,7 @@ Surface temperature,"x,y,t",ST,litemptop,temperature_at_top_of_ice_sheet_model,K
 Depth average temperature,"x,y,t",ST,litempavg,,K,no,Should get standard name land_ice_temperature,183,290,183,290
 Basal temperature beneath grounded ice sheet,"x,y,t",ST,litempbotgr,temperature_at_base_of_ice_sheet_model,K,no,Ice temperature at base of grounded ice sheet,183,290,183,290
 Basal temperature beneath floating ice shelf,"x,y,t",ST,litempbotfl,temperature_at_base_of_ice_sheet_model,K,no,Ice temperature at base of floating ice shelf,183,290,183,290
-Basal drag,"x,y,t",ST,strbasemag,land_ice_basal_drag,Pa,yes,Basal drag,0,300000,0,300000
+Basal drag,"x,y,t",ST,strbasemag,land_ice_basal_drag,Pa,yes,Basal drag,0,1.00E+06,0,1.00E+06
 Calving flux,"x,y,t",FL,licalvf,land_ice_specific_mass_flux_due_to_calving,kg m-2 s-1,yes,Ice mass change resulting from iceberg calving. Only for grid cells in contact with ocean,-1.00E+11,0,-1.00E+11,0
 Grounding line flux,"x,y,t",FL,ligroundf,,kg m-2 s-1,yes,Flux of ice mass across the grounding line. Only for grounding line grid cells. Should get standard name: land_ice_specific_grounding_line_flux,-1.00E+09,1.00E+11,-1.00E+09,1.00E+11
 Ice front melt flux,"x,y,t",FL,lifmassbf,,kg m-2 s-1,yes,Ice mass change resulting from ice front melting. Only for grid cells in contact with ocean. Should get standard name: land_ice_specific_mass_flux_due_to_ice_front_melting,-1.00E+11,0,-1.00E+11,0
