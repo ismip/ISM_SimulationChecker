@@ -76,6 +76,6 @@ python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
 
 ## Notes
 
-- Variable metadata is read from `conventions/ISMIP7_variable_request.csv`; grid definitions from the top-level `gdfs/` directory.
+- Variable metadata is read from `compliance_checker/data/ISMIP7_variable_request.csv`; grid definitions from the top-level `gdfs/` directory.
 - `group`, `model`, `contact_name`, and `contact_email` are hardcoded in `create_netcdf_file()` to synthetic defaults — edit there to customise.
 - Generated files are synthetic and intended for testing the compliance checker, not for scientific use.

@@ -37,7 +37,6 @@ def baseline_core_dir(tmp_path_factory):
         scenario="historical",
         start_year=2013,
         nyears=2,
-        conventions_dir=REPO_ROOT / "conventions",
         include_scalars=True,
         include_xyt=False,
         output_root=baseline_root,
@@ -48,7 +47,6 @@ def baseline_core_dir(tmp_path_factory):
     baseline_summary = compliance_checker.run_checker(
         source_path=str(core_dir),
         variable_list="ismip7_scalars",
-        workdir=str(REPO_ROOT),
         commit_num="tests",
     )
     assert baseline_summary["total_errors"] == 0, (
@@ -69,7 +67,6 @@ def run_checker(case_dir: Path):
     return compliance_checker.run_checker(
         source_path=str(case_dir),
         variable_list="ismip7_scalars",
-        workdir=str(REPO_ROOT),
         commit_num="tests",
     )
 

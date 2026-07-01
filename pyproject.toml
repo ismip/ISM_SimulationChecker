@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "isschecker"
+version = "0.1.0"
+description = "ISMIP7 compliance checker for ice sheet model simulation NetCDF datasets"
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Heiko Goelzer", email = "heig@norceresearch.no" }]
+dependencies = [
+    "numpy",
+    "pandas",
+    "xarray",
+    "cftime",
+    "netCDF4",
+    "tqdm",
+]
+
+[project.optional-dependencies]
+test = ["pytest"]
+
+[project.scripts]
+ismip7-compliance-checker = "compliance_checker:main"
+
+[tool.setuptools]
+packages = ["compliance_checker", "compliance_checker.data"]
+
+[tool.setuptools.package-data]
+"compliance_checker.data" = ["*.csv"]
