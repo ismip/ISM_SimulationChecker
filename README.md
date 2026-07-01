@@ -8,7 +8,7 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence for `x,y,t` and `t` variables; sparse snapshot timestamps for `x,y,z,t` variables (see [Time encoding](#time-encoding)); experiment start/end dates and duration match `experiments_ismip7.csv` for `x,y,t` and `t` variables.
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-Compliance criteria are defined in `conventions/ISMIP7_variable_request.csv` (variable metadata) and `experiments_ismip7.csv` (valid experiment year ranges and durations).
+Compliance criteria are defined in `compliance_checker/data/ISMIP7_variable_request.csv` (variable metadata) and `compliance_checker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). These files are bundled with the package.
 
 ---
 
@@ -44,10 +44,15 @@ Reference lookup tables are available in the companion repository [`ismip7-time-
 
 ## Setup
 
+Create the conda environment and install the package:
+
 ```bash
 conda env create -f isschecker_env.yml
 conda activate isschecker
+pip install .
 ```
+
+Installing the package registers the `ismip7-compliance-checker` command and bundles the data files, so the checker can be run from any directory. For development, install in editable mode with the test extra: `pip install -e ".[test]"`.
 
 Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `xarray` 2026.4, `cftime` 1.6, `netCDF4` 1.7, `tqdm` 4.67.
 
@@ -55,17 +60,17 @@ Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `xarray` 2026.4, `cftime` 
 
 ## Running the checker
 
-The script must be run from the repository root. It writes `compliance_checker_log.txt` into the `--source-path` directory.
+Once installed, run the checker from any directory with the `ismip7-compliance-checker` command (equivalently, `python -m compliance_checker`). It writes `compliance_checker_log.txt` into the `--source-path` directory.
 
 ```bash
 # Check x,y,t (3D spatial) variables
-python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_xyt
+ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_xyt
 
 # Check scalar (time-only) variables
-python compliance_checker.py --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_scalars
+ismip7-compliance-checker --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_scalars
 
 # Check both
-python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7
+ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7
 ```
 
 | Option | Default | Description |

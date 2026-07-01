@@ -12,6 +12,11 @@ from datetime import datetime
 from pathlib import Path
 import netCDF4
 
+REPO_ROOT = Path(__file__).resolve().parent.parent
+GDF_DIR = REPO_ROOT / 'gdfs'
+# The variable-request CSV is bundled with the compliance_checker package data.
+CONVENTIONS_DIR = REPO_ROOT / 'compliance_checker' / 'data'
+
 
 def get_available_grids(conventions_dir):
     """
@@ -27,8 +32,8 @@ def get_available_grids(conventions_dir):
     dict
         Dictionary with grid info: {'GrIS': [...], 'AIS': [...]}
     """
-    # Grid definitions moved to project root `gdfs` directory
-    gdf_dir = Path(conventions_dir).parent / 'gdfs'
+    # Grid definitions live in the project root `gdfs` directory
+    gdf_dir = GDF_DIR
     grids = {'GrIS': [], 'AIS': []}
 
     if not gdf_dir.exists():
@@ -221,11 +226,9 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     contact_names='Your Name'
     contact_emails='your@email.org'
 
-    # Determine conventions directory
+    # Determine conventions directory (bundled package data by default)
     if conventions_dir is None:
-        # Try to find conventions directory relative to this script
-        script_dir = Path(__file__).parent.parent
-        conventions_dir = script_dir / 'conventions'
+        conventions_dir = CONVENTIONS_DIR
 
     conventions_dir = Path(conventions_dir)
 
@@ -252,7 +255,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load grid definition
-    gdf_file = conventions_dir.parent / 'gdfs' / f'gdf_ISMIP7_{grid_type}_{resolution}.txt'
+    gdf_file = GDF_DIR / f'gdf_ISMIP7_{grid_type}_{resolution}.txt'
     if not gdf_file.exists():
         raise FileNotFoundError(f"Grid definition file not found: {gdf_file}")
 
@@ -755,9 +758,7 @@ def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
     """
 
     if conventions_dir is None:
-        # Try to find conventions directory relative to this script
-        script_dir = Path(__file__).parent.parent
-        conventions_dir = script_dir / 'conventions'
+        conventions_dir = CONVENTIONS_DIR
 
     # Get available grids
     grids = get_available_grids(str(conventions_dir))
@@ -794,8 +795,7 @@ if __name__ == '__main__':
     import argparse
 
     # Get available grids
-    script_dir = Path(__file__).parent.parent
-    conventions_dir = script_dir / 'conventions'
+    conventions_dir = CONVENTIONS_DIR
     available_grids = get_available_grids(str(conventions_dir))
 
     # Create list of available grid choices, excluding some high-resolution entries

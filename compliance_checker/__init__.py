@@ -42,6 +42,7 @@ import os
 import re
 import subprocess
 import argparse
+from importlib import resources
 
 import numpy as np
 import pandas as pd
@@ -54,9 +55,14 @@ DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE/C001"
 DEFAULT_VARIABLE_LIST = "ismip7_scalars"
 VARIABLE_LIST_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
 
-VARIABLE_REQUEST_CSV = os.path.join("conventions", "ISMIP7_variable_request.csv")
+VARIABLE_REQUEST_CSV = "ISMIP7_variable_request.csv"
 
 EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
+
+
+def data_path(filename: str) -> str:
+    """Return the filesystem path to a bundled data file in ``compliance_checker.data``."""
+    return str(resources.files("compliance_checker.data").joinpath(filename))
 
 AIS_GRID_EXTENT = [-3040000, -3040000, 3040000, 3040000]
 GrIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
@@ -138,22 +144,19 @@ def main() -> None:
     run_checker(
         source_path=source_path,
         variable_list=variable_list,
-        workdir=os.getcwd(),
     )
 
 
 def run_checker(
     source_path: str,
     variable_list: str = DEFAULT_VARIABLE_LIST,
-    workdir: str | None = None,
     commit_num: str | None = None,
 ):
-    workdir = os.path.abspath(workdir or os.getcwd())
     commit_num = _get_commit_number() if commit_num is None else commit_num
     experiments_ismip7 = _load_experiments_csv(
-        os.path.join(workdir, EXPERIMENTS_ISMIP7_CSV_FILENAME)
+        data_path(EXPERIMENTS_ISMIP7_CSV_FILENAME)
     )
-    ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir, variable_list)
+    ismip_meta, ismip_var, mandatory_variables = _load_criteria(variable_list)
 
     summary = _run_compliance_checker(
         source_path=source_path,
@@ -205,8 +208,8 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_criteria(workdir: str, variable_list: str):
-    csv_path = os.path.join(workdir, VARIABLE_REQUEST_CSV)
+def _load_criteria(variable_list: str):
+    csv_path = data_path(VARIABLE_REQUEST_CSV)
     try:
         df = pd.read_csv(csv_path)
     except IOError:
@@ -1511,7 +1514,3 @@ def _insert_synthesis(
 
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
         f.writelines(contents)
-
-
-if __name__ == "__main__":
-    main()

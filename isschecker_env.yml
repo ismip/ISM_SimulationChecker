@@ -2,16 +2,16 @@ name: isschecker
 channels:
   - conda-forge
 dependencies:
-  - python=3.14
-  - pip=26.0.1
+  - python
+  - pip
 
 # Core scientific python
-  - numpy=2.4.3
-  - pandas=3.0.2
-  - pytest=8.4.2
-  - tqdm=4.67.3
+  - numpy
+  - pandas
+  - pytest
+  - tqdm
 
 # Spatial packages
-  - xarray=2026.4.0
-  - cftime=1.6.5
-  - netcdf4=1.7.4
+  - xarray
+  - cftime
+  - netcdf4
