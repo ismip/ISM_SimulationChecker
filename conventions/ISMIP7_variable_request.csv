@@ -1,7 +1,7 @@
 long_name,Dim,Type,Variable Name,standard_name,units,Mandatory (yes/no),Comment,min_value_ais,max_value_ais,min_value_gris,max_value_gris
-Ice thickness,"x,y,t",ST,lithk,land_ice_thickness,m,yes,Ice thickness of the ice sheet,0,5000,0,5000
-Surface elevation,"x,y,t",ST,orog,surface_altitude,m,yes,Surface elevation of the ice sheet,0,4500,0,4500
-Bedrock elevation,"x,y,t",ST,topg,bedrock_altitude,m,yes,The bedrock topography (may change during the projections),-7000,4000,-4000,4000
+Ice thickness,"x,y,t",ST,lithk,land_ice_thickness,m,yes,Ice thickness of the ice sheet,0,5500,0,5000
+Surface elevation,"x,y,t",ST,orog,surface_altitude,m,yes,Surface elevation of the ice sheet,0,5500,0,4500
+Bedrock elevation,"x,y,t",ST,topg,bedrock_altitude,m,yes,The bedrock topography (may change during the projections),-7000,5500,-4000,4000
 Ice base elevation,"x,y,t",ST,base,,m,yes,Should get standard name land_ice_temperature,-4000,4000,-4000,4000
 Geothermal heat flux,"x,y,t",FL,hfgeoubed,upward_geothermal_heat_flux_in_land_ice,W m-2,no,Geothermal Heat flux at the ice interface,0,0.3,0,0.3
 Surface mass balance flux,"x,y,t",FL,acabf,land_ice_surface_specific_mass_balance_flux,kg m-2 s-1,yes,Surface Mass Balance flux,-0.0006,0.001,-0.0006,0.001
@@ -14,15 +14,15 @@ Surface velocity in z,"x,y,t",ST,zvelsurf,land_ice_surface_upward_velocity,m s-1
 Basal velocity in x,"x,y,t",ST,xvelbase,land_ice_basal_x_velocity,m s-1,no,u-velocity at land ice base,-0.0004,0.0004,-0.0008,0.0008
 Basal velocity in y,"x,y,t",ST,yvelbase,land_ice_basal_y_velocity,m s-1,no,v-velocity at land ice base,-0.0004,0.0004,-0.0008,0.0008
 Basal velocity in z,"x,y,t",ST,zvelbase,land_ice_basal_upward_velocity,m s-1,no,w-velocity at land ice base,-5.00E-06,5.00E-06,-8.00E-06,8.00E-06
-Mean velocity in x,"x,y,t",ST,xvelmean,land_ice_vertical_mean_x_velocity,m s-1,yes,Vertical mean land ice velocity ,-0.0004,0.0004,-0.0008,0.0008
-Mean velocity in y,"x,y,t",ST,yvelmean,land_ice_vertical_mean_y_velocity,m s-1,yes,The vertical mean land ice velocity is the average from the bedrock to the surface of the ice,-0.0004,0.0004,-0.0008,0.0008
+Mean velocity in x,"x,y,t",ST,xvelmean,land_ice_vertical_mean_x_velocity,m s-1,yes,Vertical mean land ice velocity ,-0.0008,0.0008,-0.0008,0.0008
+Mean velocity in y,"x,y,t",ST,yvelmean,land_ice_vertical_mean_y_velocity,m s-1,yes,The vertical mean land ice velocity is the average from the bedrock to the surface of the ice,-0.0008,0.0008,-0.0008,0.0008
 Surface temperature,"x,y,t",ST,litemptop,temperature_at_top_of_ice_sheet_model,K,no,Ice temperature at surface,183,290,183,290
 Depth average temperature,"x,y,t",ST,litempavg,,K,no,Should get standard name land_ice_temperature,183,290,183,290
 Basal temperature beneath grounded ice sheet,"x,y,t",ST,litempbotgr,temperature_at_base_of_ice_sheet_model,K,no,Ice temperature at base of grounded ice sheet,183,290,183,290
 Basal temperature beneath floating ice shelf,"x,y,t",ST,litempbotfl,temperature_at_base_of_ice_sheet_model,K,no,Ice temperature at base of floating ice shelf,183,290,183,290
-Basal drag,"x,y,t",ST,strbasemag,land_ice_basal_drag,Pa,yes,Basal drag,0,300000,0,300000
+Basal drag,"x,y,t",ST,strbasemag,land_ice_basal_drag,Pa,yes,Basal drag,0,1.00E+06,0,1.00E+06
 Calving flux,"x,y,t",FL,licalvf,land_ice_specific_mass_flux_due_to_calving,kg m-2 s-1,yes,Ice mass change resulting from iceberg calving. Only for grid cells in contact with ocean,-1.00E+11,0,-1.00E+11,0
-Grounding line flux,"x,y,t",FL,ligroundf,,kg m-2 s-1,yes,Flux of ice mass across the grounding line. Only for grounding line grid cells. Should get standard name: land_ice_specific_grounding_line_flux,0,1.00E+11,0,1.00E+11
+Grounding line flux,"x,y,t",FL,ligroundf,,kg m-2 s-1,yes,Flux of ice mass across the grounding line. Only for grounding line grid cells. Should get standard name: land_ice_specific_grounding_line_flux,-1.00E+09,1.00E+11,-1.00E+09,1.00E+11
 Ice front melt flux,"x,y,t",FL,lifmassbf,,kg m-2 s-1,yes,Ice mass change resulting from ice front melting. Only for grid cells in contact with ocean. Should get standard name: land_ice_specific_mass_flux_due_to_ice_front_melting,-1.00E+11,0,-1.00E+11,0
 Land ice area fraction,"x,y,t",ST,sftgif,land_ice_area_fraction,1,yes,"Fraction of grid cell covered by land ice (ice sheet, ice shelf, ice cap, glacier)",0,1,0,1
 Grounded ice sheet area fraction,"x,y,t",ST,sftgrf,grounded_ice_sheet_area_fraction,1,yes,"Fraction of grid cell covered by grounded ice sheet, where grounded indicates that the quantity correspond to the ice sheet that flows over bedrock",0,1,0,1
