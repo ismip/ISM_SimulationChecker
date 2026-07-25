@@ -4,6 +4,8 @@
 # 1. Naming (_check_naming, _check_file_variables)
 #    - Variable name matches the expected ISMIP7 name from the data request.
 #    - The variable named in the filename is present in the file.
+#    - The file holds no variables beyond that one, its coordinates, and any
+#      bounds or grid-mapping variables they refer to.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
@@ -829,8 +831,36 @@ def _check_naming(
     return errors
 
 
+def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
+    """The variables a file may hold besides the one it is named for.
+
+    A file carries one variable of the data request, but CF lets that variable
+    bring companions: the bounds of a coordinate (which is how 'time_bounds'
+    reaches every FL file), the container variable a 'grid_mapping' points at,
+    and any auxiliary coordinates the variable names.  Those belong in the
+    file; anything else is something the data request did not ask for.
+    """
+    allowed = {considered_variable} | set(ds.coords)
+
+    # xarray moves CF attributes into .encoding as it decodes, so both places
+    # have to be looked at to find what a file actually declares.
+    for coord in ds.coords.values():
+        bounds = {**coord.attrs, **coord.encoding}.get("bounds")
+        if bounds:
+            allowed.add(str(bounds))
+
+    attributes = {**ds[considered_variable].attrs, **ds[considered_variable].encoding}
+    grid_mapping = attributes.get("grid_mapping")
+    if grid_mapping:
+        allowed.add(str(grid_mapping))
+    allowed.update(str(attributes.get("coordinates", "")).split())
+
+    return allowed
+
+
 def _check_file_variables(
     log_file,
+    ds,
     file_name: str,
     considered_variable: str,
     file_variables,
@@ -870,6 +900,20 @@ def _check_file_variables(
         f" - Variable '{considered_variable}' from the file name is present in"
         f" the file: OK\n"
     )
+
+    allowed = _allowed_file_variables(ds, considered_variable)
+    unexpected = sorted(name for name in file_variables if name not in allowed)
+    for name in unexpected:
+        log_file.write(
+            f" - ERROR: unexpected variable '{name}' in the file. A file holds"
+            f" one variable of the data request -- here '{considered_variable}'"
+            f" -- along with its coordinates and any bounds or grid-mapping"
+            f" variables, and nothing else.\n"
+        )
+        errors += 1
+    if not unexpected:
+        log_file.write(" - No unexpected variables in the file: OK\n")
+
     return errors, True
 
 
@@ -1563,7 +1607,7 @@ def _run_variable_checks(
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
     file_var_errors, has_variable = _check_file_variables(
-        log_file, file_name, considered_variable, file_variables, report_naming_issues
+        log_file, ds, file_name, considered_variable, file_variables, report_naming_issues
     )
     var_naming_errors += file_var_errors
     if not has_variable:

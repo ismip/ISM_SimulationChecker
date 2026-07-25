@@ -98,6 +98,12 @@ def rename_variable_in_file(file_path: Path, old_name: str, new_name: str) -> No
         dataset.renameVariable(old_name, new_name)
 
 
+def add_variable_to_file(file_path: Path, name: str) -> None:
+    """Add a stray variable, leaving the requested one in place."""
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        dataset.createVariable(name, "f4", ("time",))
+
+
 def test_generated_scalar_dataset_passes_checker(case_dir):
     summary = run_checker(case_dir)
 
@@ -257,6 +263,19 @@ def test_checker_reports_swapped_variable_in_file(case_dir):
     # only -- and incidental -- sign of this file's problem is gone.
     assert summary["total_attr_errors"] == 0
     assert "does not match expected 'land_ice_mass" not in summary["log_text"]
+
+
+def test_checker_reports_unexpected_variable_in_file(case_dir):
+    add_variable_to_file(dataset_for_variable(case_dir, "lim"), "mask")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert summary["total_errors"] == 1
+    assert "unexpected variable 'mask' in the file" in summary["log_text"]
+    # An extra variable does not make the file uncheckable, so the requested
+    # one is still checked.
+    assert "** Tested Variable: lim\n" in summary["log_text"]
 
 
 def test_checker_reports_missing_contact_email_attribute(case_dir):
