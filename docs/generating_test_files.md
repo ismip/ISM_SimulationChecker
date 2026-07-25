@@ -26,6 +26,7 @@ ismip7-generate-test-files [OPTIONS]
 | `--esm-id` | `CESM2-WACCM` | ESM id (written into filenames) |
 | `--forcing-member-id` | `f001` | Forcing ensemble member id (written into filenames) |
 | `--set-counter` | `C001` | Set counter id (written into filenames) |
+| `--seed` | `0` | Seed for the synthetic data; the same seed always produces the same values |
 | `--list-grids` | — | List all available grids and exit |
 
 ## Examples
@@ -79,3 +80,4 @@ ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
 - Variable metadata is read from `ISMIP7_variable_request.csv` and grid definitions from `gdfs/`, both bundled as package data in `isschecker/data/`. Use `--conventions-dir` to point at a different directory (it must contain the CSV and a `gdfs/` subdirectory).
 - `group`, `model`, `contact_name`, and `contact_email` are hardcoded in `create_netcdf_file()` to synthetic defaults — edit there to customise.
 - Generated files are synthetic and intended for testing the compliance checker, not for scientific use.
+- Data values are drawn from a seeded generator, so a given `--seed` reproduces the same files. With `--multiple`, each file uses `seed + i` so the files differ from one another while the run as a whole stays reproducible.

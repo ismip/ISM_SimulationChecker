@@ -16,6 +16,11 @@ import netCDF4
 
 DATA_PACKAGE = f'{__package__}.data'
 
+# Synthetic data is drawn from a seeded generator so that a given seed always
+# produces the same files: reproducible test data, and no test that can drift
+# across a numerical bound from one run to the next.
+DEFAULT_SEED = 0
+
 
 def data_dir() -> Path:
     """Return the bundled directory of criteria CSVs and `gdfs` grid definitions.
@@ -174,7 +179,8 @@ def read_variable_criteria(csv_file, include_non_mandatory=False):
     return variables
 
 
-def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6):
+def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6,
+                            rng=None):
     """
     Generate synthetic data within specified range.
 
@@ -191,21 +197,27 @@ def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6)
     eps : float, optional
         A small fraction by which `min_val` and `max_val` move toward one another to avoid
         synthetic data that violates numerical checks because of roundoff.
+    rng : np.random.Generator, optional
+        Random number generator to draw from (default: a fresh generator seeded
+        with `DEFAULT_SEED`)
 
     Returns
     -------
     np.ndarray
         Random data within the specified range
     """
+    if rng is None:
+        rng = np.random.default_rng(DEFAULT_SEED)
     delta = eps * (max_val - min_val)
-    data = np.random.uniform(min_val + delta, max_val - delta, shape).astype(dtype)
+    data = rng.uniform(min_val + delta, max_val - delta, shape).astype(dtype)
     return data
 
 
 def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', start_year=2015, nyears=5,
                        conventions_dir=None, include_non_mandatory=False, include_scalars=False,
                        include_xyt=False, output_root=None, nz=5,
-                       ism_member_id='m001', esm_id='CESM2-WACCM', forcing_member_id='f001', set_counter='C001'):
+                       ism_member_id='m001', esm_id='CESM2-WACCM', forcing_member_id='f001', set_counter='C001',
+                       seed=DEFAULT_SEED):
     """
     Create NetCDF files with ISMIP7 variables (one file per variable).
 
@@ -229,7 +241,11 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
         Whether to include scalar time-series variables
     include_xyt : bool
         Whether to include non-scalar x,y,t variables (3D). Set to False to skip x,y,t variables.
+    seed : int, optional
+        Seed for the synthetic data; the same seed always produces the same values.
     """
+
+    rng = np.random.default_rng(seed)
 
     group='ISMIP7'
     model='SYNTH1'
@@ -389,7 +405,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((nyears, ny, nx), min_val, max_val)
+            data = generate_synthetic_data((nyears, ny, nx), min_val, max_val, rng=rng)
 
             # Create data array with metadata
             data_vars = {
@@ -504,7 +520,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((n_snapshots, nz, ny, nx), min_val, max_val)
+            data = generate_synthetic_data((n_snapshots, nz, ny, nx), min_val, max_val, rng=rng)
 
             data_vars = {
                 var_name: (
@@ -573,7 +589,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((ny, nx), min_val, max_val)
+            data = generate_synthetic_data((ny, nx), min_val, max_val, rng=rng)
 
             data_vars = {
                 var_name: (
@@ -674,7 +690,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                 max_val = min_val + 1.0
 
             # Generate synthetic 1D data
-            data = generate_synthetic_data((nyears,), min_val, max_val).astype(np.float32)  # Wide range for scalar data
+            data = generate_synthetic_data((nyears,), min_val, max_val, rng=rng).astype(np.float32)  # Wide range for scalar data
             # Create data array with metadata
             data_vars = {
                 var_name: (
@@ -753,7 +769,8 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
 
 def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
                           start_year=2015, contact_names='Your Name', contact_emails='your@email.org',
-                          include_xyt=True, include_non_mandatory=False):
+                          include_xyt=True, include_non_mandatory=False,
+                          seed=DEFAULT_SEED):
     """
     Create multiple NetCDF files for testing (one file per variable per grid).
 
@@ -795,6 +812,7 @@ def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
                 include_scalars=(i == 0),
                 include_xyt=include_xyt,
                 include_non_mandatory=include_non_mandatory,
+                seed=seed + i,
              )
             total_files += len(created_files)
 
@@ -887,6 +905,13 @@ def main():
         help='Set counter id (default: C001)'
     )
     parser.add_argument(
+        '--seed',
+        type=int,
+        default=DEFAULT_SEED,
+        help=f'Seed for the synthetic data (default: {DEFAULT_SEED}); the same '
+             f'seed always produces the same values'
+    )
+    parser.add_argument(
         '--list-grids',
         action='store_true',
         help='List all available grids and exit'
@@ -909,7 +934,8 @@ def main():
         create_multiple_files(conventions_dir=args.conventions_dir,
                               start_year=args.start_year,
                               include_xyt=args.xyt,
-                              include_non_mandatory=args.include_non_mandatory)
+                              include_non_mandatory=args.include_non_mandatory,
+                              seed=args.seed)
     else:
         create_netcdf_file(
             None,  # Use default output path
@@ -925,6 +951,7 @@ def main():
             esm_id=args.esm_id,
             forcing_member_id=args.forcing_member_id,
             set_counter=args.set_counter,
+            seed=args.seed,
         )
 
 
