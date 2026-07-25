@@ -62,7 +62,7 @@ For development, add `-e` for an editable install:
 python -m pip install --no-deps --no-build-isolation -e .
 ```
 
-(`pytest` comes from the conda environment, so the `[test]` extra is not needed.)
+(`pytest` comes from the conda environment, so the `[test]` extra is not needed.) An editable install is worth having while developing, because the tests import the installed package: after a non-editable install, edits to the source tree do not affect a test run until you reinstall.
 
 If a rebuild ever behaves as though it were still running older code, delete the `build/` directory: `setuptools` reuses its contents, so files that have since been renamed or removed can otherwise end up back in the installed package.
 
@@ -141,3 +141,13 @@ If you want to retain the files generated during testing you can use:
 pytest -v tests/test_compliance_checker.py --basetemp=/tmp/pytest_tmp
 ```
 The files will then be left in `/tmp/pytest_tmp`.  Otherwise, they are cleaned up once tests pass.
+
+### The reference log
+
+`tests/test_golden_log.py` runs the checker over a fixed, seeded dataset and compares the resulting log line by line against `tests/reference/compliance_checker_log.txt`, with the version, date, and source path masked out. It is what turns "results should agree across machines" into something CI can check: any difference in log text fails the test, whether it comes from a change of ours or from a dependency release inside the supported version ranges.
+
+When a change to the checker is *meant* to change the log, read the diff the failure prints, then regenerate the reference and commit it alongside the change:
+
+```bash
+ISSCHECKER_UPDATE_GOLDEN_LOG=1 pytest tests/test_golden_log.py
+```
