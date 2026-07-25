@@ -1,17 +1,29 @@
 name: isschecker
 channels:
   - conda-forge
+  # Never let a user's `defaults` channel leak into the solve: it would give
+  # different builds on different machines.
+  - nodefaults
+
 dependencies:
-  - python
-  - pip
+# Interpreter and build tools
+  - python >=3.11,<3.15
+  - pip >=24
+  # setuptools is required by `pip install --no-build-isolation` (conda-forge
+  # python no longer vendors it); >=77 for PEP 639 license metadata
+  - setuptools >=77
 
 # Core scientific python
-  - numpy
-  - pandas
-  - pytest
-  - tqdm
+  - numpy >=2.1,<3
+  - pandas >=2.2,<4
+  - tqdm >=4.66
 
 # Spatial packages
-  - xarray
-  - cftime
-  - netcdf4
+  # xarray >=2025.1.2 provides `xarray.coders.CFDatetimeCoder` (public API since
+  # 2025.1.1) and the non-nanosecond datetime decoding the checker relies on
+  - xarray >=2025.1.2,<2027
+  - cftime >=1.6.4,<2
+  - netcdf4 >=1.7,<2
+
+# Testing
+  - pytest >=8
