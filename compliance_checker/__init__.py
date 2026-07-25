@@ -42,7 +42,7 @@ import os
 import re
 import subprocess
 import argparse
-from importlib import resources
+from importlib import metadata, resources
 
 import numpy as np
 import pandas as pd
@@ -50,6 +50,12 @@ import xarray as xr
 import netCDF4
 from tqdm import tqdm
 
+
+try:
+    __version__ = metadata.version("isschecker")
+except metadata.PackageNotFoundError:
+    # Running from a source tree that has not been installed.
+    __version__ = "unknown"
 
 DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE/C001"
 DEFAULT_VARIABLE_LIST = "ismip7_scalars"
@@ -193,6 +199,12 @@ def _get_commit_number() -> str:
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Check simulation NetCDF datasets for ISMIP compliance."
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show the installed isschecker version and exit.",
     )
     parser.add_argument(
         "--source-path",

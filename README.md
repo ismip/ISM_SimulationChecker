@@ -84,7 +84,7 @@ If you report a problem with the checker, please include the output of `conda li
 
 ## Running the checker
 
-Once installed, run the checker from any directory with the `ismip7-compliance-checker` command. It writes `compliance_checker_log.txt` into the `--source-path` directory.
+Once installed, run the checker from any directory with the `ismip7-compliance-checker` command (equivalently, `python -m compliance_checker`). It writes `compliance_checker_log.txt` into the `--source-path` directory.
 
 ```bash
 # Check x,y,t (3D spatial) variables
@@ -101,6 +101,7 @@ ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --
 |--------|---------|-------------|
 | `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE/C001` | Set-counter subdirectory containing `.nc` files to check |
 | `--variable-list` | `ismip7_scalars` | `ismip7_xyt`, `ismip7_scalars`, or `ismip7` (both) |
+| `--version` | — | Print the installed version and exit; quote it when reporting a problem |
 
 `experiments_ismip7.csv` defines the allowed nominal year ranges and durations for each experiment. The checker derives the expected FL and ST timestamps from these year values at runtime (see [Time encoding](#time-encoding)).
 
