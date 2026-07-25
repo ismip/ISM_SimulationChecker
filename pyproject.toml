@@ -1,5 +1,5 @@
 [build-system]
-requires = ["setuptools>=61.0"]
+requires = ["setuptools>=77"]
 build-backend = "setuptools.build_meta"
 
 [project]
@@ -7,20 +7,34 @@ name = "isschecker"
 version = "0.1.0"
 description = "ISMIP7 compliance checker for ice sheet model simulation NetCDF datasets"
 readme = "README.md"
-license = { file = "LICENSE" }
-requires-python = ">=3.10"
+license = "MIT"
+license-files = ["LICENSE"]
+requires-python = ">=3.11,<3.15"
 authors = [{ name = "Heiko Goelzer", email = "heig@norceresearch.no" }]
+classifiers = [
+    "Intended Audience :: Science/Research",
+    "Programming Language :: Python :: 3",
+    "Topic :: Scientific/Engineering :: Atmospheric Science",
+]
+# These must stay in sync with isschecker_env.yml.  The supported install path
+# is `pip install --no-deps --no-build-isolation .` into the conda environment,
+# so pip never resolves these; they are here so the metadata is honest about
+# what the checker needs.
 dependencies = [
-    "numpy",
-    "pandas",
-    "xarray",
-    "cftime",
-    "netCDF4",
-    "tqdm",
+    "numpy>=2.1,<3",
+    "pandas>=2.2,<4",
+    "xarray>=2025.1.2,<2027",
+    "cftime>=1.6.4,<2",
+    "netCDF4>=1.7,<2",
+    "tqdm>=4.66",
 ]
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = ["pytest>=8"]
+
+[project.urls]
+Homepage = "https://github.com/ismip/ISM_SimulationChecker"
+Issues = "https://github.com/ismip/ISM_SimulationChecker/issues"
 
 [project.scripts]
 ismip7-compliance-checker = "compliance_checker:main"
