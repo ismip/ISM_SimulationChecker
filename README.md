@@ -8,6 +8,8 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; the file name's year range is one the experiment allows; and the time axis is **exactly** the axis the experiment calls for. For `x,y,t` and `t` variables that means every nominal year from `experiments_ismip7.csv`, each carrying the timestamp its ST/FL convention prescribes; for `x,y,z,t` variables it means the required set of sparse snapshots (see [Time encoding](#time-encoding)).
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
+Every file is checked as far as it can be. A naming problem stops the other checks only where it leaves them nothing to read — a missing `x` or `y` dimension, or a file that does not contain the variable its name promises. Everything else (a mistyped ESM name, a malformed year range, an unrecognised region) is reported and the file is checked on, so one run tells you everything that is wrong rather than only the first thing. An unrecognised region costs just the checks that depend on it: value range, grid extent and resolution, and `crs`.
+
 Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). Together with the grid definitions in `isschecker/data/gdfs/`, these files are bundled with the package.
 
 ---

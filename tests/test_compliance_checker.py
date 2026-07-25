@@ -334,6 +334,56 @@ def test_checker_reports_invalid_esm_in_filename(case_dir):
     assert "is not a recognised CMIP6/CMIP7 model name" in summary["log_text"]
 
 
+def test_checker_still_checks_a_file_with_an_unrecognised_esm(case_dir):
+    """A mistyped file name must not hide the problems inside the file.
+
+    A naming error used to abandon the file, so a modeller fixed the name, ran
+    again, and only then found out about the time axis. Nothing about an ESM
+    name affects whether the rest of the file can be read.
+    """
+    target_file = dataset_for_variable(case_dir, "lim")
+    set_time_values(target_file, state_timestamps([2012, 2013]))
+    rename_file_part(
+        target_file, checker.ISMIP7_FILENAME_ESM_IDX, "NOT-A-CMIP-MODEL"
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert summary["total_time_errors"] >= 1
+    assert "is not a recognised CMIP6/CMIP7 model name" in summary["log_text"]
+    assert "nominal year(s) missing from the time axis: 2014" in summary["log_text"]
+
+
+def test_checker_skips_only_region_dependent_checks_for_a_bad_region(xyt_case_dir):
+    """An unrecognised region costs the checks that need it, and no others.
+
+    Value range, grid extent/resolution and crs are all defined per ice sheet,
+    so they cannot be checked; the time axis does not depend on the region at
+    all, and previously went unchecked purely because the region check ran
+    first.
+    """
+    target_file = dataset_for_variable(xyt_case_dir, "lithk")
+    set_time_values(target_file, state_timestamps([2012, 2013]))
+    renamed = rename_file_part(target_file, checker.ISMIP7_FILENAME_REGION_IDX, "XXX")
+    assert renamed.exists()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert "Region XXX not recognized" in summary["log_text"]
+
+    # The checks that genuinely depend on the region say so rather than
+    # silently falling back to one ice sheet's criteria.
+    assert "Value range: not checked" in summary["log_text"]
+    assert "the expected grid extent and resolutions depend on" in summary["log_text"]
+    assert "Global attribute 'crs': not checked" in summary["log_text"]
+
+    # ... and the ones that do not, still run.
+    assert summary["total_time_errors"] >= 1
+    assert "nominal year(s) missing from the time axis: 2014" in summary["log_text"]
+
+
 def test_checker_reports_invalid_year_range_format(case_dir):
     rename_file_part(
         first_dataset(case_dir),

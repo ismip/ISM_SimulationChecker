@@ -9,6 +9,8 @@
 #    - The variable's dimensions are the ones the data request asks for, in the
 #      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
+#      An unrecognised region costs only the checks that need it (value range,
+#      grid extent and resolution, crs); the rest of the file is still checked.
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
 #    - Forcing member id (field 6) matches format fNNN (e.g. f001).
@@ -51,6 +53,13 @@
 #      If missing_value is also present, it must equal _FillValue.
 #    - Main variable and time coordinate are single-precision float (float32 / f4).
 #    - scale_factor and add_offset are not allowed on the main variable.
+#
+# A file is checked as far as it can be.  A naming problem stops the other
+# checks only when it leaves them nothing to read -- a missing x or y dimension,
+# or a file that does not contain the variable its name promises.  Everything
+# else (a mistyped ESM name, a malformed year range, an unrecognised region) is
+# reported and the file is checked on, so that one run tells a modeller
+# everything that is wrong rather than only the first thing.
 
 
 import datetime
@@ -977,10 +986,16 @@ class NamingResult(NamedTuple):
     The file name is where the year range under test comes from, so parsing it
     is the naming check's job; comparing it to the time axis is the time
     check's, which decodes the file anyway.
+
+    `can_continue` is what the other checks key off.  Most naming problems say
+    nothing about whether a file can be checked -- a mistyped ESM name is worth
+    reporting and worth nothing else -- so only the ones that genuinely leave
+    the later checks with nothing to read clear it.
     """
 
     errors: int
     filename_years: tuple[int, int] | None
+    can_continue: bool = True
 
 
 def _check_naming(
@@ -1007,16 +1022,21 @@ def _check_naming(
             "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing in "
             + file_name
         )
-        return NamingResult(errors + 1, filename_years)
+        # Without x and y there is no grid to check and no spatial variable to
+        # read: this is one of the few naming problems that really does stop
+        # everything else.
+        return NamingResult(errors + 1, filename_years, can_continue=False)
 
     if region not in ["AIS", "GrIS"]:
         log_file.write(
             " - ERROR: Region "
             + region
-            + " not recognized. It should be AIS or GrIS. The compliance check has been interrupted for this variable.\n"
+            + " not recognized. It should be AIS or GrIS. The checks that depend"
+            + " on the region (value range, grid extent and resolution, crs) are"
+            + " skipped for this file; the rest still run.\n"
         )
         report_naming_issues.append(
-            "Compliance check ignored: region (AIS/GrIS) not identified in the file "
+            "Region-dependent checks skipped: region (AIS/GrIS) not identified in the file "
             + file_name
             + " due to wrong naming."
         )
@@ -1332,9 +1352,15 @@ def _check_numerical(
 
     log_file.write("NUMERICAL Tests \n")
 
-    var_units = ds[ivar].attrs["units"]
+    var_units = ds[ivar].attrs.get("units")
     expected_units = ismip_meta[var_index]["units"]
-    if var_units == expected_units:
+    if var_units is None:
+        log_file.write(
+            f" - ERROR: The variable '{ivar}' has no 'units' attribute. The data"
+            f" request asks for '{expected_units}'.\n"
+        )
+        errors += 1
+    elif var_units == expected_units:
         log_file.write(" - The unit is correct: " + var_units + "\n")
     elif _units_match(var_units, expected_units):
         log_file.write(
@@ -1354,7 +1380,12 @@ def _check_numerical(
         )
         errors += 1
 
-    if not isscalar:
+    if not isscalar and region not in ("AIS", "GrIS"):
+        log_file.write(
+            " - Value range: not checked (the allowed range depends on the"
+            " region, which the file name does not identify).\n"
+        )
+    elif not isscalar:
         if False in ds[ivar].isnull():
             if (
                 ds[ivar].min(skipna=True).item()
@@ -1655,7 +1686,12 @@ def _check_attributes(
             global_errors += 1
     expected_crs = "epsg:3413" if region == "GrIS" else "epsg:3031"
     actual_crs = ds.attrs.get("crs")
-    if actual_crs is None:
+    if region not in ("AIS", "GrIS"):
+        log_file.write(
+            " - Global attribute 'crs': not checked (the expected value depends"
+            " on the region, which the file name does not identify).\n"
+        )
+    elif actual_crs is None:
         log_file.write(" - ERROR (attributes): global attribute 'crs' is missing.\n")
         global_errors += 1
     elif actual_crs.lower() != expected_crs:
@@ -1842,7 +1878,7 @@ def _run_variable_checks(
 
     naming = _check_naming(log_file, file_name, region, dim, isscalar, report_naming_issues)
     var_naming_errors += naming.errors
-    if naming.errors > 0:
+    if not naming.can_continue:
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
     file_var_errors, has_variable = _check_file_variables(
@@ -1867,7 +1903,13 @@ def _run_variable_checks(
 
     var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
 
-    if not isscalar:
+    if not isscalar and region not in ("AIS", "GrIS"):
+        log_file.write("SPATIAL Tests \n")
+        log_file.write(
+            " - Not checked: the expected grid extent and resolutions depend on"
+            " the region, which the file name does not identify.\n"
+        )
+    elif not isscalar:
         var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
 
     var_time_errors += _check_time(
