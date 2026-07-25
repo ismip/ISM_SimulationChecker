@@ -49,18 +49,42 @@ Create the conda environment and install the package:
 ```bash
 conda env create -f isschecker_env.yml
 conda activate isschecker
-pip install .
+python -m pip install --no-deps --no-build-isolation .
 ```
 
-Installing the package registers the `ismip7-compliance-checker` command and bundles the data files, so the checker can be run from any directory. For development, install in editable mode with the test extra: `pip install -e ".[test]"`.
+Installing the package registers the `ismip7-compliance-checker` command and bundles the data files, so the checker can be run from any directory.
 
-Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `xarray` 2026.4, `cftime` 1.6, `netCDF4` 1.7, `tqdm` 4.67.
+**Use those pip flags.** All dependencies come from conda-forge, and a plain `pip install .` can silently replace them with PyPI wheels — `netCDF4` in particular bundles its own copy of the netCDF C library — which is exactly how two people end up with different results from the same files. `--no-deps` keeps pip from resolving anything, and `--no-build-isolation` builds with the environment's `setuptools` instead of downloading one from PyPI. Add `--no-index` if you want any accidental network fetch to fail loudly rather than succeed quietly.
+
+For development, add `-e` for an editable install:
+
+```bash
+python -m pip install --no-deps --no-build-isolation -e .
+```
+
+(`pytest` comes from the conda environment, so the `[test]` extra is not needed.)
+
+### Dependencies
+
+Versions are constrained in `isschecker_env.yml`; the same constraints appear in `pyproject.toml`. The suite is tested at both ends of every range, so results should agree across machines and operating systems within these bounds.
+
+| Package | Constraint | Why bounded |
+|---|---|---|
+| `python` | `>=3.11,<3.15` | `str \| None` annotations need ≥3.10; 3.10 is EOL in Oct 2026 |
+| `numpy` | `>=2.1,<3` | what recent `pandas`/`xarray` are built against |
+| `pandas` | `>=2.2,<4` | reads the criteria CSVs; 3.0 changed the default string dtype |
+| `xarray` | `>=2025.1.2,<2027` | `xarray.coders.CFDatetimeCoder` (public API in 2025.1.1) and non-nanosecond datetime decoding, both used by the time checks |
+| `cftime` | `>=1.6.4,<2` | date arithmetic in the start/end/duration checks |
+| `netCDF4` | `>=1.7,<2` | `_FillValue` checks compare against `netCDF4.default_fillvals` |
+| `tqdm` | `>=4.66` | progress bar only; never affects the log |
+
+If you report a problem with the checker, please include the output of `conda list` for your `isschecker` environment.
 
 ---
 
 ## Running the checker
 
-Once installed, run the checker from any directory with the `ismip7-compliance-checker` command (equivalently, `python -m compliance_checker`). It writes `compliance_checker_log.txt` into the `--source-path` directory.
+Once installed, run the checker from any directory with the `ismip7-compliance-checker` command. It writes `compliance_checker_log.txt` into the `--source-path` directory.
 
 ```bash
 # Check x,y,t (3D spatial) variables
