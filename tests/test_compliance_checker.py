@@ -81,6 +81,17 @@ def remove_global_attribute(file_path: Path, attr_name: str) -> None:
         dataset.delncattr(attr_name)
 
 
+def set_variable_units(file_path: Path, units: str) -> None:
+    """Rewrite the units of the main (ISMIP7-named) variable of a file."""
+    variable_name = file_path.name.split("_")[0]
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        dataset.variables[variable_name].units = units
+
+
+def dataset_for_variable(case_dir: Path, variable_name: str) -> Path:
+    return sorted(case_dir.glob(f"{variable_name}_*.nc"))[0]
+
+
 def test_generated_scalar_dataset_passes_checker(case_dir):
     summary = run_checker(case_dir)
 
@@ -149,6 +160,69 @@ def test_checker_reports_historical_time_range_violation(case_dir):
     assert summary["total_time_errors"] >= 2
     assert summary["total_naming_errors"] == 0
     assert "The date should be comprised between" in summary["log_text"]
+
+
+@pytest.mark.parametrize(
+    "variable_name, units",
+    [
+        # The data request asks for 'm^2' here and 'kg s-1' there, so both
+        # directions of the caret spelling are covered.
+        ("iareagr", "m2"),
+        ("iareagr", "m**2"),
+        ("tendacabf", "kg s^-1"),
+        ("tendacabf", "kg/s"),
+        ("tendacabf", "kg.s-1"),
+    ],
+)
+def test_checker_accepts_equivalent_units_spellings(case_dir, variable_name, units):
+    set_variable_units(dataset_for_variable(case_dir, variable_name), units)
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_num_errors"] == 0
+    assert summary["total_errors"] == 0
+    assert f" - The unit is correct: {units} (equivalent to the requested " in (
+        summary["log_text"]
+    )
+
+
+def test_checker_reports_wrong_units(case_dir):
+    set_variable_units(dataset_for_variable(case_dir, "iareagr"), "m^3")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_num_errors"] == 1
+    assert summary["total_errors"] == 1
+    assert "The unit of the variable is m^3 and should be m^2" in summary["log_text"]
+
+
+@pytest.mark.parametrize(
+    "actual, expected, matches",
+    [
+        ("m^2", "m2", True),
+        ("m**2", "m2", True),
+        ("kg m^-2 s^-1", "kg m-2 s-1", True),
+        ("kg.m-2.s-1", "kg m-2 s-1", True),
+        ("kg/m2/s", "kg m-2 s-1", True),
+        ("s-1 kg m-2", "kg m-2 s-1", True),
+        ("kg  m-2   s-1", "kg m-2 s-1", True),
+        ("1", "1", True),
+        ("m3", "m2", False),
+        ("kg m-2", "kg m-2 s-1", False),
+        ("km", "m", False),
+        ("M", "m", False),
+        # UDUNITS divides left to right, so the '/' inverts only 'm2' here.
+        ("kg/m2*s", "kg m-2 s-1", False),
+        ("kg/m2 s", "kg m-2 s-1", False),
+        # Not understood, so compared as strings rather than guessed at.
+        ("", "1", False),
+        ("kg/(m2 s)", "kg m-2 s-1", False),
+        ("days since 1850-01-01", "days since 1850-01-01", True),
+        ("days since 1850-01-01", "days since 2000-01-01", False),
+    ],
+)
+def test_units_match(actual, expected, matches):
+    assert checker._units_match(actual, expected) is matches
 
 
 def test_checker_reports_missing_contact_email_attribute(case_dir):
