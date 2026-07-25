@@ -14,8 +14,8 @@ import netCDF4
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 GDF_DIR = REPO_ROOT / 'gdfs'
-# The variable-request CSV is bundled with the compliance_checker package data.
-CONVENTIONS_DIR = REPO_ROOT / 'compliance_checker' / 'data'
+# The variable-request CSV is bundled with the isschecker package data.
+CONVENTIONS_DIR = REPO_ROOT / 'isschecker' / 'data'
 
 
 def get_available_grids(conventions_dir):

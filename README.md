@@ -8,7 +8,7 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence for `x,y,t` and `t` variables; sparse snapshot timestamps for `x,y,z,t` variables (see [Time encoding](#time-encoding)); experiment start/end dates and duration match `experiments_ismip7.csv` for `x,y,t` and `t` variables.
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-Compliance criteria are defined in `compliance_checker/data/ISMIP7_variable_request.csv` (variable metadata) and `compliance_checker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). These files are bundled with the package.
+Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). These files are bundled with the package.
 
 ---
 
@@ -64,6 +64,8 @@ python -m pip install --no-deps --no-build-isolation -e .
 
 (`pytest` comes from the conda environment, so the `[test]` extra is not needed.)
 
+If a rebuild ever behaves as though it were still running older code, delete the `build/` directory: `setuptools` reuses its contents, so files that have since been renamed or removed can otherwise end up back in the installed package.
+
 ### Dependencies
 
 Versions are constrained in `isschecker_env.yml`; the same constraints appear in `pyproject.toml`. The suite is tested at both ends of every range, so results should agree across machines and operating systems within these bounds.
@@ -84,7 +86,7 @@ If you report a problem with the checker, please include the output of `conda li
 
 ## Running the checker
 
-Once installed, run the checker from any directory with the `ismip7-compliance-checker` command (equivalently, `python -m compliance_checker`). It writes `compliance_checker_log.txt` into the `--source-path` directory.
+Once installed, run the checker from any directory with the `ismip7-compliance-checker` command (equivalently, `python -m isschecker`). It writes `compliance_checker_log.txt` into the `--source-path` directory.
 
 ```bash
 # Check x,y,t (3D spatial) variables

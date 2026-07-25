@@ -37,10 +37,10 @@ Homepage = "https://github.com/ismip/ISM_SimulationChecker"
 Issues = "https://github.com/ismip/ISM_SimulationChecker/issues"
 
 [project.scripts]
-ismip7-compliance-checker = "compliance_checker:main"
+ismip7-compliance-checker = "isschecker:main"
 
 [tool.setuptools]
-packages = ["compliance_checker", "compliance_checker.data"]
+packages = ["isschecker", "isschecker.data"]
 
 [tool.setuptools.package-data]
-"compliance_checker.data" = ["*.csv"]
+"isschecker.data" = ["*.csv"]

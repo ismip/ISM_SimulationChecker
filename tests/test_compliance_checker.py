@@ -12,7 +12,7 @@ REPO_ROOT = Path(__file__).resolve().parents[1]
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-checker = importlib.import_module("compliance_checker.checker")
+checker = importlib.import_module("isschecker.checker")
 
 
 def _load_generator_module():
