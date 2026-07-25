@@ -1,8 +1,9 @@
 #
 # ISMIP7 Compliance Checker — check summary
 #
-# 1. Naming (_check_naming)
+# 1. Naming (_check_naming, _check_file_variables)
 #    - Variable name matches the expected ISMIP7 name from the data request.
+#    - The variable named in the filename is present in the file.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
@@ -38,6 +39,7 @@
 
 
 import datetime
+import difflib
 import os
 import re
 import subprocess
@@ -827,6 +829,50 @@ def _check_naming(
     return errors
 
 
+def _check_file_variables(
+    log_file,
+    file_name: str,
+    considered_variable: str,
+    file_variables,
+    report_naming_issues: list,
+) -> tuple[int, bool]:
+    """Check the variables a file contains against the one its name promises.
+
+    The file name states which variable of the data request a file carries, and
+    every other check reads that variable, so a file that does not contain it
+    has nothing to check: the second element of the return value is False, and
+    the caller skips the remaining checks for the file rather than reporting a
+    clean bill of health on a variable that was never looked at.
+    """
+    errors = 0
+
+    if considered_variable not in file_variables:
+        message = (
+            f"the file name promises variable '{considered_variable}', but the"
+            f" file does not contain it. Data variables found:"
+            f" {sorted(file_variables)}."
+        )
+        near_misses = difflib.get_close_matches(
+            considered_variable, file_variables, n=1
+        )
+        if near_misses:
+            message += (
+                f" '{near_misses[0]}' may be a misspelling of"
+                f" '{considered_variable}'."
+            )
+        log_file.write(f" - ERROR: {message}\n")
+        report_naming_issues.append(
+            f"Compliance check ignored: in the file {file_name}, {message}"
+        )
+        return errors + 1, False
+
+    log_file.write(
+        f" - Variable '{considered_variable}' from the file name is present in"
+        f" the file: OK\n"
+    )
+    return errors, True
+
+
 # CF requires only that the units attribute be "a string that can be recognized
 # by the UDUNITS package", and UDUNITS recognises several spellings of the same
 # unit: the exponent in 'm2' may equally be written 'm^2' or 'm**2', the factors
@@ -1516,23 +1562,33 @@ def _run_variable_checks(
     if n_err > 0:
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
+    file_var_errors, has_variable = _check_file_variables(
+        log_file, file_name, considered_variable, file_variables, report_naming_issues
+    )
+    var_naming_errors += file_var_errors
+    if not has_variable:
+        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+
     grid_extent = AIS_GRID_EXTENT if region == "AIS" else GrIS_GRID_EXTENT
     possible_resolution = AIS_POSSIBLE_RESOLUTION if region == "AIS" else GrIS_POSSIBLE_RESOLUTION
 
-    for ivar in file_variables:
-        if ivar in ismip_var:
-            log_file.write("** Tested Variable: " + ivar + "\n")
-            log_file.write(" \n")
-            var_index = [k for k in range(len(ismip_var)) if ismip_var[k] == ivar][0]
+    # The checks read the variable the file name promises, and the row of the
+    # data request that goes with it.  Reading whatever variable the file
+    # happens to contain instead would check a file against the wrong criteria,
+    # or -- when nothing in it is a requested name -- against none at all.
+    ivar = considered_variable
+    var_index = index
+    log_file.write("** Tested Variable: " + ivar + "\n")
+    log_file.write(" \n")
 
-            var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
+    var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
 
-            if not isscalar:
-                var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
+    if not isscalar:
+        var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
 
-            var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name, ismip_meta[var_index].get("type", ""))
+    var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name, var_type)
 
-            var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, ismip_meta[var_index].get("type", ""), region)
+    var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, var_type, region)
 
     return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 

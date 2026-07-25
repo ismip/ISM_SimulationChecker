@@ -92,6 +92,12 @@ def dataset_for_variable(case_dir: Path, variable_name: str) -> Path:
     return sorted(case_dir.glob(f"{variable_name}_*.nc"))[0]
 
 
+def rename_variable_in_file(file_path: Path, old_name: str, new_name: str) -> None:
+    """Rename a variable inside a file, leaving the file name alone."""
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        dataset.renameVariable(old_name, new_name)
+
+
 def test_generated_scalar_dataset_passes_checker(case_dir):
     summary = run_checker(case_dir)
 
@@ -223,6 +229,34 @@ def test_checker_reports_wrong_units(case_dir):
 )
 def test_units_match(actual, expected, matches):
     assert checker._units_match(actual, expected) is matches
+
+
+def test_checker_reports_variable_missing_from_file(case_dir):
+    rename_variable_in_file(dataset_for_variable(case_dir, "lim"), "lim", "limm")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert summary["total_errors"] == 1
+    assert (
+        "the file name promises variable 'lim', but the file does not contain it"
+        in summary["log_text"]
+    )
+    assert "'limm' may be a misspelling of 'lim'" in summary["log_text"]
+
+
+def test_checker_reports_swapped_variable_in_file(case_dir):
+    rename_variable_in_file(dataset_for_variable(case_dir, "lim"), "lim", "limnsw")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert summary["total_errors"] == 1
+    # The variable that was swapped in is no longer checked against its own row
+    # of the data request, so the standard_name mismatch that used to be the
+    # only -- and incidental -- sign of this file's problem is gone.
+    assert summary["total_attr_errors"] == 0
+    assert "does not match expected 'land_ice_mass" not in summary["log_text"]
 
 
 def test_checker_reports_missing_contact_email_attribute(case_dir):
