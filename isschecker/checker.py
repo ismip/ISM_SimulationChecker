@@ -6,6 +6,7 @@
 #    - The variable named in the filename is present in the file.
 #    - The file holds no variables beyond that one, its coordinates, and any
 #      bounds or grid-mapping variables they refer to.
+#    - The variable's dimensions are the ones the data request asks for.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
@@ -831,6 +832,54 @@ def _check_naming(
     return errors
 
 
+# The data request writes a variable's dimensions innermost-first and calls the
+# time dimension 't' ('x,y,t'); the files write them outermost-first in the
+# conventional CF order and call it 'time'.  This is the translation between
+# the two, and the four forms here are every 'Dim' the request uses.
+REQUESTED_DIMENSIONS: dict[str, tuple[str, ...]] = {
+    "t": ("time",),
+    "x,y": ("y", "x"),
+    "x,y,t": ("time", "y", "x"),
+    "x,y,z,t": ("time", "z", "y", "x"),
+}
+
+
+def _check_variable_dimensions(
+    log_file,
+    ds,
+    considered_variable: str,
+    requested_dim: str,
+) -> int:
+    """Check a variable's dimensions against the 'Dim' column of the request."""
+    expected = REQUESTED_DIMENSIONS.get(requested_dim)
+    if expected is None:
+        log_file.write(
+            f" - Variable '{considered_variable}' dimensions: not checked (the"
+            f" data request gives Dim '{requested_dim}', which this checker does"
+            f" not know).\n"
+        )
+        return 0
+
+    # 't' is an accepted spelling of the time dimension throughout the checker.
+    actual = tuple(
+        "time" if name == "t" else name for name in ds[considered_variable].dims
+    )
+
+    if set(actual) != set(expected):
+        log_file.write(
+            f" - ERROR: variable '{considered_variable}' has dimensions"
+            f" {actual}; the data request asks for {requested_dim}, that is"
+            f" {expected}.\n"
+        )
+        return 1
+
+    log_file.write(
+        f" - Variable '{considered_variable}' dimensions ({', '.join(actual)})"
+        f" match the requested {requested_dim}: OK\n"
+    )
+    return 0
+
+
 def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
     """The variables a file may hold besides the one it is named for.
 
@@ -864,6 +913,7 @@ def _check_file_variables(
     file_name: str,
     considered_variable: str,
     file_variables,
+    requested_dim: str,
     report_naming_issues: list,
 ) -> tuple[int, bool]:
     """Check the variables a file contains against the one its name promises.
@@ -913,6 +963,10 @@ def _check_file_variables(
         errors += 1
     if not unexpected:
         log_file.write(" - No unexpected variables in the file: OK\n")
+
+    errors += _check_variable_dimensions(
+        log_file, ds, considered_variable, requested_dim
+    )
 
     return errors, True
 
@@ -1607,7 +1661,8 @@ def _run_variable_checks(
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
     file_var_errors, has_variable = _check_file_variables(
-        log_file, ds, file_name, considered_variable, file_variables, report_naming_issues
+        log_file, ds, file_name, considered_variable, file_variables,
+        ismip_meta[index]["dim"], report_naming_issues,
     )
     var_naming_errors += file_var_errors
     if not has_variable:
