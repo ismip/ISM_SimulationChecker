@@ -1842,12 +1842,13 @@ def _insert_synthesis(
     iline += 2
     contents.insert(iline, "0 warning(s) detected.\n")
     iline += 2
-    if total_naming_errors > 0:
+    if report_naming_issues:
         contents.insert(iline, "Naming tests errors report: \n")
         iline += 1
-        for i in range(iline, len(report_naming_issues)):
-            contents.insert(i, "  - " + report_naming_issues[i - 24] + "\n")
-        contents.insert(iline + len(report_naming_issues), "\n")
+        for issue in report_naming_issues:
+            contents.insert(iline, "  - " + issue.rstrip("\n") + "\n")
+            iline += 1
+        contents.insert(iline, "\n")
 
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
         f.writelines(contents)

@@ -354,6 +354,11 @@ def test_checker_reports_variable_missing_from_file(case_dir):
         in summary["log_text"]
     )
     assert "'limm' may be a misspelling of 'lim'" in summary["log_text"]
+    # The problem is also named in the synthesis at the top of the log, which
+    # is where a modeler with a long log looks first.
+    synthesis = summary["log_text"].split("DETAILED RESULTS")[0]
+    assert "Naming tests errors report:" in synthesis
+    assert "does not contain it" in synthesis
 
 
 def test_checker_reports_swapped_variable_in_file(case_dir):
