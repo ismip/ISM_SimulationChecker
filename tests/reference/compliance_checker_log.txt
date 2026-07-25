@@ -39,6 +39,9 @@ Experiment: historical - File: acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_hi
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'acabf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'acabf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: acabf
  
 NUMERICAL Tests 
@@ -73,6 +76,9 @@ Experiment: historical - File: base_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_his
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'base' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'base' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: base
  
 NUMERICAL Tests 
@@ -107,6 +113,9 @@ Experiment: historical - File: dlithkdt_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'dlithkdt' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'dlithkdt' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: dlithkdt
  
 NUMERICAL Tests 
@@ -141,6 +150,9 @@ Experiment: historical - File: iareafl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'iareafl' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'iareafl' dimensions (time) match the requested t: OK
 ** Tested Variable: iareafl
  
 NUMERICAL Tests 
@@ -169,6 +181,9 @@ Experiment: historical - File: iareagr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'iareagr' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'iareagr' dimensions (time) match the requested t: OK
 ** Tested Variable: iareagr
  
 NUMERICAL Tests 
@@ -197,6 +212,9 @@ Experiment: historical - File: libmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'libmassbffl' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'libmassbffl' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: libmassbffl
  
 NUMERICAL Tests 
@@ -231,6 +249,9 @@ Experiment: historical - File: libmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'libmassbfgr' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'libmassbfgr' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: libmassbfgr
  
 NUMERICAL Tests 
@@ -265,6 +286,9 @@ Experiment: historical - File: licalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'licalvf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'licalvf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: licalvf
  
 NUMERICAL Tests 
@@ -299,6 +323,9 @@ Experiment: historical - File: lifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f00
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'lifmassbf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'lifmassbf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: lifmassbf
  
 NUMERICAL Tests 
@@ -333,6 +360,9 @@ Experiment: historical - File: ligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f00
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'ligroundf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'ligroundf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: ligroundf
  
 NUMERICAL Tests 
@@ -367,6 +397,9 @@ Experiment: historical - File: lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_hist
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'lim' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'lim' dimensions (time) match the requested t: OK
 ** Tested Variable: lim
  
 NUMERICAL Tests 
@@ -395,6 +428,9 @@ Experiment: historical - File: limnsw_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_h
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'limnsw' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'limnsw' dimensions (time) match the requested t: OK
 ** Tested Variable: limnsw
  
 NUMERICAL Tests 
@@ -423,6 +459,9 @@ Experiment: historical - File: lithk_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_hi
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'lithk' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'lithk' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: lithk
  
 NUMERICAL Tests 
@@ -457,6 +496,9 @@ Experiment: historical - File: orog_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_his
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'orog' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'orog' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: orog
  
 NUMERICAL Tests 
@@ -491,6 +533,9 @@ Experiment: historical - File: sftflf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_h
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'sftflf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'sftflf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: sftflf
  
 NUMERICAL Tests 
@@ -525,6 +570,9 @@ Experiment: historical - File: sftgif_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_h
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'sftgif' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'sftgif' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: sftgif
  
 NUMERICAL Tests 
@@ -559,6 +607,9 @@ Experiment: historical - File: sftgrf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_h
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'sftgrf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'sftgrf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: sftgrf
  
 NUMERICAL Tests 
@@ -593,6 +644,9 @@ Experiment: historical - File: strbasemag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f0
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'strbasemag' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'strbasemag' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: strbasemag
  
 NUMERICAL Tests 
@@ -627,6 +681,9 @@ Experiment: historical - File: tendacabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f00
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'tendacabf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'tendacabf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendacabf
  
 NUMERICAL Tests 
@@ -655,6 +712,9 @@ Experiment: historical - File: tendlibmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WAC
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'tendlibmassbffl' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'tendlibmassbffl' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlibmassbffl
  
 NUMERICAL Tests 
@@ -683,6 +743,9 @@ Experiment: historical - File: tendlibmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WAC
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'tendlibmassbfgr' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'tendlibmassbfgr' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlibmassbfgr
  
 NUMERICAL Tests 
@@ -711,6 +774,9 @@ Experiment: historical - File: tendlicalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'tendlicalvf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'tendlicalvf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlicalvf
  
 NUMERICAL Tests 
@@ -739,6 +805,9 @@ Experiment: historical - File: tendlifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'tendlifmassbf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'tendlifmassbf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlifmassbf
  
 NUMERICAL Tests 
@@ -767,6 +836,9 @@ Experiment: historical - File: tendligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'tendligroundf' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'tendligroundf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendligroundf
  
 NUMERICAL Tests 
@@ -795,6 +867,9 @@ Experiment: historical - File: topg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_his
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'topg' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'topg' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: topg
  
 NUMERICAL Tests 
@@ -829,6 +904,9 @@ Experiment: historical - File: xvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'xvelmean' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'xvelmean' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: xvelmean
  
 NUMERICAL Tests 
@@ -863,6 +941,9 @@ Experiment: historical - File: yvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001
  
 NAMING Tests 
  - Filename year range 2013-2014 matches time axis: OK
+ - Variable 'yvelmean' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'yvelmean' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: yvelmean
  
 NUMERICAL Tests 

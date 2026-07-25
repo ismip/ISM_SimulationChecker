@@ -1,8 +1,13 @@
 #
 # ISMIP7 Compliance Checker — check summary
 #
-# 1. Naming (_check_naming)
-#    - Variable name matches the expected ISMIP7 name from the data request.
+# 1. Naming (_check_naming, _check_file_variables)
+#    - Variable field of the filename is a variable of the data request.
+#    - The variable named in the filename is present in the file.
+#    - The file holds no variables beyond that one, its coordinates, and any
+#      bounds or grid-mapping variables they refer to.
+#    - The variable's dimensions are the ones the data request asks for, in the
+#      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
@@ -38,6 +43,7 @@
 
 
 import datetime
+import difflib
 import os
 import re
 import subprocess
@@ -165,7 +171,9 @@ def run_checker(
 ):
     version = _describe_version() if version is None else version
     experiments_ismip7 = _load_experiments_csv()
-    ismip_meta, ismip_var, mandatory_variables = _load_criteria(variable_list)
+    ismip_meta, ismip_var, mandatory_variables, all_request_variables = _load_criteria(
+        variable_list
+    )
 
     summary = _run_compliance_checker(
         source_path=source_path,
@@ -173,6 +181,7 @@ def run_checker(
         ismip_meta=ismip_meta,
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
+        all_request_variables=all_request_variables,
         experiments=experiments_ismip7,
         criteria_file=VARIABLE_REQUEST_CSV,
     )
@@ -259,6 +268,12 @@ def _load_criteria(variable_list: str):
 
     df = df.dropna(subset=["Variable Name"])
 
+    # The whole request, before --variable-list narrows it below.  A file whose
+    # variable is in the request but outside the selected list is skipped
+    # rather than reported: checking the scalars of a directory says nothing
+    # about the x,y,t files sitting beside them.
+    all_request_variables = set(df["Variable Name"])
+
     if variable_list == "ismip7_xyt":
         df = df[df["Dim"].isin(["x,y,t", "x,y,z,t", "x,y"])]
     elif variable_list == "ismip7_scalars":
@@ -286,7 +301,7 @@ def _load_criteria(variable_list: str):
 
     ismip_var = [d["variable"] for d in ismip_meta]
     ismip_mandatory_var = [d["variable"] for d in ismip_meta if d["mandatory"] == 1]
-    return ismip_meta, ismip_var, ismip_mandatory_var
+    return ismip_meta, ismip_var, ismip_mandatory_var, all_request_variables
 
 
 def _load_experiments_csv(filename: str = EXPERIMENTS_ISMIP7_CSV_FILENAME):
@@ -322,6 +337,7 @@ def _run_compliance_checker(
     ismip_meta,
     ismip_var,
     mandatory_variables,
+    all_request_variables,
     experiments,
     criteria_file,
 ):
@@ -348,6 +364,7 @@ def _run_compliance_checker(
                 source_path=source_path,
                 experiment_groups=experiment_groups,
                 mandatory_variables=mandatory_variables,
+                all_request_variables=all_request_variables,
                 experiments=experiments,
                 ismip_var=ismip_var,
                 ismip_meta=ismip_meta,
@@ -409,6 +426,7 @@ def _process_experiments(
     source_path: str,
     experiment_groups: dict,
     mandatory_variables,
+    all_request_variables,
     experiments,
     ismip_var,
     ismip_meta,
@@ -432,6 +450,7 @@ def _process_experiments(
             experiment_name=experiment_name,
             exp_files=exp_files,
             mandatory_variables=mandatory_variables,
+            all_request_variables=all_request_variables,
             experiments=experiments,
             ismip_var=ismip_var,
             ismip_meta=ismip_meta,
@@ -481,6 +500,7 @@ def _process_single_experiment(
     experiment_name: str,
     exp_files: list,
     mandatory_variables,
+    all_request_variables,
     experiments,
     ismip_var,
     ismip_meta,
@@ -531,6 +551,7 @@ def _process_single_experiment(
                 experiment_name=experiment_name,
                 ismip_var=ismip_var,
                 ismip_meta=ismip_meta,
+                all_request_variables=all_request_variables,
                 experiments=experiments,
                 report_naming_issues=report_naming_issues,
             )
@@ -589,6 +610,7 @@ def _process_single_file(
     experiment_name: str,
     ismip_var,
     ismip_meta,
+    all_request_variables,
     experiments,
     report_naming_issues,
 ):
@@ -670,7 +692,25 @@ def _process_single_file(
             "var_attr_errors": var_attr_errors,
         }
 
-    if considered_variable in ismip_var:
+    if considered_variable not in all_request_variables:
+        log_file.write(" \n")
+        log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
+        log_file.write(" \n")
+        log_file.write("NAMING Tests \n")
+        message = (
+            f"'{considered_variable}' (field {ISMIP7_FILENAME_VAR_IDX} of the"
+            f" file name) is not a variable in the data request"
+            f" {VARIABLE_REQUEST_CSV}."
+        )
+        near_misses = difflib.get_close_matches(
+            considered_variable, all_request_variables, n=1
+        )
+        if near_misses:
+            message += f" The closest requested name is '{near_misses[0]}'."
+        log_file.write(f" - ERROR: {message}\n")
+        report_naming_issues.append(f"Compliance check ignored: {message}")
+        var_naming_errors += 1
+    elif considered_variable in ismip_var:
         var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors = (
             _run_variable_checks(
                 log_file=log_file,
@@ -825,6 +865,153 @@ def _check_naming(
                     )
 
     return errors
+
+
+# The data request writes a variable's dimensions innermost-first and calls the
+# time dimension 't' ('x,y,t'); the files write them outermost-first in the
+# conventional CF order and call it 'time'.  This is the translation between
+# the two, and the four forms here are every 'Dim' the request uses.
+REQUESTED_DIMENSIONS: dict[str, tuple[str, ...]] = {
+    "t": ("time",),
+    "x,y": ("y", "x"),
+    "x,y,t": ("time", "y", "x"),
+    "x,y,z,t": ("time", "z", "y", "x"),
+}
+
+
+def _check_variable_dimensions(
+    log_file,
+    ds,
+    considered_variable: str,
+    requested_dim: str,
+) -> int:
+    """Check a variable's dimensions against the 'Dim' column of the request."""
+    expected = REQUESTED_DIMENSIONS.get(requested_dim)
+    if expected is None:
+        log_file.write(
+            f" - Variable '{considered_variable}' dimensions: not checked (the"
+            f" data request gives Dim '{requested_dim}', which this checker does"
+            f" not know).\n"
+        )
+        return 0
+
+    # 't' is an accepted spelling of the time dimension throughout the checker.
+    actual = tuple(
+        "time" if name == "t" else name for name in ds[considered_variable].dims
+    )
+
+    if set(actual) != set(expected):
+        log_file.write(
+            f" - ERROR: variable '{considered_variable}' has dimensions"
+            f" {actual}; the data request asks for {requested_dim}, that is"
+            f" {expected}.\n"
+        )
+        return 1
+
+    if actual != expected:
+        log_file.write(
+            f" - ERROR: variable '{considered_variable}' has dimensions"
+            f" {actual}; the data request asks for {requested_dim} in the"
+            f" conventional order {expected}.\n"
+        )
+        return 1
+
+    log_file.write(
+        f" - Variable '{considered_variable}' dimensions ({', '.join(actual)})"
+        f" match the requested {requested_dim}: OK\n"
+    )
+    return 0
+
+
+def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
+    """The variables a file may hold besides the one it is named for.
+
+    A file carries one variable of the data request, but CF lets that variable
+    bring companions: the bounds of a coordinate (which is how 'time_bounds'
+    reaches every FL file), the container variable a 'grid_mapping' points at,
+    and any auxiliary coordinates the variable names.  Those belong in the
+    file; anything else is something the data request did not ask for.
+    """
+    allowed = {considered_variable} | set(ds.coords)
+
+    # xarray moves CF attributes into .encoding as it decodes, so both places
+    # have to be looked at to find what a file actually declares.
+    for coord in ds.coords.values():
+        bounds = {**coord.attrs, **coord.encoding}.get("bounds")
+        if bounds:
+            allowed.add(str(bounds))
+
+    attributes = {**ds[considered_variable].attrs, **ds[considered_variable].encoding}
+    grid_mapping = attributes.get("grid_mapping")
+    if grid_mapping:
+        allowed.add(str(grid_mapping))
+    allowed.update(str(attributes.get("coordinates", "")).split())
+
+    return allowed
+
+
+def _check_file_variables(
+    log_file,
+    ds,
+    file_name: str,
+    considered_variable: str,
+    file_variables,
+    requested_dim: str,
+    report_naming_issues: list,
+) -> tuple[int, bool]:
+    """Check the variables a file contains against the one its name promises.
+
+    The file name states which variable of the data request a file carries, and
+    every other check reads that variable, so a file that does not contain it
+    has nothing to check: the second element of the return value is False, and
+    the caller skips the remaining checks for the file rather than reporting a
+    clean bill of health on a variable that was never looked at.
+    """
+    errors = 0
+
+    if considered_variable not in file_variables:
+        message = (
+            f"the file name promises variable '{considered_variable}', but the"
+            f" file does not contain it. Data variables found:"
+            f" {sorted(file_variables)}."
+        )
+        near_misses = difflib.get_close_matches(
+            considered_variable, file_variables, n=1
+        )
+        if near_misses:
+            message += (
+                f" '{near_misses[0]}' may be a misspelling of"
+                f" '{considered_variable}'."
+            )
+        log_file.write(f" - ERROR: {message}\n")
+        report_naming_issues.append(
+            f"Compliance check ignored: in the file {file_name}, {message}"
+        )
+        return errors + 1, False
+
+    log_file.write(
+        f" - Variable '{considered_variable}' from the file name is present in"
+        f" the file: OK\n"
+    )
+
+    allowed = _allowed_file_variables(ds, considered_variable)
+    unexpected = sorted(name for name in file_variables if name not in allowed)
+    for name in unexpected:
+        log_file.write(
+            f" - ERROR: unexpected variable '{name}' in the file. A file holds"
+            f" one variable of the data request -- here '{considered_variable}'"
+            f" -- along with its coordinates and any bounds or grid-mapping"
+            f" variables, and nothing else.\n"
+        )
+        errors += 1
+    if not unexpected:
+        log_file.write(" - No unexpected variables in the file: OK\n")
+
+    errors += _check_variable_dimensions(
+        log_file, ds, considered_variable, requested_dim
+    )
+
+    return errors, True
 
 
 # CF requires only that the units attribute be "a string that can be recognized
@@ -1516,23 +1703,34 @@ def _run_variable_checks(
     if n_err > 0:
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
+    file_var_errors, has_variable = _check_file_variables(
+        log_file, ds, file_name, considered_variable, file_variables,
+        ismip_meta[index]["dim"], report_naming_issues,
+    )
+    var_naming_errors += file_var_errors
+    if not has_variable:
+        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+
     grid_extent = AIS_GRID_EXTENT if region == "AIS" else GrIS_GRID_EXTENT
     possible_resolution = AIS_POSSIBLE_RESOLUTION if region == "AIS" else GrIS_POSSIBLE_RESOLUTION
 
-    for ivar in file_variables:
-        if ivar in ismip_var:
-            log_file.write("** Tested Variable: " + ivar + "\n")
-            log_file.write(" \n")
-            var_index = [k for k in range(len(ismip_var)) if ismip_var[k] == ivar][0]
+    # The checks read the variable the file name promises, and the row of the
+    # data request that goes with it.  Reading whatever variable the file
+    # happens to contain instead would check a file against the wrong criteria,
+    # or -- when nothing in it is a requested name -- against none at all.
+    ivar = considered_variable
+    var_index = index
+    log_file.write("** Tested Variable: " + ivar + "\n")
+    log_file.write(" \n")
 
-            var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
+    var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
 
-            if not isscalar:
-                var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
+    if not isscalar:
+        var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
 
-            var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name, ismip_meta[var_index].get("type", ""))
+    var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name, var_type)
 
-            var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, ismip_meta[var_index].get("type", ""), region)
+    var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, var_type, region)
 
     return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
@@ -1644,12 +1842,13 @@ def _insert_synthesis(
     iline += 2
     contents.insert(iline, "0 warning(s) detected.\n")
     iline += 2
-    if total_naming_errors > 0:
+    if report_naming_issues:
         contents.insert(iline, "Naming tests errors report: \n")
         iline += 1
-        for i in range(iline, len(report_naming_issues)):
-            contents.insert(i, "  - " + report_naming_issues[i - 24] + "\n")
-        contents.insert(iline + len(report_naming_issues), "\n")
+        for issue in report_naming_issues:
+            contents.insert(iline, "  - " + issue.rstrip("\n") + "\n")
+            iline += 1
+        contents.insert(iline, "\n")
 
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
         f.writelines(contents)
