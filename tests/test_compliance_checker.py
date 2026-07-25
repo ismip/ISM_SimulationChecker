@@ -427,6 +427,42 @@ def test_checker_reports_transposed_variable(xyt_case_dir):
     )
 
 
+def test_checker_reports_unknown_variable_in_file_name(case_dir):
+    rename_file_part(
+        dataset_for_variable(case_dir, "lim"),
+        checker.ISMIP7_FILENAME_VAR_IDX,
+        "bogusvar",
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert (
+        "'bogusvar' (field 0 of the file name) is not a variable in the data "
+        "request" in summary["log_text"]
+    )
+    # The file no longer supplies lim, so the mandatory-variable check fires
+    # too; before this the missing variable was the only sign of the problem.
+    assert summary["total_file_errors"] == 1
+    assert summary["total_errors"] == 2
+
+
+def test_checker_ignores_variables_outside_the_selected_list(xyt_case_dir):
+    """An x,y,t file is skipped, not faulted, by a scalars-only run.
+
+    The README has modelers check a directory once per variable list, so the
+    files belonging to the other list have to pass by in silence.
+    """
+    summary = checker.run_checker(
+        source_path=str(xyt_case_dir),
+        variable_list="ismip7_scalars",
+        version="tests",
+    )
+
+    assert "is not a variable in the data request" not in summary["log_text"]
+    assert summary["total_naming_errors"] == 0
+
+
 def test_checker_reports_missing_contact_email_attribute(case_dir):
     remove_global_attribute(first_dataset(case_dir), "contact_email")
 

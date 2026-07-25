@@ -2,7 +2,7 @@
 # ISMIP7 Compliance Checker — check summary
 #
 # 1. Naming (_check_naming, _check_file_variables)
-#    - Variable name matches the expected ISMIP7 name from the data request.
+#    - Variable field of the filename is a variable of the data request.
 #    - The variable named in the filename is present in the file.
 #    - The file holds no variables beyond that one, its coordinates, and any
 #      bounds or grid-mapping variables they refer to.
@@ -171,7 +171,9 @@ def run_checker(
 ):
     version = _describe_version() if version is None else version
     experiments_ismip7 = _load_experiments_csv()
-    ismip_meta, ismip_var, mandatory_variables = _load_criteria(variable_list)
+    ismip_meta, ismip_var, mandatory_variables, all_request_variables = _load_criteria(
+        variable_list
+    )
 
     summary = _run_compliance_checker(
         source_path=source_path,
@@ -179,6 +181,7 @@ def run_checker(
         ismip_meta=ismip_meta,
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
+        all_request_variables=all_request_variables,
         experiments=experiments_ismip7,
         criteria_file=VARIABLE_REQUEST_CSV,
     )
@@ -265,6 +268,12 @@ def _load_criteria(variable_list: str):
 
     df = df.dropna(subset=["Variable Name"])
 
+    # The whole request, before --variable-list narrows it below.  A file whose
+    # variable is in the request but outside the selected list is skipped
+    # rather than reported: checking the scalars of a directory says nothing
+    # about the x,y,t files sitting beside them.
+    all_request_variables = set(df["Variable Name"])
+
     if variable_list == "ismip7_xyt":
         df = df[df["Dim"].isin(["x,y,t", "x,y,z,t", "x,y"])]
     elif variable_list == "ismip7_scalars":
@@ -292,7 +301,7 @@ def _load_criteria(variable_list: str):
 
     ismip_var = [d["variable"] for d in ismip_meta]
     ismip_mandatory_var = [d["variable"] for d in ismip_meta if d["mandatory"] == 1]
-    return ismip_meta, ismip_var, ismip_mandatory_var
+    return ismip_meta, ismip_var, ismip_mandatory_var, all_request_variables
 
 
 def _load_experiments_csv(filename: str = EXPERIMENTS_ISMIP7_CSV_FILENAME):
@@ -328,6 +337,7 @@ def _run_compliance_checker(
     ismip_meta,
     ismip_var,
     mandatory_variables,
+    all_request_variables,
     experiments,
     criteria_file,
 ):
@@ -354,6 +364,7 @@ def _run_compliance_checker(
                 source_path=source_path,
                 experiment_groups=experiment_groups,
                 mandatory_variables=mandatory_variables,
+                all_request_variables=all_request_variables,
                 experiments=experiments,
                 ismip_var=ismip_var,
                 ismip_meta=ismip_meta,
@@ -415,6 +426,7 @@ def _process_experiments(
     source_path: str,
     experiment_groups: dict,
     mandatory_variables,
+    all_request_variables,
     experiments,
     ismip_var,
     ismip_meta,
@@ -438,6 +450,7 @@ def _process_experiments(
             experiment_name=experiment_name,
             exp_files=exp_files,
             mandatory_variables=mandatory_variables,
+            all_request_variables=all_request_variables,
             experiments=experiments,
             ismip_var=ismip_var,
             ismip_meta=ismip_meta,
@@ -487,6 +500,7 @@ def _process_single_experiment(
     experiment_name: str,
     exp_files: list,
     mandatory_variables,
+    all_request_variables,
     experiments,
     ismip_var,
     ismip_meta,
@@ -537,6 +551,7 @@ def _process_single_experiment(
                 experiment_name=experiment_name,
                 ismip_var=ismip_var,
                 ismip_meta=ismip_meta,
+                all_request_variables=all_request_variables,
                 experiments=experiments,
                 report_naming_issues=report_naming_issues,
             )
@@ -595,6 +610,7 @@ def _process_single_file(
     experiment_name: str,
     ismip_var,
     ismip_meta,
+    all_request_variables,
     experiments,
     report_naming_issues,
 ):
@@ -676,7 +692,25 @@ def _process_single_file(
             "var_attr_errors": var_attr_errors,
         }
 
-    if considered_variable in ismip_var:
+    if considered_variable not in all_request_variables:
+        log_file.write(" \n")
+        log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
+        log_file.write(" \n")
+        log_file.write("NAMING Tests \n")
+        message = (
+            f"'{considered_variable}' (field {ISMIP7_FILENAME_VAR_IDX} of the"
+            f" file name) is not a variable in the data request"
+            f" {VARIABLE_REQUEST_CSV}."
+        )
+        near_misses = difflib.get_close_matches(
+            considered_variable, all_request_variables, n=1
+        )
+        if near_misses:
+            message += f" The closest requested name is '{near_misses[0]}'."
+        log_file.write(f" - ERROR: {message}\n")
+        report_naming_issues.append(f"Compliance check ignored: {message}")
+        var_naming_errors += 1
+    elif considered_variable in ismip_var:
         var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors = (
             _run_variable_checks(
                 log_file=log_file,
