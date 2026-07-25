@@ -11,7 +11,8 @@
 #    - Year range (field 9) matches format YYYY-YYYY; start <= end; both match the actual time axis.
 #
 # 2. Numerical (_check_numerical)
-#    - Variable units match the data request.
+#    - Variable units match the data request (any UDUNITS spelling of the
+#      requested unit is accepted: 'm2', 'm^2' and 'm**2' are all the same).
 #    - All values lie within the allowed min/max range for the relevant region.
 #    - Array is not entirely fill/missing values.
 #
@@ -826,6 +827,97 @@ def _check_naming(
     return errors
 
 
+# CF requires only that the units attribute be "a string that can be recognized
+# by the UDUNITS package", and UDUNITS recognises several spellings of the same
+# unit: the exponent in 'm2' may equally be written 'm^2' or 'm**2', the factors
+# of a product may be separated by a space, a '.', a '*' or a middle dot, and a
+# '/' introduces factors with negated exponents.  The data request writes one
+# spelling per variable, but a model that writes another is just as compliant
+# (PISM writes 'm^2' because pint does not recognise 'm2'), so the checker
+# compares what units mean rather than how they are spelled.
+
+# One factor of a product: a base name, then an exponent written with a caret
+# ('m^2'), a double star ('m**2', normalised to a caret first) or bare ('m2').
+# Digits and signs are kept out of the base so that the exponent is what is
+# left over.
+_UNIT_FACTOR_RE = re.compile(r"^(?P<base>[^\d\s^/*.()+-]+)\^?(?P<exponent>[+-]?\d+)?$")
+
+# Whitespace, '.', '*' and the middle dot all multiply in UDUNITS.
+_UNIT_PRODUCT_SEPARATORS = r"[\s.*·×]+"
+_UNIT_PRODUCT_SEPARATOR_RE = re.compile(_UNIT_PRODUCT_SEPARATORS)
+
+# Splits a units string into factors and the operators between them, keeping
+# the operators so that '/' can be told from the multiplications.
+_UNIT_TOKEN_RE = re.compile(rf"(/|{_UNIT_PRODUCT_SEPARATORS})")
+
+
+def _parse_units(units: str):
+    """Return a canonical (scale, factors) form of a UDUNITS string.
+
+    `factors` is the sorted tuple of (base unit, exponent) pairs, so that
+    equivalent spellings of the same unit give equal results.  Returns None for
+    the strings this deliberately small parser does not claim to understand:
+    empty units, parentheses, timestamp offsets such as 'days since
+    1850-01-01', and decimal scale factors (where '.' is a decimal point rather
+    than a multiplication).  Callers fall back to comparing such strings
+    literally.
+    """
+    text = units.strip()
+    if (
+        not text
+        or "(" in text
+        or ")" in text
+        or re.search(r"\d\.\d", text)
+        or re.search(r"\b(since|after|from|ref)\b", text)
+    ):
+        return None
+
+    text = text.replace("**", "^")
+    scale = 1.0
+    exponents: dict[str, int] = {}
+    # UDUNITS multiplies and divides left to right, so a '/' inverts only the
+    # factor that follows it: 'kg/m2 s' is kg m-2 s, not kg m-2 s-1.
+    sign = 1
+    factor_count = 0
+    for token in _UNIT_TOKEN_RE.split(text):
+        if not token:
+            continue
+        if token == "/":
+            sign = -1
+            continue
+        if _UNIT_PRODUCT_SEPARATOR_RE.fullmatch(token):
+            sign = 1
+            continue
+        match = _UNIT_FACTOR_RE.match(token)
+        if match is None:
+            # Not a named unit: the only other thing it can be is a numerical
+            # factor, such as the '1' of a dimensionless unit.
+            try:
+                scale *= float(token) ** sign
+            except ValueError:
+                return None
+        else:
+            base = match.group("base")
+            exponent = int(match.group("exponent") or 1) * sign
+            exponents[base] = exponents.get(base, 0) + exponent
+        sign = 1
+        factor_count += 1
+
+    if factor_count == 0:
+        return None
+
+    factors = tuple(sorted((b, e) for b, e in exponents.items() if e != 0))
+    return scale, factors
+
+
+def _units_match(actual: str, expected: str) -> bool:
+    """Whether two units strings denote the same unit, however each is spelled."""
+    if actual == expected:
+        return True
+    parsed_actual = _parse_units(actual)
+    return parsed_actual is not None and parsed_actual == _parse_units(expected)
+
+
 def _check_numerical(
     log_file,
     ds,
@@ -839,14 +931,24 @@ def _check_numerical(
 
     log_file.write("NUMERICAL Tests \n")
 
-    if ds[ivar].attrs["units"] == ismip_meta[var_index]["units"]:
-        log_file.write(" - The unit is correct: " + ds[ivar].attrs["units"] + "\n")
+    var_units = ds[ivar].attrs["units"]
+    expected_units = ismip_meta[var_index]["units"]
+    if var_units == expected_units:
+        log_file.write(" - The unit is correct: " + var_units + "\n")
+    elif _units_match(var_units, expected_units):
+        log_file.write(
+            " - The unit is correct: "
+            + var_units
+            + " (equivalent to the requested "
+            + expected_units
+            + ")\n"
+        )
     else:
         log_file.write(
             " - ERROR: The unit of the variable is "
-            + ds[ivar].attrs["units"]
+            + var_units
             + " and should be "
-            + ismip_meta[var_index]["units"]
+            + expected_units
             + " \n"
         )
         errors += 1
