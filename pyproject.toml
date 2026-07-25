@@ -38,9 +38,10 @@ Issues = "https://github.com/ismip/ISM_SimulationChecker/issues"
 
 [project.scripts]
 ismip7-compliance-checker = "isschecker:main"
+ismip7-generate-test-files = "isschecker.generate:main"
 
 [tool.setuptools]
 packages = ["isschecker", "isschecker.data"]
 
 [tool.setuptools.package-data]
-"isschecker.data" = ["*.csv"]
+"isschecker.data" = ["*.csv", "gdfs/*.txt"]

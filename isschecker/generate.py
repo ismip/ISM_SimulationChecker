@@ -1,39 +1,49 @@
-#!/usr/bin/env python3
 """
 NetCDF file generator for ISMIP7 ice sheet simulation data.
 
-This script generates NetCDF files with variables and metadata following
-ISMIP7 conventions as defined in the criteria CSV files and grid definitions.
+Generates NetCDF files with variables and metadata following ISMIP7
+conventions as defined in the criteria CSV files and grid definitions, both of
+which ship as package data alongside the checker.
 """
+import argparse
 import re
+from importlib import resources
 import numpy as np
 import xarray as xr
 from datetime import datetime
 from pathlib import Path
 import netCDF4
 
-REPO_ROOT = Path(__file__).resolve().parent.parent
-GDF_DIR = REPO_ROOT / 'gdfs'
-# The variable-request CSV is bundled with the isschecker package data.
-CONVENTIONS_DIR = REPO_ROOT / 'isschecker' / 'data'
+DATA_PACKAGE = f'{__package__}.data'
 
 
-def get_available_grids(conventions_dir):
+def data_dir() -> Path:
+    """Return the bundled directory of criteria CSVs and `gdfs` grid definitions.
+
+    The package is always installed as a directory rather than a zip, so the
+    resource is a real path on disk.
     """
-    Get available grid definitions from gdfs directory.
+    return Path(str(resources.files(DATA_PACKAGE)))
+
+
+def get_available_grids(conventions_dir=None):
+    """
+    Get available grid definitions from the `gdfs` directory.
 
     Parameters
     ----------
-    conventions_dir : str
-        Path to conventions directory
+    conventions_dir : str, optional
+        Path to conventions directory (default: the bundled package data)
 
     Returns
     -------
     dict
         Dictionary with grid info: {'GrIS': [...], 'AIS': [...]}
     """
-    # Grid definitions live in the project root `gdfs` directory
-    gdf_dir = GDF_DIR
+    if conventions_dir is None:
+        conventions_dir = data_dir()
+    gdf_dir = Path(conventions_dir) / 'gdfs'
+
     grids = {'GrIS': [], 'AIS': []}
 
     if not gdf_dir.exists():
@@ -228,7 +238,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
 
     # Determine conventions directory (bundled package data by default)
     if conventions_dir is None:
-        conventions_dir = CONVENTIONS_DIR
+        conventions_dir = data_dir()
 
     conventions_dir = Path(conventions_dir)
 
@@ -246,7 +256,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
         domain_crs = 'EPSG:3031'
 
     # Determine output directory
-    models_dir = Path(output_root) if output_root is not None else Path(__file__).parent.parent / 'Models'
+    models_dir = Path(output_root) if output_root is not None else Path.cwd() / 'Models'
     if grid_type == 'AIS':
         output_dir = models_dir / 'AIS' / group / model / 'CORE' / set_counter
     else:  # GrIS
@@ -255,7 +265,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load grid definition
-    gdf_file = GDF_DIR / f'gdf_ISMIP7_{grid_type}_{resolution}.txt'
+    gdf_file = conventions_dir / 'gdfs' / f'gdf_ISMIP7_{grid_type}_{resolution}.txt'
     if not gdf_file.exists():
         raise FileNotFoundError(f"Grid definition file not found: {gdf_file}")
 
@@ -758,7 +768,7 @@ def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
     """
 
     if conventions_dir is None:
-        conventions_dir = CONVENTIONS_DIR
+        conventions_dir = data_dir()
 
     # Get available grids
     grids = get_available_grids(str(conventions_dir))
@@ -791,12 +801,11 @@ def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
     print(f"Total files created: {total_files}")
 
 
-if __name__ == '__main__':
-    import argparse
-
+def main():
+    """Command-line entry point for `ismip7-generate-test-files`."""
     # Get available grids
-    conventions_dir = CONVENTIONS_DIR
-    available_grids = get_available_grids(str(conventions_dir))
+    conventions_directory = data_dir()
+    available_grids = get_available_grids(conventions_directory)
 
     # Create list of available grid choices, excluding some high-resolution entries
     grid_choices = []
@@ -854,8 +863,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--conventions-dir',
-        default=str(conventions_dir),
-        help=f'Path to conventions directory (default: {conventions_dir})'
+        default=str(conventions_directory),
+        help=f'Path to conventions directory (default: {conventions_directory})'
     )
     parser.add_argument(
         '--ism-member-id',
@@ -894,7 +903,7 @@ if __name__ == '__main__':
                 for resolution in available_grids[grid_type]:
                     print(f"  - {grid_type}_{resolution}")
         print()
-        exit(0)
+        return
 
     if args.multiple:
         create_multiple_files(conventions_dir=args.conventions_dir,
@@ -917,3 +926,7 @@ if __name__ == '__main__':
             forcing_member_id=args.forcing_member_id,
             set_counter=args.set_counter,
         )
+
+
+if __name__ == '__main__':
+    main()

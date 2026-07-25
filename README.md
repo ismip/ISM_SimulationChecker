@@ -8,7 +8,7 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence for `x,y,t` and `t` variables; sparse snapshot timestamps for `x,y,z,t` variables (see [Time encoding](#time-encoding)); experiment start/end dates and duration match `experiments_ismip7.csv` for `x,y,t` and `t` variables.
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). These files are bundled with the package.
+Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). Together with the grid definitions in `isschecker/data/gdfs/`, these files are bundled with the package.
 
 ---
 
@@ -111,26 +111,26 @@ ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --
 
 ## Generating synthetic test files
 
-`generate/generate_test_files.py` creates ISMIP7-style NetCDF test files with synthetic data. See [generate/README.md](generate/README.md) for full options and examples.
+The `ismip7-generate-test-files` command creates ISMIP7-style NetCDF test files with synthetic data, under `Models/` in the current directory. See [docs/generating_test_files.md](docs/generating_test_files.md) for full options and examples.
 
 ```bash
 conda activate isschecker
 
 # Generate 286-year GrIS ctrl xyt variables
-python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl --xyt --nyears 286 --start-year 2015
+ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl --xyt --nyears 286 --start-year 2015
 
 # Generate 286-year AIS ctrl scalar variables
-python generate/generate_test_files.py --grid AIS_16000m --scenario ctrl --scalars --nyears 286 --start-year 2015
+ismip7-generate-test-files --grid AIS_16000m --scenario ctrl --scalars --nyears 286 --start-year 2015
 
 # List available grids
-python generate/generate_test_files.py --list-grids
+ismip7-generate-test-files --list-grids
 ```
 
 ---
 
 ## Running Tests
 
-The regression suite uses `pytest` and creates temporary synthetic datasets, then mutates them to verify expected checker failures for naming, missing variables, time-axis problems, and missing attributes.
+The regression suite uses `pytest` and creates temporary synthetic datasets, then mutates them to verify expected checker failures for naming, missing variables, time-axis problems, and missing attributes. It imports `isschecker`, so install the package first (see [Setup](#setup)); the tests then exercise what is actually installed and can be run from any directory.
 
 ```bash
 pytest -v tests/test_compliance_checker.py

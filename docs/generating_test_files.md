@@ -1,14 +1,14 @@
 # ISMIP7 NetCDF generator
 
-`generate/generate_test_files.py` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker.
+`ismip7-generate-test-files` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker. It is part of the `isschecker` package (`isschecker.generate`), so it is installed along with the checker and can be run from any directory.
 
-Files are written to `Models/{GrIS|AIS}/ISMIP7/SYNTH1/CORE/{set_counter}/` (default `C001`).
+Files are written to `Models/{GrIS|AIS}/ISMIP7/SYNTH1/CORE/{set_counter}/` (default `C001`) beneath the current working directory.
 
 ## Usage
 
 ```bash
 conda activate isschecker
-python generate/generate_test_files.py [OPTIONS]
+ismip7-generate-test-files [OPTIONS]
 ```
 
 ## Key options
@@ -32,32 +32,32 @@ python generate/generate_test_files.py [OPTIONS]
 
 ```bash
 # List available grids
-python generate/generate_test_files.py --list-grids
+ismip7-generate-test-files --list-grids
 
 # Generate 286-year GrIS ctrl files (x,y,t variables)
-python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
+ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
   --xyt --nyears 286 --start-year 2015
 
 # Generate 286-year AIS ssp370 files
-python generate/generate_test_files.py --grid AIS_08000m --scenario ssp370 \
+ismip7-generate-test-files --grid AIS_08000m --scenario ssp370 \
   --xyt --nyears 286 --start-year 2015
 
 # Generate scalar-only variables
-python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
+ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
   --scalars --nyears 286 --start-year 2015
 
 # Generate both 3D and scalar variables, including non-mandatory ones
-python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
+ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
   --xyt --scalars --include-non-mandatory --nyears 286 --start-year 2015
 
 # Generate testdata for ismip7-scalar-processing
-python generate/generate_test_files.py --grid AIS_16000m --scenario historical \
+ismip7-generate-test-files --grid AIS_16000m --scenario historical \
   --set-counter C001 --xyt --include-non-mandatory --nyears 1  --start-year 2014 
-python generate/generate_test_files.py --grid AIS_16000m --scenario ssp585 \
+ismip7-generate-test-files --grid AIS_16000m --scenario ssp585 \
   --set-counter C007 --xyt --include-non-mandatory --nyears 286 --start-year 2015
-python generate/generate_test_files.py --grid GrIS_16000m --scenario historical \
+ismip7-generate-test-files --grid GrIS_16000m --scenario historical \
   --set-counter C001 --xyt --include-non-mandatory --nyears 55  --start-year 1960
-python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
+ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
   --set-counter C009 --xyt --include-non-mandatory --nyears 286 --start-year 2015
 ```
 
@@ -76,6 +76,6 @@ python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl \
 
 ## Notes
 
-- Variable metadata is read from `isschecker/data/ISMIP7_variable_request.csv`; grid definitions from the top-level `gdfs/` directory.
+- Variable metadata is read from `ISMIP7_variable_request.csv` and grid definitions from `gdfs/`, both bundled as package data in `isschecker/data/`. Use `--conventions-dir` to point at a different directory (it must contain the CSV and a `gdfs/` subdirectory).
 - `group`, `model`, `contact_name`, and `contact_email` are hardcoded in `create_netcdf_file()` to synthetic defaults — edit there to customise.
 - Generated files are synthetic and intended for testing the compliance checker, not for scientific use.

@@ -1,31 +1,14 @@
-import importlib.util
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 
 import netCDF4
 import pytest
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-checker = importlib.import_module("isschecker.checker")
-
-
-def _load_generator_module():
-    generator_path = REPO_ROOT / "generate" / "generate_test_files.py"
-    spec = importlib.util.spec_from_file_location("generate_test_files", generator_path)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-generate_test_files = _load_generator_module()
+# The installed package is what is tested: run `pip install --no-deps
+# --no-build-isolation -e .` (or without -e) before pytest.
+from isschecker import checker
+from isschecker import generate as generate_test_files
 
 
 @pytest.fixture(scope="session")
