@@ -1,0 +1,894 @@
+************************************************************************************
+*************     Ice Sheet Model Simulations - Compliance Checker     *************
+************************************************************************************
+isschecker version: <masked>
+verification criteria: ISMIP7_variable_request.csv
+date: <masked>
+source: https://github.com/ismip/ISM_SimulationChecker 
+ 
+------------------------------------------------------------------------------------
+Verified directory: <source-path> 
+------------------------------------------------------------------------------------
+1 experiments checked.
+27 files checked.
+ 
+0 error(s) detected.
+  - Mandatory variables: 0 error(s)
+  - Naming Tests       : 0 error(s)
+  - Numerical Tests    : 0 error(s)
+  - Spatial Tests      : 0 error(s)
+  - Time Tests         : 0 error(s)
+  - Attribute Tests    : 0 error(s)
+ 
+0 warning(s) detected.
+ 
+ 
+====================================================================================
+================                DETAILED RESULTS                    ================
+====================================================================================
+Hint: Use Cltr+F to look for specific problems. 
+ 
+
+ **********************************************************
+ ** Experiment: historical 
+ **********************************************************
+
+ Mandatory variables Test: historical : all mandatory variables exist. 
+ 
+Experiment: historical - File: acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: acabf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg m-2 s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - acabf - File:acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: base_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: base
+ 
+NUMERICAL Tests 
+ - The unit is correct: m
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - base - File:base_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: dlithkdt_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: dlithkdt
+ 
+NUMERICAL Tests 
+ - The unit is correct: m s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - dlithkdt - File:dlithkdt_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: iareafl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: iareafl
+ 
+NUMERICAL Tests 
+ - The unit is correct: m^2
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - iareafl - File:iareafl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: iareagr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: iareagr
+ 
+NUMERICAL Tests 
+ - The unit is correct: m^2
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - iareagr - File:iareagr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: libmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: libmassbffl
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg m-2 s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - libmassbffl - File:libmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: libmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: libmassbfgr
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg m-2 s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - libmassbfgr - File:libmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: licalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: licalvf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg m-2 s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - licalvf - File:licalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: lifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: lifmassbf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg m-2 s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - lifmassbf - File:lifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: ligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: ligroundf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg m-2 s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - ligroundf - File:ligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: lim
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - lim - File:lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: limnsw_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: limnsw
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - limnsw - File:limnsw_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: lithk_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: lithk
+ 
+NUMERICAL Tests 
+ - The unit is correct: m
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - lithk - File:lithk_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: orog_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: orog
+ 
+NUMERICAL Tests 
+ - The unit is correct: m
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - orog - File:orog_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: sftflf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: sftflf
+ 
+NUMERICAL Tests 
+ - The unit is correct: 1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - sftflf - File:sftflf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: sftgif_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: sftgif
+ 
+NUMERICAL Tests 
+ - The unit is correct: 1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - sftgif - File:sftgif_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: sftgrf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: sftgrf
+ 
+NUMERICAL Tests 
+ - The unit is correct: 1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - sftgrf - File:sftgrf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: strbasemag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: strbasemag
+ 
+NUMERICAL Tests 
+ - The unit is correct: Pa
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - strbasemag - File:strbasemag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: tendacabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: tendacabf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg s-1
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - tendacabf - File:tendacabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: tendlibmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: tendlibmassbffl
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg s-1
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - tendlibmassbffl - File:tendlibmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: tendlibmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: tendlibmassbfgr
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg s-1
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - tendlibmassbfgr - File:tendlibmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: tendlicalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: tendlicalvf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg s-1
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - tendlicalvf - File:tendlicalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: tendlifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: tendlifmassbf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg s-1
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - tendlifmassbf - File:tendlifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: tendligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: tendligroundf
+ 
+NUMERICAL Tests 
+ - The unit is correct: kg s-1
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2013-07-01 (nominal year 2013).
+ - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - tendligroundf - File:tendligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: topg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: topg
+ 
+NUMERICAL Tests 
+ - The unit is correct: m
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - topg - File:topg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: xvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: xvelmean
+ 
+NUMERICAL Tests 
+ - The unit is correct: m s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - xvelmean - File:xvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+ 
+Experiment: historical - File: yvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+ 
+NAMING Tests 
+ - Filename year range 2013-2014 matches time axis: OK
+** Tested Variable: yvelmean
+ 
+NUMERICAL Tests 
+ - The unit is correct: m s-1
+ - The minimum value successfully verified.
+ - The maximum value successfully verified.
+SPATIAL Tests 
+ - Grid: Lowest left corner is well defined.
+ - Grid: Upper right corner is well defined.
+ - The grid resolution (16 km) was successfully verified.
+TIME Tests 
+ - Time is a record (unlimited) dimension: OK
+ - Time step: 365 days
+ - Experiment lasts 2 years (>= 1 year required): OK
+ - First time stamp correctly set to 2014-01-01 (nominal year 2013).
+ - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ATTRIBUTE Tests 
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - yvelmean - File:yvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------

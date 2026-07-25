@@ -1,0 +1,26 @@
+# The oldest dependency versions the checker supports: every floor in
+# isschecker_env.yml pinned exactly.  CI runs the test suite against this
+# environment as well as the latest solve, so both ends of every range in
+# isschecker_env.yml are actually verified rather than assumed.
+#
+# Keep this file in step with isschecker_env.yml: when a floor moves there, move
+# it here too.
+name: isschecker
+channels:
+  - conda-forge
+  - nodefaults
+
+dependencies:
+  - python =3.11
+  - pip
+  - setuptools >=77
+
+  - numpy =2.1
+  - pandas =2.2
+  - tqdm =4.66
+
+  - xarray =2025.1.2
+  - cftime =1.6.4
+  - netcdf4 =1.7
+
+  - pytest =8

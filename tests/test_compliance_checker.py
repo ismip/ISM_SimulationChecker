@@ -1,31 +1,14 @@
-import importlib.util
 import shutil
-import sys
 from datetime import datetime
 from pathlib import Path
 
 import netCDF4
 import pytest
 
-
-REPO_ROOT = Path(__file__).resolve().parents[1]
-if str(REPO_ROOT) not in sys.path:
-    sys.path.insert(0, str(REPO_ROOT))
-
-compliance_checker = importlib.import_module("compliance_checker")
-
-
-def _load_generator_module():
-    generator_path = REPO_ROOT / "generate" / "generate_test_files.py"
-    spec = importlib.util.spec_from_file_location("generate_test_files", generator_path)
-    assert spec is not None
-    module = importlib.util.module_from_spec(spec)
-    assert spec.loader is not None
-    spec.loader.exec_module(module)
-    return module
-
-
-generate_test_files = _load_generator_module()
+# The installed package is what is tested: run `pip install --no-deps
+# --no-build-isolation -e .` (or without -e) before pytest.
+from isschecker import checker
+from isschecker import generate as generate_test_files
 
 
 @pytest.fixture(scope="session")
@@ -37,7 +20,6 @@ def baseline_core_dir(tmp_path_factory):
         scenario="historical",
         start_year=2013,
         nyears=2,
-        conventions_dir=REPO_ROOT / "conventions",
         include_scalars=True,
         include_xyt=False,
         output_root=baseline_root,
@@ -45,11 +27,10 @@ def baseline_core_dir(tmp_path_factory):
     assert created_files, "Synthetic baseline generation did not create any files."
 
     core_dir = baseline_root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "C001"
-    baseline_summary = compliance_checker.run_checker(
+    baseline_summary = checker.run_checker(
         source_path=str(core_dir),
         variable_list="ismip7_scalars",
-        workdir=str(REPO_ROOT),
-        commit_num="tests",
+        version="tests",
     )
     assert baseline_summary["total_errors"] == 0, (
         "Synthetic baseline files should pass the checker, but found "
@@ -66,11 +47,10 @@ def case_dir(tmp_path, baseline_core_dir):
 
 
 def run_checker(case_dir: Path):
-    return compliance_checker.run_checker(
+    return checker.run_checker(
         source_path=str(case_dir),
         variable_list="ismip7_scalars",
-        workdir=str(REPO_ROOT),
-        commit_num="tests",
+        version="tests",
     )
 
 
@@ -124,7 +104,7 @@ def test_checker_reports_missing_mandatory_variable(case_dir):
 def test_checker_reports_invalid_esm_in_filename(case_dir):
     rename_file_part(
         first_dataset(case_dir),
-        compliance_checker.ISMIP7_FILENAME_ESM_IDX,
+        checker.ISMIP7_FILENAME_ESM_IDX,
         "NOT-A-CMIP-MODEL",
     )
 
@@ -138,7 +118,7 @@ def test_checker_reports_invalid_esm_in_filename(case_dir):
 def test_checker_reports_invalid_year_range_format(case_dir):
     rename_file_part(
         first_dataset(case_dir),
-        compliance_checker.ISMIP7_FILENAME_YEAR_RANGE_IDX,
+        checker.ISMIP7_FILENAME_YEAR_RANGE_IDX,
         "2013to2014.nc",
     )
 
@@ -160,7 +140,7 @@ def test_checker_reports_historical_time_range_violation(case_dir):
     )
     rename_file_part(
         target_file,
-        compliance_checker.ISMIP7_FILENAME_YEAR_RANGE_IDX,
+        checker.ISMIP7_FILENAME_YEAR_RANGE_IDX,
         "2015-2016.nc",
     )
 

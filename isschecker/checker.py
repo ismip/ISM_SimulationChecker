@@ -1,4 +1,3 @@
-#!/usr/bin/env python3
 #
 # ISMIP7 Compliance Checker — check summary
 #
@@ -42,6 +41,7 @@ import os
 import re
 import subprocess
 import argparse
+from importlib import metadata, resources
 
 import numpy as np
 import pandas as pd
@@ -50,13 +50,29 @@ import netCDF4
 from tqdm import tqdm
 
 
+try:
+    __version__ = metadata.version("isschecker")
+except metadata.PackageNotFoundError:
+    # Running from a source tree that has not been installed.
+    __version__ = "unknown"
+
 DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE/C001"
 DEFAULT_VARIABLE_LIST = "ismip7_scalars"
 VARIABLE_LIST_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
 
-VARIABLE_REQUEST_CSV = os.path.join("conventions", "ISMIP7_variable_request.csv")
+VARIABLE_REQUEST_CSV = "ISMIP7_variable_request.csv"
 
 EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
+
+
+DATA_PACKAGE = f"{__package__}.data"
+
+
+def _read_data_csv(filename: str, **kwargs) -> pd.DataFrame:
+    """Read a CSV bundled as package data in :data:`DATA_PACKAGE`."""
+    resource = resources.files(DATA_PACKAGE).joinpath(filename)
+    with resources.as_file(resource) as path:
+        return pd.read_csv(path, **kwargs)
 
 AIS_GRID_EXTENT = [-3040000, -3040000, 3040000, 3040000]
 GrIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
@@ -138,26 +154,21 @@ def main() -> None:
     run_checker(
         source_path=source_path,
         variable_list=variable_list,
-        workdir=os.getcwd(),
     )
 
 
 def run_checker(
     source_path: str,
     variable_list: str = DEFAULT_VARIABLE_LIST,
-    workdir: str | None = None,
-    commit_num: str | None = None,
+    version: str | None = None,
 ):
-    workdir = os.path.abspath(workdir or os.getcwd())
-    commit_num = _get_commit_number() if commit_num is None else commit_num
-    experiments_ismip7 = _load_experiments_csv(
-        os.path.join(workdir, EXPERIMENTS_ISMIP7_CSV_FILENAME)
-    )
-    ismip_meta, ismip_var, mandatory_variables = _load_criteria(workdir, variable_list)
+    version = _describe_version() if version is None else version
+    experiments_ismip7 = _load_experiments_csv()
+    ismip_meta, ismip_var, mandatory_variables = _load_criteria(variable_list)
 
     summary = _run_compliance_checker(
         source_path=source_path,
-        commit_num=commit_num,
+        version=version,
         ismip_meta=ismip_meta,
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
@@ -176,20 +187,49 @@ def run_checker(
     return summary
 
 
-def _get_commit_number() -> str:
+def _describe_version() -> str:
+    """Describe which checker produced a log.
+
+    The installed version, plus the git commit when the package is being run
+    from a checkout (a source or editable install).
+    """
+    commit = _git_commit()
+    return __version__ if commit is None else f"{__version__} (git {commit})"
+
+
+def _git_commit() -> str | None:
+    """Return the short git commit of the checkout this module lives in.
+
+    Deliberately keyed to the location of this file rather than the working
+    directory: the log records which checker ran, not which repository the user
+    happened to be standing in.  Returns None for a non-editable install, where
+    there is no checkout to describe.
+    """
+    package_dir = os.path.dirname(os.path.abspath(__file__))
     try:
-        bash_command = "git log --pretty=format:'%h' -n 1"
-        process = subprocess.Popen(bash_command.split(), stdout=subprocess.PIPE)
-        commit_num, _error = process.communicate()
-        return commit_num.decode("UTF-8")
-    except Exception:
-        print("Could not retrieve git commit number. Is there a .git directory here?")
-        return "No commit number identified."
+        process = subprocess.run(
+            ["git", "-C", package_dir, "log", "--pretty=format:%h", "-n", "1"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        # git is not installed
+        return None
+    if process.returncode != 0:
+        return None
+    return process.stdout.strip() or None
 
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Check simulation NetCDF datasets for ISMIP compliance."
+    )
+    parser.add_argument(
+        "--version",
+        action="version",
+        version=f"%(prog)s {__version__}",
+        help="Show the installed isschecker version and exit.",
     )
     parser.add_argument(
         "--source-path",
@@ -205,14 +245,14 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
-def _load_criteria(workdir: str, variable_list: str):
-    csv_path = os.path.join(workdir, VARIABLE_REQUEST_CSV)
+def _load_criteria(variable_list: str):
     try:
-        df = pd.read_csv(csv_path)
-    except IOError:
+        df = _read_data_csv(VARIABLE_REQUEST_CSV)
+    except (IOError, ModuleNotFoundError):
         print(
-            "ERROR: Unable to open the variable request file. Is the path correct? "
-            + csv_path
+            "ERROR: Unable to open the variable request file "
+            + VARIABLE_REQUEST_CSV
+            + f" bundled in {DATA_PACKAGE}. Is the package installed correctly?"
         )
         raise
 
@@ -248,9 +288,9 @@ def _load_criteria(workdir: str, variable_list: str):
     return ismip_meta, ismip_var, ismip_mandatory_var
 
 
-def _load_experiments_csv(file_path: str):
+def _load_experiments_csv(filename: str = EXPERIMENTS_ISMIP7_CSV_FILENAME):
     experiments = []
-    frame = pd.read_csv(file_path, delimiter=";")
+    frame = _read_data_csv(filename, delimiter=";")
     for _, row in frame.iterrows():
         experiments.append(
             {
@@ -277,7 +317,7 @@ def _nominal_to_timestamp(year: int, var_type: str) -> datetime.datetime:
 
 def _run_compliance_checker(
     source_path: str,
-    commit_num: str,
+    version: str,
     ismip_meta,
     ismip_var,
     mandatory_variables,
@@ -293,7 +333,7 @@ def _run_compliance_checker(
             print("-> Checking " + source_path)
             print()
             today = datetime.date.today()
-            _write_log_header(f, commit_num, source_path, today, criteria_file)
+            _write_log_header(f, version, source_path, today, criteria_file)
 
             experiment_groups = _group_files_by_experiment(source_path)
             if not experiment_groups:
@@ -1425,7 +1465,7 @@ def _strictly_increasing(values) -> bool:
 
 
 def _write_log_header(
-        log_file, commit_num: str, source_path: str, today: datetime.date, criteria_file: str,
+        log_file, version: str, source_path: str, today: datetime.date, criteria_file: str,
 ) -> None:
     log_file.write(
         "************************************************************************************\n"
@@ -1436,7 +1476,7 @@ def _write_log_header(
     log_file.write(
         "************************************************************************************\n"
     )
-    log_file.write(f"Commit Number: {commit_num} \n")
+    log_file.write(f"isschecker version: {version} \n")
     log_file.write("verification criteria: " + criteria_file + "\n")
     log_file.write("date: " + today.strftime("%Y/%m/%d") + "\n")
     log_file.write("source: https://github.com/ismip/ISM_SimulationChecker \n")
@@ -1511,7 +1551,3 @@ def _insert_synthesis(
 
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
         f.writelines(contents)
-
-
-if __name__ == "__main__":
-    main()

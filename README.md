@@ -8,7 +8,7 @@ Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data re
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence for `x,y,t` and `t` variables; sparse snapshot timestamps for `x,y,z,t` variables (see [Time encoding](#time-encoding)); experiment start/end dates and duration match `experiments_ismip7.csv` for `x,y,t` and `t` variables.
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
 
-Compliance criteria are defined in `conventions/ISMIP7_variable_request.csv` (variable metadata) and `experiments_ismip7.csv` (valid experiment year ranges and durations).
+Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). Together with the grid definitions in `isschecker/data/gdfs/`, these files are bundled with the package.
 
 ---
 
@@ -44,34 +44,66 @@ Reference lookup tables are available in the companion repository [`ismip7-time-
 
 ## Setup
 
+Create the conda environment and install the package:
+
 ```bash
 conda env create -f isschecker_env.yml
 conda activate isschecker
+python -m pip install --no-deps --no-build-isolation .
 ```
 
-Dependencies: Python 3.14, `numpy` 2.4, `pandas` 3.0, `xarray` 2026.4, `cftime` 1.6, `netCDF4` 1.7, `tqdm` 4.67.
+Installing the package registers the `ismip7-compliance-checker` command and bundles the data files, so the checker can be run from any directory.
+
+**Use those pip flags.** All dependencies come from conda-forge, and a plain `pip install .` can silently replace them with PyPI wheels — `netCDF4` in particular bundles its own copy of the netCDF C library — which is exactly how two people end up with different results from the same files. `--no-deps` keeps pip from resolving anything, and `--no-build-isolation` builds with the environment's `setuptools` instead of downloading one from PyPI. Add `--no-index` if you want any accidental network fetch to fail loudly rather than succeed quietly.
+
+For development, add `-e` for an editable install:
+
+```bash
+python -m pip install --no-deps --no-build-isolation -e .
+```
+
+(`pytest` comes from the conda environment, so the `[test]` extra is not needed.) An editable install is worth having while developing, because the tests import the installed package: after a non-editable install, edits to the source tree do not affect a test run until you reinstall.
+
+If a rebuild ever behaves as though it were still running older code, delete the `build/` directory: `setuptools` reuses its contents, so files that have since been renamed or removed can otherwise end up back in the installed package.
+
+### Dependencies
+
+Versions are constrained in `isschecker_env.yml`; the same constraints appear in `pyproject.toml`. The suite is tested at both ends of every range, so results should agree across machines and operating systems within these bounds.
+
+| Package | Constraint | Why bounded |
+|---|---|---|
+| `python` | `>=3.11,<3.15` | `str \| None` annotations need ≥3.10; 3.10 is EOL in Oct 2026 |
+| `numpy` | `>=2.1,<3` | what recent `pandas`/`xarray` are built against |
+| `pandas` | `>=2.2,<4` | reads the criteria CSVs; 3.0 changed the default string dtype |
+| `xarray` | `>=2025.1.2,<2027` | `xarray.coders.CFDatetimeCoder` (public API in 2025.1.1) and non-nanosecond datetime decoding, both used by the time checks |
+| `cftime` | `>=1.6.4,<2` | date arithmetic in the start/end/duration checks |
+| `netCDF4` | `>=1.7,<2` | `_FillValue` checks compare against `netCDF4.default_fillvals` |
+| `tqdm` | `>=4.66` | progress bar only; never affects the log |
+
+If you report a problem with the checker, please include the output of `conda list` for your `isschecker` environment.
 
 ---
 
 ## Running the checker
 
-The script must be run from the repository root. It writes `compliance_checker_log.txt` into the `--source-path` directory.
+Once installed, run the checker from any directory with the `ismip7-compliance-checker` command (equivalently, `python -m isschecker`). It writes `compliance_checker_log.txt` into the `--source-path` directory.
 
 ```bash
 # Check x,y,t (3D spatial) variables
-python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_xyt
+ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_xyt
 
 # Check scalar (time-only) variables
-python compliance_checker.py --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_scalars
+ismip7-compliance-checker --source-path ./Models/AIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7_scalars
 
 # Check both
-python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7
+ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --variable-list ismip7
 ```
 
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE/C001` | Set-counter subdirectory containing `.nc` files to check |
 | `--variable-list` | `ismip7_scalars` | `ismip7_xyt`, `ismip7_scalars`, or `ismip7` (both) |
+| `--version` | — | Print the installed version and exit; quote it when reporting a problem |
 
 `experiments_ismip7.csv` defines the allowed nominal year ranges and durations for each experiment. The checker derives the expected FL and ST timestamps from these year values at runtime (see [Time encoding](#time-encoding)).
 
@@ -79,26 +111,26 @@ python compliance_checker.py --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001
 
 ## Generating synthetic test files
 
-`generate/generate_test_files.py` creates ISMIP7-style NetCDF test files with synthetic data. See [generate/README.md](generate/README.md) for full options and examples.
+The `ismip7-generate-test-files` command creates ISMIP7-style NetCDF test files with synthetic data, under `Models/` in the current directory. See [docs/generating_test_files.md](docs/generating_test_files.md) for full options and examples.
 
 ```bash
 conda activate isschecker
 
 # Generate 286-year GrIS ctrl xyt variables
-python generate/generate_test_files.py --grid GrIS_16000m --scenario ctrl --xyt --nyears 286 --start-year 2015
+ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl --xyt --nyears 286 --start-year 2015
 
 # Generate 286-year AIS ctrl scalar variables
-python generate/generate_test_files.py --grid AIS_16000m --scenario ctrl --scalars --nyears 286 --start-year 2015
+ismip7-generate-test-files --grid AIS_16000m --scenario ctrl --scalars --nyears 286 --start-year 2015
 
 # List available grids
-python generate/generate_test_files.py --list-grids
+ismip7-generate-test-files --list-grids
 ```
 
 ---
 
 ## Running Tests
 
-The regression suite uses `pytest` and creates temporary synthetic datasets, then mutates them to verify expected checker failures for naming, missing variables, time-axis problems, and missing attributes.
+The regression suite uses `pytest` and creates temporary synthetic datasets, then mutates them to verify expected checker failures for naming, missing variables, time-axis problems, and missing attributes. It imports `isschecker`, so install the package first (see [Setup](#setup)); the tests then exercise what is actually installed and can be run from any directory.
 
 ```bash
 pytest -v tests/test_compliance_checker.py
@@ -109,3 +141,13 @@ If you want to retain the files generated during testing you can use:
 pytest -v tests/test_compliance_checker.py --basetemp=/tmp/pytest_tmp
 ```
 The files will then be left in `/tmp/pytest_tmp`.  Otherwise, they are cleaned up once tests pass.
+
+### The reference log
+
+`tests/test_golden_log.py` runs the checker over a fixed, seeded dataset and compares the resulting log line by line against `tests/reference/compliance_checker_log.txt`, with the version, date, and source path masked out. It is what turns "results should agree across machines" into something CI can check: any difference in log text fails the test, whether it comes from a change of ours or from a dependency release inside the supported version ranges.
+
+When a change to the checker is *meant* to change the log, read the diff the failure prints, then regenerate the reference and commit it alongside the change:
+
+```bash
+ISSCHECKER_UPDATE_GOLDEN_LOG=1 pytest tests/test_golden_log.py
+```

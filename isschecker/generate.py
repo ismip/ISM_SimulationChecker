@@ -1,34 +1,54 @@
-#!/usr/bin/env python3
 """
 NetCDF file generator for ISMIP7 ice sheet simulation data.
 
-This script generates NetCDF files with variables and metadata following
-ISMIP7 conventions as defined in the criteria CSV files and grid definitions.
+Generates NetCDF files with variables and metadata following ISMIP7
+conventions as defined in the criteria CSV files and grid definitions, both of
+which ship as package data alongside the checker.
 """
+import argparse
 import re
+from importlib import resources
 import numpy as np
 import xarray as xr
 from datetime import datetime
 from pathlib import Path
 import netCDF4
 
+DATA_PACKAGE = f'{__package__}.data'
 
-def get_available_grids(conventions_dir):
+# Synthetic data is drawn from a seeded generator so that a given seed always
+# produces the same files: reproducible test data, and no test that can drift
+# across a numerical bound from one run to the next.
+DEFAULT_SEED = 0
+
+
+def data_dir() -> Path:
+    """Return the bundled directory of criteria CSVs and `gdfs` grid definitions.
+
+    The package is always installed as a directory rather than a zip, so the
+    resource is a real path on disk.
     """
-    Get available grid definitions from gdfs directory.
+    return Path(str(resources.files(DATA_PACKAGE)))
+
+
+def get_available_grids(conventions_dir=None):
+    """
+    Get available grid definitions from the `gdfs` directory.
 
     Parameters
     ----------
-    conventions_dir : str
-        Path to conventions directory
+    conventions_dir : str, optional
+        Path to conventions directory (default: the bundled package data)
 
     Returns
     -------
     dict
         Dictionary with grid info: {'GrIS': [...], 'AIS': [...]}
     """
-    # Grid definitions moved to project root `gdfs` directory
-    gdf_dir = Path(conventions_dir).parent / 'gdfs'
+    if conventions_dir is None:
+        conventions_dir = data_dir()
+    gdf_dir = Path(conventions_dir) / 'gdfs'
+
     grids = {'GrIS': [], 'AIS': []}
 
     if not gdf_dir.exists():
@@ -159,7 +179,8 @@ def read_variable_criteria(csv_file, include_non_mandatory=False):
     return variables
 
 
-def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6):
+def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6,
+                            rng=None):
     """
     Generate synthetic data within specified range.
 
@@ -176,21 +197,27 @@ def generate_synthetic_data(shape, min_val, max_val, dtype=np.float32, eps=1e-6)
     eps : float, optional
         A small fraction by which `min_val` and `max_val` move toward one another to avoid
         synthetic data that violates numerical checks because of roundoff.
+    rng : np.random.Generator, optional
+        Random number generator to draw from (default: a fresh generator seeded
+        with `DEFAULT_SEED`)
 
     Returns
     -------
     np.ndarray
         Random data within the specified range
     """
+    if rng is None:
+        rng = np.random.default_rng(DEFAULT_SEED)
     delta = eps * (max_val - min_val)
-    data = np.random.uniform(min_val + delta, max_val - delta, shape).astype(dtype)
+    data = rng.uniform(min_val + delta, max_val - delta, shape).astype(dtype)
     return data
 
 
 def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', start_year=2015, nyears=5,
                        conventions_dir=None, include_non_mandatory=False, include_scalars=False,
                        include_xyt=False, output_root=None, nz=5,
-                       ism_member_id='m001', esm_id='CESM2-WACCM', forcing_member_id='f001', set_counter='C001'):
+                       ism_member_id='m001', esm_id='CESM2-WACCM', forcing_member_id='f001', set_counter='C001',
+                       seed=DEFAULT_SEED):
     """
     Create NetCDF files with ISMIP7 variables (one file per variable).
 
@@ -214,18 +241,20 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
         Whether to include scalar time-series variables
     include_xyt : bool
         Whether to include non-scalar x,y,t variables (3D). Set to False to skip x,y,t variables.
+    seed : int, optional
+        Seed for the synthetic data; the same seed always produces the same values.
     """
+
+    rng = np.random.default_rng(seed)
 
     group='ISMIP7'
     model='SYNTH1'
     contact_names='Your Name'
     contact_emails='your@email.org'
 
-    # Determine conventions directory
+    # Determine conventions directory (bundled package data by default)
     if conventions_dir is None:
-        # Try to find conventions directory relative to this script
-        script_dir = Path(__file__).parent.parent
-        conventions_dir = script_dir / 'conventions'
+        conventions_dir = data_dir()
 
     conventions_dir = Path(conventions_dir)
 
@@ -243,7 +272,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
         domain_crs = 'EPSG:3031'
 
     # Determine output directory
-    models_dir = Path(output_root) if output_root is not None else Path(__file__).parent.parent / 'Models'
+    models_dir = Path(output_root) if output_root is not None else Path.cwd() / 'Models'
     if grid_type == 'AIS':
         output_dir = models_dir / 'AIS' / group / model / 'CORE' / set_counter
     else:  # GrIS
@@ -252,7 +281,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     output_dir.mkdir(parents=True, exist_ok=True)
 
     # Load grid definition
-    gdf_file = conventions_dir.parent / 'gdfs' / f'gdf_ISMIP7_{grid_type}_{resolution}.txt'
+    gdf_file = conventions_dir / 'gdfs' / f'gdf_ISMIP7_{grid_type}_{resolution}.txt'
     if not gdf_file.exists():
         raise FileNotFoundError(f"Grid definition file not found: {gdf_file}")
 
@@ -376,7 +405,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((nyears, ny, nx), min_val, max_val)
+            data = generate_synthetic_data((nyears, ny, nx), min_val, max_val, rng=rng)
 
             # Create data array with metadata
             data_vars = {
@@ -491,7 +520,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((n_snapshots, nz, ny, nx), min_val, max_val)
+            data = generate_synthetic_data((n_snapshots, nz, ny, nx), min_val, max_val, rng=rng)
 
             data_vars = {
                 var_name: (
@@ -560,7 +589,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((ny, nx), min_val, max_val)
+            data = generate_synthetic_data((ny, nx), min_val, max_val, rng=rng)
 
             data_vars = {
                 var_name: (
@@ -661,7 +690,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                 max_val = min_val + 1.0
 
             # Generate synthetic 1D data
-            data = generate_synthetic_data((nyears,), min_val, max_val).astype(np.float32)  # Wide range for scalar data
+            data = generate_synthetic_data((nyears,), min_val, max_val, rng=rng).astype(np.float32)  # Wide range for scalar data
             # Create data array with metadata
             data_vars = {
                 var_name: (
@@ -740,7 +769,8 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
 
 def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
                           start_year=2015, contact_names='Your Name', contact_emails='your@email.org',
-                          include_xyt=True, include_non_mandatory=False):
+                          include_xyt=True, include_non_mandatory=False,
+                          seed=DEFAULT_SEED):
     """
     Create multiple NetCDF files for testing (one file per variable per grid).
 
@@ -755,9 +785,7 @@ def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
     """
 
     if conventions_dir is None:
-        # Try to find conventions directory relative to this script
-        script_dir = Path(__file__).parent.parent
-        conventions_dir = script_dir / 'conventions'
+        conventions_dir = data_dir()
 
     # Get available grids
     grids = get_available_grids(str(conventions_dir))
@@ -784,19 +812,18 @@ def create_multiple_files(output_dir=None, n_files=3, conventions_dir=None,
                 include_scalars=(i == 0),
                 include_xyt=include_xyt,
                 include_non_mandatory=include_non_mandatory,
+                seed=seed + i,
              )
             total_files += len(created_files)
 
     print(f"Total files created: {total_files}")
 
 
-if __name__ == '__main__':
-    import argparse
-
+def main():
+    """Command-line entry point for `ismip7-generate-test-files`."""
     # Get available grids
-    script_dir = Path(__file__).parent.parent
-    conventions_dir = script_dir / 'conventions'
-    available_grids = get_available_grids(str(conventions_dir))
+    conventions_directory = data_dir()
+    available_grids = get_available_grids(conventions_directory)
 
     # Create list of available grid choices, excluding some high-resolution entries
     grid_choices = []
@@ -854,8 +881,8 @@ if __name__ == '__main__':
     )
     parser.add_argument(
         '--conventions-dir',
-        default=str(conventions_dir),
-        help=f'Path to conventions directory (default: {conventions_dir})'
+        default=str(conventions_directory),
+        help=f'Path to conventions directory (default: {conventions_directory})'
     )
     parser.add_argument(
         '--ism-member-id',
@@ -878,6 +905,13 @@ if __name__ == '__main__':
         help='Set counter id (default: C001)'
     )
     parser.add_argument(
+        '--seed',
+        type=int,
+        default=DEFAULT_SEED,
+        help=f'Seed for the synthetic data (default: {DEFAULT_SEED}); the same '
+             f'seed always produces the same values'
+    )
+    parser.add_argument(
         '--list-grids',
         action='store_true',
         help='List all available grids and exit'
@@ -894,13 +928,14 @@ if __name__ == '__main__':
                 for resolution in available_grids[grid_type]:
                     print(f"  - {grid_type}_{resolution}")
         print()
-        exit(0)
+        return
 
     if args.multiple:
         create_multiple_files(conventions_dir=args.conventions_dir,
                               start_year=args.start_year,
                               include_xyt=args.xyt,
-                              include_non_mandatory=args.include_non_mandatory)
+                              include_non_mandatory=args.include_non_mandatory,
+                              seed=args.seed)
     else:
         create_netcdf_file(
             None,  # Use default output path
@@ -916,4 +951,9 @@ if __name__ == '__main__':
             esm_id=args.esm_id,
             forcing_member_id=args.forcing_member_id,
             set_counter=args.set_counter,
+            seed=args.seed,
         )
+
+
+if __name__ == '__main__':
+    main()
