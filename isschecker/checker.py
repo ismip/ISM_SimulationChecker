@@ -160,15 +160,15 @@ def main() -> None:
 def run_checker(
     source_path: str,
     variable_list: str = DEFAULT_VARIABLE_LIST,
-    commit_num: str | None = None,
+    version: str | None = None,
 ):
-    commit_num = _get_commit_number() if commit_num is None else commit_num
+    version = _describe_version() if version is None else version
     experiments_ismip7 = _load_experiments_csv()
     ismip_meta, ismip_var, mandatory_variables = _load_criteria(variable_list)
 
     summary = _run_compliance_checker(
         source_path=source_path,
-        commit_num=commit_num,
+        version=version,
         ismip_meta=ismip_meta,
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
@@ -187,15 +187,38 @@ def run_checker(
     return summary
 
 
-def _get_commit_number() -> str:
+def _describe_version() -> str:
+    """Describe which checker produced a log.
+
+    The installed version, plus the git commit when the package is being run
+    from a checkout (a source or editable install).
+    """
+    commit = _git_commit()
+    return __version__ if commit is None else f"{__version__} (git {commit})"
+
+
+def _git_commit() -> str | None:
+    """Return the short git commit of the checkout this module lives in.
+
+    Deliberately keyed to the location of this file rather than the working
+    directory: the log records which checker ran, not which repository the user
+    happened to be standing in.  Returns None for a non-editable install, where
+    there is no checkout to describe.
+    """
+    package_dir = os.path.dirname(os.path.abspath(__file__))
     try:
-        bash_command = "git log --pretty=format:'%h' -n 1"
-        process = subprocess.Popen(bash_command.split(), stdout=subprocess.PIPE)
-        commit_num, _error = process.communicate()
-        return commit_num.decode("UTF-8")
-    except Exception:
-        print("Could not retrieve git commit number. Is there a .git directory here?")
-        return "No commit number identified."
+        process = subprocess.run(
+            ["git", "-C", package_dir, "log", "--pretty=format:%h", "-n", "1"],
+            capture_output=True,
+            text=True,
+            check=False,
+        )
+    except OSError:
+        # git is not installed
+        return None
+    if process.returncode != 0:
+        return None
+    return process.stdout.strip() or None
 
 
 def _parse_args() -> argparse.Namespace:
@@ -294,7 +317,7 @@ def _nominal_to_timestamp(year: int, var_type: str) -> datetime.datetime:
 
 def _run_compliance_checker(
     source_path: str,
-    commit_num: str,
+    version: str,
     ismip_meta,
     ismip_var,
     mandatory_variables,
@@ -310,7 +333,7 @@ def _run_compliance_checker(
             print("-> Checking " + source_path)
             print()
             today = datetime.date.today()
-            _write_log_header(f, commit_num, source_path, today, criteria_file)
+            _write_log_header(f, version, source_path, today, criteria_file)
 
             experiment_groups = _group_files_by_experiment(source_path)
             if not experiment_groups:
@@ -1442,7 +1465,7 @@ def _strictly_increasing(values) -> bool:
 
 
 def _write_log_header(
-        log_file, commit_num: str, source_path: str, today: datetime.date, criteria_file: str,
+        log_file, version: str, source_path: str, today: datetime.date, criteria_file: str,
 ) -> None:
     log_file.write(
         "************************************************************************************\n"
@@ -1453,7 +1476,7 @@ def _write_log_header(
     log_file.write(
         "************************************************************************************\n"
     )
-    log_file.write(f"Commit Number: {commit_num} \n")
+    log_file.write(f"isschecker version: {version} \n")
     log_file.write("verification criteria: " + criteria_file + "\n")
     log_file.write("date: " + today.strftime("%Y/%m/%d") + "\n")
     log_file.write("source: https://github.com/ismip/ISM_SimulationChecker \n")

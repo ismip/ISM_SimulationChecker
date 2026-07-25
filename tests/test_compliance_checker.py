@@ -47,7 +47,7 @@ def baseline_core_dir(tmp_path_factory):
     baseline_summary = checker.run_checker(
         source_path=str(core_dir),
         variable_list="ismip7_scalars",
-        commit_num="tests",
+        version="tests",
     )
     assert baseline_summary["total_errors"] == 0, (
         "Synthetic baseline files should pass the checker, but found "
@@ -67,7 +67,7 @@ def run_checker(case_dir: Path):
     return checker.run_checker(
         source_path=str(case_dir),
         variable_list="ismip7_scalars",
-        commit_num="tests",
+        version="tests",
     )
 
 
