@@ -6,7 +6,8 @@
 #    - The variable named in the filename is present in the file.
 #    - The file holds no variables beyond that one, its coordinates, and any
 #      bounds or grid-mapping variables they refer to.
-#    - The variable's dimensions are the ones the data request asks for.
+#    - The variable's dimensions are the ones the data request asks for, in the
+#      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
@@ -870,6 +871,14 @@ def _check_variable_dimensions(
             f" - ERROR: variable '{considered_variable}' has dimensions"
             f" {actual}; the data request asks for {requested_dim}, that is"
             f" {expected}.\n"
+        )
+        return 1
+
+    if actual != expected:
+        log_file.write(
+            f" - ERROR: variable '{considered_variable}' has dimensions"
+            f" {actual}; the data request asks for {requested_dim} in the"
+            f" conventional order {expected}.\n"
         )
         return 1
 

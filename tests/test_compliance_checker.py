@@ -411,6 +411,22 @@ def test_checker_reports_missing_variable_dimension(xyt_case_dir):
     )
 
 
+def test_checker_reports_transposed_variable(xyt_case_dir):
+    set_variable_dimensions(
+        dataset_for_variable(xyt_case_dir, "lithk"), "lithk", ("time", "x", "y")
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert summary["total_errors"] == 1
+    assert (
+        "variable 'lithk' has dimensions ('time', 'x', 'y'); the data request "
+        "asks for x,y,t in the conventional order ('time', 'y', 'x')"
+        in summary["log_text"]
+    )
+
+
 def test_checker_reports_missing_contact_email_attribute(case_dir):
     remove_global_attribute(first_dataset(case_dir), "contact_email")
 
