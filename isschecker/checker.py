@@ -36,6 +36,11 @@
 #      per the ST/FL convention, then compared with what the file holds.  This is
 #      what catches a missing, decimated or gappy axis, which endpoint-and-
 #      cadence reasoning cannot see.
+#    - For x,y,z,t snapshot variables the axis is instead checked against the
+#      required set of snapshot nominal years: the run's last year, the century
+#      marks inside it, and (for historical only) the run's first year.  Both
+#      missing and unasked-for snapshots are reported.  A snapshot at 2000 is
+#      tolerated but not required -- see issue #12.
 #
 # 5. Attributes (_check_attributes)
 #    - Global attributes present: group, model, contact_name, contact_email, crs
@@ -437,9 +442,7 @@ def _compare_time_axis(actual: list, expected_years: list[int], var_type: str) -
             f" {_describe_convention(var_type)}."
         ]
 
-    actual_at: dict[int, object] = {}
-    for timestamp in actual:
-        actual_at.setdefault(_timestamp_to_nominal_year(timestamp, var_type), timestamp)
+    actual_at = _nominal_year_index(actual, var_type)
 
     messages = []
     if len(actual) != len(expected_years):
@@ -464,31 +467,89 @@ def _compare_time_axis(actual: list, expected_years: list[int], var_type: str) -
             f" ({len(unexpected)} year(s))."
         )
 
-    misencoded = [
-        year
-        for year in sorted(set(expected_at) & set(actual_at))
-        if abs(actual_at[year] - expected_at[year]) > TIME_STAMP_TOLERANCE
-    ]
-    if misencoded:
-        shown = ", ".join(
-            f"{year} is {actual_at[year].strftime('%Y-%m-%d')}"
-            f" (expected {expected_at[year].strftime('%Y-%m-%d')})"
-            for year in misencoded[:MAX_REPORTED_TIME_MISMATCHES]
-        )
-        if len(misencoded) > MAX_REPORTED_TIME_MISMATCHES:
-            shown += f", and {len(misencoded) - MAX_REPORTED_TIME_MISMATCHES} more"
-        messages.append(
-            f"{len(misencoded)} timestamp(s) do not match the {var_type}"
-            f" convention ({_describe_convention(var_type)}): {shown}."
-        )
+    mismatch = _timestamp_mismatch_message(
+        actual_at, sorted(set(expected_at) & set(actual_at)), var_type
+    )
+    if mismatch:
+        messages.append(mismatch)
 
     return messages
+
+
+def _nominal_year_index(actual: list, var_type: str) -> dict:
+    """Index a file's timestamps by the nominal year each one encodes."""
+    index: dict[int, object] = {}
+    for timestamp in actual:
+        index.setdefault(_timestamp_to_nominal_year(timestamp, var_type), timestamp)
+    return index
+
+
+def _timestamp_mismatch_message(actual_at: dict, years: list[int], var_type: str):
+    """Report years whose timestamp does not sit where the convention puts it.
+
+    The years themselves are right here -- it is the date written against them
+    that is wrong, which is a different mistake from a missing or extra year and
+    reads badly if the two are merged.
+    """
+    misencoded = [
+        year
+        for year in years
+        if abs(actual_at[year] - _nominal_to_timestamp(year, var_type))
+        > TIME_STAMP_TOLERANCE
+    ]
+    if not misencoded:
+        return None
+
+    shown = ", ".join(
+        f"{year} is {actual_at[year].strftime('%Y-%m-%d')}"
+        f" (expected {_nominal_to_timestamp(year, var_type).strftime('%Y-%m-%d')})"
+        for year in misencoded[:MAX_REPORTED_TIME_MISMATCHES]
+    )
+    if len(misencoded) > MAX_REPORTED_TIME_MISMATCHES:
+        shown += f", and {len(misencoded) - MAX_REPORTED_TIME_MISMATCHES} more"
+    return (
+        f"{len(misencoded)} timestamp(s) do not match the {var_type}"
+        f" convention ({_describe_convention(var_type)}): {shown}."
+    )
 
 
 def _describe_convention(var_type: str) -> str:
     if var_type == "ST":
         return "Jan 1 of the year after the nominal year"
     return "Jul 1 of the nominal year"
+
+
+# The nominal years an x,y,z,t variable (litemp) must carry a snapshot for,
+# whenever they fall inside the run.  Taken from the litemp Comment column of
+# ISMIP7_variable_request.csv: "(1900 if in historical), initial state, 2014,
+# 2100, 2200, and 2300".  The 2014 there is the last year of the historical
+# experiment, so it is covered by requiring the run's final year rather than by
+# naming a literal.
+CENTURY_SNAPSHOT_YEARS = frozenset({1900, 2100, 2200, 2300})
+
+# Accepted if a file carries it, never required.  The README, this checker and
+# the generator all used to require a snapshot at 2000; the data request does
+# not ask for one.  Tolerating it means a group that followed the README as
+# published is not failed for a year that is still in dispute -- see issue #12.
+TOLERATED_SNAPSHOT_YEARS = frozenset({2000})
+
+
+def _required_snapshot_years(exp: dict, run_years: list[int]) -> set[int]:
+    """The snapshot nominal years an x,y,z,t file must carry.
+
+    The final year of the run is always reported, as are the century marks
+    inside it.  The *first* year is only required where the protocol leaves it
+    open -- that is, for 'historical', whose start year is the modeller's choice
+    (duration -1) and so is not recorded anywhere else.  A projection's initial
+    state is the historical run's final state, already reported as historical's
+    last-year snapshot, so requiring it again in every projection would ask for
+    the same field twice.
+    """
+    required = {run_years[-1]}
+    required |= {y for y in CENTURY_SNAPSHOT_YEARS if run_years[0] <= y <= run_years[-1]}
+    if exp["duration"] == -1:
+        required.add(run_years[0])
+    return required
 
 
 def _run_compliance_checker(
@@ -1457,15 +1518,12 @@ def _check_time(
         log_file.write(f" - ERROR: {message}\n")
         errors += 1
 
-    if requested_dim == "x,y,z,t":
-        return errors + _check_snapshot_time_axis(
-            log_file, actual, exp, var_type, filename_years
-        )
-
-    expected_years = _expected_nominal_years(
+    # The nominal years the run as a whole covers.  The annual variables carry
+    # one time step for each of them; the snapshot variables carry a few.
+    run_years = _expected_nominal_years(
         exp, _axis_start_year(exp, filename_years, actual, var_type)
     )
-    if not expected_years:
+    if not run_years:
         log_file.write(
             f" - ERROR: the time axis starts in nominal year"
             f" {_timestamp_to_nominal_year(actual[0], var_type)}, after experiment"
@@ -1474,7 +1532,12 @@ def _check_time(
         )
         return errors + 1
 
-    messages = _compare_time_axis(actual, expected_years, var_type)
+    if requested_dim == "x,y,z,t":
+        return errors + _check_snapshot_time_axis(
+            log_file, actual, exp, var_type, run_years
+        )
+
+    messages = _compare_time_axis(actual, run_years, var_type)
     for message in messages:
         log_file.write(f" - ERROR: {message}\n")
     errors += len(messages)
@@ -1482,7 +1545,7 @@ def _check_time(
     if not messages:
         log_file.write(
             f" - Time axis: {len(actual)} annual {var_type} time step(s) covering"
-            f" nominal years {expected_years[0]}-{expected_years[-1]}, as"
+            f" nominal years {run_years[0]}-{run_years[-1]}, as"
             f" experiment '{experiment_name}' requires: OK\n"
         )
 
@@ -1509,31 +1572,62 @@ def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> 
     return _timestamp_to_nominal_year(actual[0], var_type)
 
 
-def _check_snapshot_time_axis(log_file, actual: list, exp: dict, var_type: str,
-                              filename_years) -> int:
-    """Check the sparse snapshot axis of an x,y,z,t variable (e.g. litemp)."""
-    _LITEMP_SNAPSHOT_NOMINAL_YEARS = {1900, 2000, 2100, 2200, 2300}
-    nominal_years = [_timestamp_to_nominal_year(t, var_type) for t in actual]
-    valid_snapshot_years = {nominal_years[-1]} | {
-        y for y in _LITEMP_SNAPSHOT_NOMINAL_YEARS
-        if exp["start_year_min"] <= y <= exp["end_year"]
+def _check_snapshot_time_axis(
+    log_file, actual: list, exp: dict, var_type: str, run_years: list[int]
+) -> int:
+    """Check the sparse snapshot axis of an x,y,z,t variable (e.g. litemp).
+
+    Unlike the annual variables, these carry a handful of snapshots rather than
+    every year of the run, so the check is against a required *set* of nominal
+    years rather than a contiguous range.  It reports snapshots that should be
+    there and are not, which is the gap issue #12 asks about: the previous
+    version only validated the years a file happened to contain, and counted the
+    file's own last time step as valid whatever it was, so a file holding a
+    single snapshot at an arbitrary year passed.
+    """
+    required = _required_snapshot_years(exp, run_years)
+    permitted = required | {
+        y for y in TOLERATED_SNAPSHOT_YEARS if run_years[0] <= y <= run_years[-1]
     }
-    if exp["experiment"] == "historical":
-        valid_snapshot_years.add(nominal_years[0])
+    actual_at = _nominal_year_index(actual, var_type)
+
     errors = 0
-    for ny in nominal_years:
-        if ny not in valid_snapshot_years:
-            log_file.write(
-                f" - ERROR: time snapshot nominal year {ny} is not in the valid"
-                f" snapshot set {sorted(valid_snapshot_years)}.\n"
-            )
-            errors += 1
+
+    missing = sorted(required - set(actual_at))
+    if missing:
+        log_file.write(
+            f" - ERROR: required snapshot nominal year(s) missing:"
+            f" {_format_year_runs(missing)}. Experiment '{exp['experiment']}'"
+            f" covering {run_years[0]}-{run_years[-1]} requires snapshots at"
+            f" {_format_year_runs(sorted(required))}.\n"
+        )
+        errors += 1
+
+    unexpected = sorted(set(actual_at) - permitted)
+    if unexpected:
+        log_file.write(
+            f" - ERROR: snapshot nominal year(s) the experiment does not call"
+            f" for: {_format_year_runs(unexpected)}. Required:"
+            f" {_format_year_runs(sorted(required))}.\n"
+        )
+        errors += 1
+
+    mismatch = _timestamp_mismatch_message(
+        actual_at, sorted(set(actual_at) & permitted), var_type
+    )
+    if mismatch:
+        log_file.write(f" - ERROR: {mismatch}\n")
+        errors += 1
+
     if errors == 0:
         log_file.write(
-            f" - Snapshot time axis nominal years {nominal_years} are all valid: OK\n"
+            f" - Snapshot time axis: nominal year(s)"
+            f" {_format_year_runs(sorted(actual_at))} cover everything experiment"
+            f" '{exp['experiment']}' requires: OK\n"
         )
     log_file.write(
-        " - Duration / start / end timestamp checks: N/A (snapshot variable — time axis holds sparse snapshots only).\n"
+        " - Annual cadence checks: N/A (snapshot variable — the time axis holds"
+        " sparse snapshots by design).\n"
     )
     return errors
 

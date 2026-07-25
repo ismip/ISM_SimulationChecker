@@ -68,7 +68,7 @@ ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
 - Time encoding: `days since 1850-01-01`, `calendar='standard'`.
   - State (ST) variables: timestamp is Jan 1 of year N+1 (end-of-year snapshot). No `time_bounds`.
   - Flux (FL) variables: timestamp is Jul 1 of year N (mid-year), with `time_bounds` = [Jan 1 of N, Jan 1 of N+1].
-  - `x,y,z,t` variables (e.g. `litemp`): ST snapshots at a sparse set of nominal years. For `historical`: first year of run, 1900 (if in range), 2000 (if in range), last year of run. For projection scenarios: 2100, 2200, 2300 (each if within the simulation year range). The filename year range reflects the full simulation period, not the first/last snapshot year.
+  - `x,y,z,t` variables (e.g. `litemp`): ST snapshots at a sparse set of nominal years. For `historical`: first year of run, 1900 (if in range), last year of run. For projection scenarios: 2100, 2200, 2300 (each if within the simulation year range). The filename year range reflects the full simulation period, not the first/last snapshot year. The set is `CENTURY_SNAPSHOT_YEARS` in `isschecker.checker`, imported here so the generator and the checker cannot disagree; note that no snapshot is written at 2000, which the checker accepts but does not require (see the README).
 - Single precision (`float32`) for all variables and time.
 - `_FillValue` and `missing_value` set to NetCDF4 default `f4` fill value.
 - `time` is an unlimited (record) dimension.

@@ -637,6 +637,73 @@ def test_generated_xyt_dataset_passes_checker(xyt_case_dir):
         assert f"match the requested {requested_dim}: OK" in summary["log_text"]
 
 
+def test_checker_reports_litemp_missing_required_snapshot(xyt_case_dir):
+    """A single snapshot where two are required.
+
+    This is the snapshot half of issue #12. The old check validated only the
+    years a file happened to contain, and treated the file's own last time step
+    as valid whatever it was, so this passed.
+    """
+    set_time_axis(
+        dataset_for_variable(xyt_case_dir, "litemp"), state_timestamps([2014])
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "required snapshot nominal year(s) missing: 2013" in summary["log_text"]
+    )
+
+
+def test_checker_reports_litemp_snapshot_year_not_requested(xyt_case_dir):
+    set_time_values(
+        dataset_for_variable(xyt_case_dir, "litemp"), state_timestamps([1975, 2014])
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "snapshot nominal year(s) the experiment does not call for: 1975"
+        in summary["log_text"]
+    )
+
+
+def test_checker_accepts_litemp_snapshot_at_2000(tmp_path):
+    """2000 is tolerated but not required, pending issue #12.
+
+    The generator no longer writes it and the data request does not ask for it,
+    but the README did until now, so a group that followed the README must not
+    be failed for a year that is still in dispute. Nothing else covers the
+    'permitted but not required' path once the generator stops emitting it.
+    """
+    root = tmp_path / "gen"
+    generate_test_files.create_netcdf_file(
+        None,
+        grid_name="GrIS_16000m",
+        scenario="historical",
+        start_year=1995,
+        nyears=20,
+        include_scalars=False,
+        include_xyt=True,
+        include_non_mandatory=True,
+        output_root=root,
+    )
+    core_dir = root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "C001"
+    litemp = dataset_for_variable(core_dir, "litemp")
+
+    # The generator writes 1995 and 2014; add the disputed 2000 alongside them.
+    set_time_axis(litemp, state_timestamps([1995, 2000, 2014]))
+
+    summary = checker.run_checker(
+        source_path=str(core_dir), variable_list="ismip7_xyt", version="tests"
+    )
+
+    assert summary["total_time_errors"] == 0, summary["log_text"]
+    assert "does not call for" not in summary["log_text"]
+
+
 def test_checker_reports_missing_variable_dimension(xyt_case_dir):
     # lithk is requested as x,y,t; this one loses its y dimension.
     set_variable_dimensions(
