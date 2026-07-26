@@ -4,14 +4,14 @@
 isschecker version: <masked>
 verification criteria: ISMIP7_variable_request.csv
 date: <masked>
-source: https://github.com/ismip/ISM_SimulationChecker 
- 
+source: https://github.com/ismip/ISM_SimulationChecker
+
 ------------------------------------------------------------------------------------
-Verified directory: <source-path> 
+Verified directory: <source-path>
 ------------------------------------------------------------------------------------
 1 experiments checked.
 27 files checked.
- 
+
 0 error(s) detected.
   - Variable presence  : 0 error(s)
   - Naming Tests       : 0 error(s)
@@ -19,7 +19,7 @@ Verified directory: <source-path>
   - Spatial Tests      : 0 error(s)
   - Time Tests         : 0 error(s)
   - Attribute Tests    : 0 error(s)
- 
+
 1 warning(s) detected.
   - Variable presence  : 1 warning(s)
   - Naming Tests       : 0 warning(s)
@@ -27,42 +27,42 @@ Verified directory: <source-path>
   - Spatial Tests      : 0 warning(s)
   - Time Tests         : 0 warning(s)
   - Attribute Tests    : 0 warning(s)
- 
- 
+
+
 ====================================================================================
 ================                DETAILED RESULTS                    ================
 ====================================================================================
-Hint: Use Cltr+F to look for specific problems. 
- 
+Hint: Use Cltr+F to look for specific problems.
+
 
  **********************************************************
- ** Experiment: historical 
+ ** Experiment: historical
  **********************************************************
 
- Mandatory variables Test: historical : all mandatory variables exist. 
-WARNING: experiment historical carries no files for the non-mandatory variable(s): ['hfgeoubed', 'xvelsurf', 'yvelsurf', 'zvelsurf', 'xvelbase', 'yvelbase', 'zvelbase', 'litemptop', 'litempavg', 'litempbotgr', 'litempbotfl', 'tfbase', 'deltag', 'refgeoid', 'litemp']. This is expected if your model does not represent them; it is listed only so that a variable lost from a submission does not pass unnoticed.
- 
+ Mandatory variables Test: historical : all mandatory variables exist.
+WARNING: experiment historical carries no files for the non-mandatory variable(s): ['hfgeoubed', 'xvelsurf', 'yvelsurf', 'zvelsurf', 'xvelbase', 'yvelbase', 'zvelbase', 'litemptop', 'litempavg', 'litempbotgr', 'litempbotfl', 'thdrflf', 'deltag', 'refgeoid', 'litemp']. This is expected if your model does not represent them; it is listed only so that a variable lost from a submission does not pass unnoticed.
+
 Experiment: historical - File: acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'acabf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'acabf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: acabf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -75,28 +75,28 @@ historical - acabf - File:acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_histori
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: base_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'base' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'base' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: base
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -109,28 +109,28 @@ historical - base - File:base_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historica
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: dlithkdt_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'dlithkdt' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'dlithkdt' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: dlithkdt
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -143,22 +143,22 @@ historical - dlithkdt - File:dlithkdt_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_h
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: iareafl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'iareafl' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'iareafl' dimensions (time) match the requested t: OK
 ** Tested Variable: iareafl
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m^2
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -171,22 +171,22 @@ historical - iareafl - File:iareafl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_his
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: iareagr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'iareagr' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'iareagr' dimensions (time) match the requested t: OK
 ** Tested Variable: iareagr
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m^2
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -199,28 +199,28 @@ historical - iareagr - File:iareagr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_his
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: libmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'libmassbffl' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'libmassbffl' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: libmassbffl
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -233,28 +233,28 @@ historical - libmassbffl - File:libmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: libmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'libmassbfgr' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'libmassbfgr' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: libmassbfgr
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -267,28 +267,28 @@ historical - libmassbfgr - File:libmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: licalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'licalvf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'licalvf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: licalvf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -301,28 +301,28 @@ historical - licalvf - File:licalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_his
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: lifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'lifmassbf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'lifmassbf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: lifmassbf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -335,28 +335,28 @@ historical - lifmassbf - File:lifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: ligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'ligroundf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'ligroundf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: ligroundf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -369,22 +369,22 @@ historical - ligroundf - File:ligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'lim' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'lim' dimensions (time) match the requested t: OK
 ** Tested Variable: lim
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -397,22 +397,22 @@ historical - lim - File:lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: limnsw_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'limnsw' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'limnsw' dimensions (time) match the requested t: OK
 ** Tested Variable: limnsw
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -425,28 +425,28 @@ historical - limnsw - File:limnsw_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_histo
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: lithk_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'lithk' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'lithk' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: lithk
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -459,28 +459,28 @@ historical - lithk - File:lithk_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_histori
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: orog_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'orog' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'orog' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: orog
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -493,28 +493,28 @@ historical - orog - File:orog_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historica
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: sftflf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'sftflf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'sftflf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: sftflf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: 1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -527,28 +527,28 @@ historical - sftflf - File:sftflf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_histo
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: sftgif_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'sftgif' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'sftgif' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: sftgif
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: 1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -561,28 +561,28 @@ historical - sftgif - File:sftgif_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_histo
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: sftgrf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'sftgrf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'sftgrf' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: sftgrf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: 1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -595,28 +595,28 @@ historical - sftgrf - File:sftgrf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_histo
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: strbasemag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'strbasemag' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'strbasemag' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: strbasemag
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: Pa
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -629,22 +629,22 @@ historical - strbasemag - File:strbasemag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f0
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: tendacabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendacabf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendacabf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendacabf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg s-1
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -657,22 +657,22 @@ historical - tendacabf - File:tendacabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: tendlibmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlibmassbffl' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlibmassbffl' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlibmassbffl
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg s-1
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -685,22 +685,22 @@ historical - tendlibmassbffl - File:tendlibmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: tendlibmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlibmassbfgr' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlibmassbfgr' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlibmassbfgr
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg s-1
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -713,22 +713,22 @@ historical - tendlibmassbfgr - File:tendlibmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: tendlicalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlicalvf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlicalvf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlicalvf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg s-1
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -741,22 +741,22 @@ historical - tendlicalvf - File:tendlicalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: tendlifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlifmassbf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlifmassbf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendlifmassbf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg s-1
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -769,22 +769,22 @@ historical - tendlifmassbf - File:tendlifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WA
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: tendligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendligroundf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendligroundf' dimensions (time) match the requested t: OK
 ** Tested Variable: tendligroundf
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: kg s-1
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -797,28 +797,28 @@ historical - tendligroundf - File:tendligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WA
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: topg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'topg' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'topg' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: topg
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -831,28 +831,28 @@ historical - topg - File:topg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historica
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: xvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'xvelmean' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'xvelmean' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: xvelmean
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK
@@ -865,28 +865,28 @@ historical - xvelmean - File:xvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_h
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------
- 
+
 Experiment: historical - File: yvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
- 
-NAMING Tests 
+
+NAMING Tests
  - Filename year range 2013-2014 is well formed: OK
  - Variable 'yvelmean' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'yvelmean' dimensions (time, y, x) match the requested x,y,t: OK
 ** Tested Variable: yvelmean
- 
-NUMERICAL Tests 
+
+NUMERICAL Tests
  - The unit is correct: m s-1
  - The minimum value successfully verified.
  - The maximum value successfully verified.
-SPATIAL Tests 
+SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
-TIME Tests 
+TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
-ATTRIBUTE Tests 
+ATTRIBUTE Tests
  - Global attributes: OK
  - Coordinate attributes: OK
  - Variable attributes: OK

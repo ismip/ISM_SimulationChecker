@@ -366,14 +366,14 @@ def test_non_mandatory_warning_names_every_variable_on_one_line(xyt_case_dir):
     A model with a narrow scope would otherwise look far worse than one that
     dropped a single file, which is the opposite of what this is for.
     """
-    for variable in ("litemp", "refgeoid", "tfbase"):
+    for variable in ("litemp", "refgeoid", "thdrflf"):
         dataset_for_variable(xyt_case_dir, variable).unlink()
 
     summary = run_xyt_checker(xyt_case_dir)
 
     assert summary["total_warnings"] == 1
     assert summary["log_text"].count("carries no files for the non-mandatory") == 1
-    for variable in ("litemp", "refgeoid", "tfbase"):
+    for variable in ("litemp", "refgeoid", "thdrflf"):
         assert f"'{variable}'" in summary["log_text"]
 
 
