@@ -853,6 +853,42 @@ def _process_experiments(
     }
 
 
+def _report_variables_not_submitted(
+    reporter: Reporter, experiment_name: str, not_submitted: list[str]
+) -> None:
+    """Name the non-mandatory variables an experiment carries no files for.
+
+    Nothing reported this before, so a group that meant to submit litemp and
+    lost it in a script got no signal whatsoever.  Everything about how it is
+    said is chosen so that it cannot be read as an accusation: not every model
+    supports every non-mandatory variable -- GIA is the obvious case -- and a
+    deliberate omission is the common case, not the exception.
+
+    Hence one line per experiment naming all of them, rather than one warning
+    per variable, which would make a model with a narrow scope look far worse
+    than one with a single dropped file; hence the wording, which says 'not
+    submitted' rather than 'missing'; and hence its absence from the trailing
+    naming-issues report, which is the part of the log that reads as a list of
+    faults.
+
+    There is no suppression when an experiment submitted nothing optional at
+    all.  For a full submission that is precisely the case worth naming, and
+    treating it as self-evidently deliberate would silence the warning for the
+    group most likely to have lost something.
+    """
+    if not not_submitted:
+        return
+    reporter.warning(
+        "experiment "
+        + experiment_name
+        + " carries no files for the non-mandatory variable(s): "
+        + str(not_submitted)
+        + ". This is expected if your model does not represent them; it is"
+        + " listed only so that a variable lost from a submission does not pass"
+        + " unnoticed."
+    )
+
+
 def _process_single_experiment(
     reporter: Reporter,
     source_path: str,
@@ -872,11 +908,14 @@ def _process_single_experiment(
     presence_reporter = reporter.category("file", bullet="")
     naming_reporter = reporter.category("naming", bullet="")
 
-    temp_mandatory_var = list(mandatory_variables)
-    for i in exp_files:
-        variable = i.split("_")[ISMIP7_FILENAME_VAR_IDX]
-        if variable in temp_mandatory_var:
-            temp_mandatory_var.remove(variable)
+    submitted = {i.split("_")[ISMIP7_FILENAME_VAR_IDX] for i in exp_files}
+    temp_mandatory_var = [v for v in mandatory_variables if v not in submitted]
+    # Scoped to the selected --variable-list, exactly as the mandatory check is:
+    # a run over ismip7_scalars says nothing about the x,y,t variables it was
+    # never asked to look at.
+    not_submitted = [
+        v for v in ismip_var if v not in mandatory_variables and v not in submitted
+    ]
 
     file_counter = 0
     if experiment_name in [dic["experiment"] for dic in experiments]:
@@ -899,6 +938,9 @@ def _process_single_experiment(
                 + str(temp_mandatory_var),
                 count=len(temp_mandatory_var),
             )
+        _report_variables_not_submitted(
+            presence_reporter, experiment_name, not_submitted
+        )
 
         for file in tqdm(exp_files):
             file_counter += 1
@@ -2055,7 +2097,10 @@ def _write_log_header(
 # The reporting categories, in the order the synthesis block lists them, with
 # the label each one carries there.
 SYNTHESIS_CATEGORIES = (
-    ("file", "Mandatory variables"),
+    # 'Variable presence' rather than 'Mandatory variables': the category now
+    # also carries the warning about non-mandatory variables not submitted,
+    # which the old label contradicted.
+    ("file", "Variable presence  "),
     ("naming", "Naming Tests       "),
     ("num", "Numerical Tests    "),
     ("spatial", "Spatial Tests      "),

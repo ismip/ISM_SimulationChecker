@@ -13,7 +13,7 @@ Verified directory: <source-path>
 42 files checked.
  
 0 error(s) detected.
-  - Mandatory variables: 0 error(s)
+  - Variable presence  : 0 error(s)
   - Naming Tests       : 0 error(s)
   - Numerical Tests    : 0 error(s)
   - Spatial Tests      : 0 error(s)
@@ -21,7 +21,7 @@ Verified directory: <source-path>
   - Attribute Tests    : 0 error(s)
  
 0 warning(s) detected.
-  - Mandatory variables: 0 warning(s)
+  - Variable presence  : 0 warning(s)
   - Naming Tests       : 0 warning(s)
   - Numerical Tests    : 0 warning(s)
   - Spatial Tests      : 0 warning(s)

@@ -330,6 +330,74 @@ def test_checker_reports_missing_mandatory_variable(case_dir):
     assert "mandatory variable(s) is (are) missing" in summary["log_text"]
 
 
+def test_checker_warns_about_non_mandatory_variables_not_submitted(xyt_case_dir):
+    """A dropped optional file gets a signal, and never gets called an error.
+
+    Nothing reported this before, so a group that meant to submit litemp and
+    lost it in a script heard nothing at all.
+    """
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_file_warnings"] == 1
+    assert summary["total_warnings"] == 1
+    assert (
+        "WARNING: experiment historical carries no files for the non-mandatory"
+        " variable(s): ['litemp']" in summary["log_text"]
+    )
+    # Wording, not accusation: a model that does not represent a variable is the
+    # common case, and the line has to read that way.
+    assert (
+        "This is expected if your model does not represent them"
+        in summary["log_text"]
+    )
+    # And it is not a fault, so it stays out of the list of faults.
+    synthesis = summary["log_text"].split("DETAILED RESULTS")[0]
+    assert "Naming tests errors report:" not in synthesis
+
+
+def test_non_mandatory_warning_names_every_variable_on_one_line(xyt_case_dir):
+    """One line per experiment, not one warning per variable.
+
+    A model with a narrow scope would otherwise look far worse than one that
+    dropped a single file, which is the opposite of what this is for.
+    """
+    for variable in ("litemp", "refgeoid", "tfbase"):
+        dataset_for_variable(xyt_case_dir, variable).unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_warnings"] == 1
+    assert summary["log_text"].count("carries no files for the non-mandatory") == 1
+    for variable in ("litemp", "refgeoid", "tfbase"):
+        assert f"'{variable}'" in summary["log_text"]
+
+
+def test_non_mandatory_warning_is_scoped_to_the_selected_variable_list(xyt_case_dir):
+    """A scalars-only run says nothing about x,y,t variables it never looked at."""
+    summary = checker.run_checker(
+        source_path=str(xyt_case_dir),
+        variable_list="ismip7_scalars",
+        version="tests",
+    )
+
+    assert "carries no files for the non-mandatory" not in summary["log_text"]
+
+
+def test_a_file_with_warnings_and_no_errors_still_passes(xyt_case_dir):
+    """Warnings never change a verdict, at any level of the report."""
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0
+    assert summary["total_warnings"] > 0
+    assert "No errors. Good job !" in summary["log_text"]
+    assert " error(s). Please review before sharing." not in summary["log_text"]
+
+
 def test_checker_reports_invalid_esm_in_filename(case_dir):
     rename_file_part(
         first_dataset(case_dir),

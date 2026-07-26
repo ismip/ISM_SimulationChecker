@@ -13,15 +13,15 @@ Verified directory: <source-path>
 27 files checked.
  
 0 error(s) detected.
-  - Mandatory variables: 0 error(s)
+  - Variable presence  : 0 error(s)
   - Naming Tests       : 0 error(s)
   - Numerical Tests    : 0 error(s)
   - Spatial Tests      : 0 error(s)
   - Time Tests         : 0 error(s)
   - Attribute Tests    : 0 error(s)
  
-0 warning(s) detected.
-  - Mandatory variables: 0 warning(s)
+1 warning(s) detected.
+  - Variable presence  : 1 warning(s)
   - Naming Tests       : 0 warning(s)
   - Numerical Tests    : 0 warning(s)
   - Spatial Tests      : 0 warning(s)
@@ -40,6 +40,7 @@ Hint: Use Cltr+F to look for specific problems.
  **********************************************************
 
  Mandatory variables Test: historical : all mandatory variables exist. 
+WARNING: experiment historical carries no files for the non-mandatory variable(s): ['hfgeoubed', 'xvelsurf', 'yvelsurf', 'zvelsurf', 'xvelbase', 'yvelbase', 'zvelbase', 'litemptop', 'litempavg', 'litempbotgr', 'litempbotfl', 'tfbase', 'deltag', 'refgeoid', 'litemp']. This is expected if your model does not represent them; it is listed only so that a variable lost from a submission does not pass unnoticed.
  
 Experiment: historical - File: acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
