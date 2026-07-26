@@ -672,17 +672,28 @@ def test_checker_reports_swapped_variable_in_file(case_dir):
     assert "does not match expected 'land_ice_mass" not in summary["log_text"]
 
 
-def test_checker_reports_unexpected_variable_in_file(case_dir):
+def test_checker_warns_about_unexpected_variable_in_file(case_dir):
+    """An extra variable is a warning: the requested one is still fully checked.
+
+    Nothing downstream has to work around a companion the data request did not
+    ask for, so this is a 'look at this', not a 'fix this'.
+    """
     add_variable_to_file(dataset_for_variable(case_dir, "lim"), "mask")
 
     summary = run_checker(case_dir)
 
-    assert summary["total_naming_errors"] == 1
-    assert summary["total_errors"] == 1
-    assert "unexpected variable 'mask' in the file" in summary["log_text"]
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_naming_warnings"] == 1
+    assert summary["total_warnings"] == 1
+    assert (
+        "WARNING: unexpected variable 'mask' in the file" in summary["log_text"]
+    )
     # An extra variable does not make the file uncheckable, so the requested
-    # one is still checked.
+    # one is still checked...
     assert "** Tested Variable: lim\n" in summary["log_text"]
+    # ... and the file's verdict is unchanged by the warning.
+    assert "No errors. Good job !" in summary["log_text"]
+    assert "1 warning(s). Please review." in summary["log_text"]
 
 
 @pytest.mark.parametrize(

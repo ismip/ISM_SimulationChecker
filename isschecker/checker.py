@@ -6,7 +6,7 @@
 #    - The variable named in the filename is present in the file.
 #    - The file holds no variables beyond that one, its coordinates, and the
 #      companion variables CF lets them name: bounds, grid mapping, cell
-#      measures and ancillary variables.
+#      measures and ancillary variables.  (warning)
 #    - The variable's dimensions are the ones the data request asks for, in the
 #      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
@@ -1313,12 +1313,17 @@ def _check_file_variables(
     allowed = _allowed_file_variables(ds, considered_variable)
     unexpected = sorted(name for name in file_variables if name not in allowed)
     for name in unexpected:
-        reporter.error(
-            f"unexpected variable '{name}' in the file. A file holds"
-            f" one variable of the data request -- here '{considered_variable}'"
-            f" -- along with its coordinates and the companion variables CF"
-            f" lets it name (bounds, grid mapping, cell measures, ancillary"
-            f" variables), and nothing else."
+        # A warning: the requested variable is present and fully checkable, and
+        # a reader taking it out of the file is unaffected by what sits beside
+        # it.  What the extra says is that the file was probably not written for
+        # this submission, which is worth a look and is not a fault.
+        reporter.warning(
+            f"unexpected variable '{name}' in the file. A file is expected to"
+            f" hold one variable of the data request -- here"
+            f" '{considered_variable}' -- along with its coordinates and the"
+            f" companion variables CF lets it name (bounds, grid mapping, cell"
+            f" measures, ancillary variables). '{considered_variable}' is"
+            f" checked as normal."
         )
     if not unexpected:
         reporter.ok("No unexpected variables in the file: OK")
