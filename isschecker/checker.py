@@ -1012,7 +1012,7 @@ def _report_not_modelled(
         else:
             suppressed.add(name)
 
-    reporter.write(" \n")
+    reporter.write("\n")
     return suppressed
 
 
@@ -1091,14 +1091,14 @@ def _process_single_experiment(
     if experiment_name in [dic["experiment"] for dic in experiments]:
         reporter.write("\n ")
         reporter.write("**********************************************************\n")
-        reporter.write(" ** Experiment: " + experiment_name + " \n ")
+        reporter.write(" ** Experiment: " + experiment_name + "\n ")
         reporter.write("**********************************************************\n")
         reporter.write("\n ")
         if not temp_mandatory_var:
             reporter.write(
                 "Mandatory variables Test: "
                 + experiment_name
-                + " : all mandatory variables exist. \n"
+                + " : all mandatory variables exist.\n"
             )
         else:
             presence_reporter.error(
@@ -1129,7 +1129,7 @@ def _process_single_experiment(
     else:
         reporter.write("\n ")
         reporter.write("**********************************************************\n")
-        reporter.write(" **  Experiment: " + experiment_name + " \n ")
+        reporter.write(" **  Experiment: " + experiment_name + "\n ")
         reporter.write("**********************************************************\n")
         reporter.write("\n ")
         naming_reporter.error(
@@ -1137,7 +1137,7 @@ def _process_single_experiment(
             + experiment_name
             + " as it is not in "
             + str([exp["experiment"] for exp in experiments])
-            + ". "
+            + "."
         )
         report_naming_issues.append(
             "Compliance check ignored : experiment "
@@ -1216,12 +1216,12 @@ def _process_single_file(
         return
 
     if considered_variable not in all_request_variables:
-        file_reporter.write(" \n")
+        file_reporter.write("\n")
         file_reporter.write(
             "Experiment: " + experiment_name + " - File: " + file_name + "\n"
         )
-        file_reporter.write(" \n")
-        file_reporter.write("NAMING Tests \n")
+        file_reporter.write("\n")
+        file_reporter.write("NAMING Tests\n")
         message = (
             f"'{considered_variable}' (field {ISMIP7_FILENAME_VAR_IDX} of the"
             f" file name) is not a variable in the data request"
@@ -1299,7 +1299,7 @@ def _check_naming(
 ) -> NamingResult:
     filename_years = None
 
-    reporter.write("NAMING Tests \n")
+    reporter.write("NAMING Tests\n")
 
     if not isscalar and not {"x", "y"}.issubset(dim):
         reporter.error(
@@ -1642,7 +1642,7 @@ def _check_numerical(
     region: str,
     isscalar: bool,
 ) -> None:
-    reporter.write("NUMERICAL Tests \n")
+    reporter.write("NUMERICAL Tests\n")
 
     var_units = ds[ivar].attrs.get("units")
     expected_units = ismip_meta[var_index]["units"]
@@ -1667,7 +1667,6 @@ def _check_numerical(
             + var_units
             + " and should be "
             + expected_units
-            + " "
         )
 
     if not isscalar and region not in ("AIS", "GrIS"):
@@ -1719,7 +1718,7 @@ def _check_spatial(
     grid_extent: list,
     possible_resolution: list,
 ) -> None:
-    reporter.write("SPATIAL Tests \n")
+    reporter.write("SPATIAL Tests\n")
     coords = ds.coords.to_dataset()
     Xbottomleft = int(min(coords["x"]).values.item())
     Ybottomleft = int(min(coords["y"]).values.item())
@@ -1786,7 +1785,7 @@ def _check_time(
     2015, 2016, 2299, 2300 spans the right years with a 365-day first interval
     and is 282 time steps short of what was asked for.
     """
-    reporter.write("TIME Tests \n")
+    reporter.write("TIME Tests\n")
     if not ({"t"}.issubset(dim) or {"time"}.issubset(dim)):
         if {"x", "y"}.issubset(dim):
             # Static spatial variable (x,y) — no time axis is expected.
@@ -1953,7 +1952,7 @@ def _check_attributes(
     var_type: str,
     region: str,
 ) -> None:
-    reporter.write("ATTRIBUTE Tests \n")
+    reporter.write("ATTRIBUTE Tests\n")
 
     # Sub-test 1: global attributes
     required_global = ["group", "model", "contact_name", "contact_email"]
@@ -2125,9 +2124,9 @@ def _run_variable_checks(
     time_reporter = reporter.category("time")
     attr_reporter = reporter.category("attr", qualifier="attributes")
 
-    reporter.write(" \n")
+    reporter.write("\n")
     reporter.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
-    reporter.write(" \n")
+    reporter.write("\n")
 
     header_ds = ds.to_dict(data=False)
     dim = set(list(header_ds["coords"].keys()))
@@ -2159,12 +2158,12 @@ def _run_variable_checks(
     ivar = considered_variable
     var_index = index
     reporter.write("** Tested Variable: " + ivar + "\n")
-    reporter.write(" \n")
+    reporter.write("\n")
 
     _check_numerical(num_reporter, ds, ivar, ismip_meta, var_index, region, isscalar)
 
     if not isscalar and region not in ("AIS", "GrIS"):
-        spatial_reporter.write("SPATIAL Tests \n")
+        spatial_reporter.write("SPATIAL Tests\n")
         spatial_reporter.note(
             "Not checked: the expected grid extent and resolutions depend on"
             " the region, which the file name does not identify."
@@ -2242,22 +2241,22 @@ def _write_log_header(
     log_file.write(
         "************************************************************************************\n"
     )
-    log_file.write(f"isschecker version: {version} \n")
+    log_file.write(f"isschecker version: {version}\n")
     log_file.write("verification criteria: " + criteria_file + "\n")
     log_file.write("date: " + today.strftime("%Y/%m/%d") + "\n")
-    log_file.write("source: https://github.com/ismip/ISM_SimulationChecker \n")
-    log_file.write(" \n")
+    log_file.write("source: https://github.com/ismip/ISM_SimulationChecker\n")
+    log_file.write("\n")
     log_file.write(
         "------------------------------------------------------------------------------------\n"
     )
-    log_file.write("Verified directory: " + source_path + " \n")
+    log_file.write("Verified directory: " + source_path + "\n")
     log_file.write(
         "------------------------------------------------------------------------------------\n"
     )
-    log_file.write(" \n")
-    log_file.write(" \n")
-    log_file.write(" \n")
-    log_file.write(" \n")
+    log_file.write("\n")
+    log_file.write("\n")
+    log_file.write("\n")
+    log_file.write("\n")
     log_file.write(
         "====================================================================================\n"
     )
@@ -2267,8 +2266,8 @@ def _write_log_header(
     log_file.write(
         "====================================================================================\n"
     )
-    log_file.write("Hint: Use Cltr+F to look for specific problems. \n")
-    log_file.write(" \n")
+    log_file.write("Hint: Use Cltr+F to look for specific problems.\n")
+    log_file.write("\n")
 
 
 # The reporting categories, in the order the synthesis block lists them, with
@@ -2320,7 +2319,7 @@ def _insert_synthesis(source_path: str, summary: dict) -> None:
         # block is separated from the next.
         iline += 1
     if report_naming_issues:
-        contents.insert(iline, "Naming tests errors report: \n")
+        contents.insert(iline, "Naming tests errors report:\n")
         iline += 1
         for issue in report_naming_issues:
             contents.insert(iline, "  - " + issue.rstrip("\n") + "\n")
