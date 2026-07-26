@@ -9,11 +9,15 @@
 #    - The variable's dimensions are the ones the data request asks for, in the
 #      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
+#      An unrecognised region costs only the checks that need it (value range,
+#      grid extent and resolution, crs); the rest of the file is still checked.
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
 #    - Forcing member id (field 6) matches format fNNN (e.g. f001).
 #    - Set counter (field 8) matches format [C|E|P]NNN (e.g. C001, E041, P132).
-#    - Year range (field 9) matches format YYYY-YYYY; start <= end; both match the actual time axis.
+#    - Year range (field 9) matches format YYYY-YYYY and start <= end.  What the
+#      range means -- whether the experiment allows it, and whether the time axis
+#      delivers it -- is checked under Time below.
 #
 # 2. Numerical (_check_numerical)
 #    - Variable units match the data request (any UDUNITS spelling of the
@@ -28,8 +32,17 @@
 #
 # 4. Time (_check_time)
 #    - Time dimension is present, is an unlimited (record) dimension, and its values are monotonically increasing.
-#    - Time step matches the expected annual cadence (within tolerance).
-#    - Experiment end date matches experiments_ismip7.csv; duration >= 1 year for historical, exact for others.
+#    - The file name's year range is one the experiment allows.
+#    - The time axis is exactly the axis the experiment calls for: the expected
+#      nominal years are reconstructed from experiments_ismip7.csv and encoded
+#      per the ST/FL convention, then compared with what the file holds.  This is
+#      what catches a missing, decimated or gappy axis, which endpoint-and-
+#      cadence reasoning cannot see.
+#    - For x,y,z,t snapshot variables the axis is instead checked against the
+#      required set of snapshot nominal years: the run's last year, the century
+#      marks inside it, and (for historical only) the run's first year.  Both
+#      missing and unasked-for snapshots are reported.  A snapshot at 2000 is
+#      tolerated but not required -- see issue #12.
 #
 # 5. Attributes (_check_attributes)
 #    - Global attributes present: group, model, contact_name, contact_email, crs
@@ -40,6 +53,13 @@
 #      If missing_value is also present, it must equal _FillValue.
 #    - Main variable and time coordinate are single-precision float (float32 / f4).
 #    - scale_factor and add_offset are not allowed on the main variable.
+#
+# A file is checked as far as it can be.  A naming problem stops the other
+# checks only when it leaves them nothing to read -- a missing x or y dimension,
+# or a file that does not contain the variable its name promises.  Everything
+# else (a mistyped ESM name, a malformed year range, an unrecognised region) is
+# reported and the file is checked on, so that one run tells a modeller
+# everything that is wrong rather than only the first thing.
 
 
 import datetime
@@ -49,6 +69,7 @@ import re
 import subprocess
 import argparse
 from importlib import metadata, resources
+from typing import NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -86,8 +107,15 @@ GrIS_GRID_EXTENT = [-720000, -3450000, 960000, -570000]
 AIS_POSSIBLE_RESOLUTION = [2, 4, 8, 16, 32]
 GrIS_POSSIBLE_RESOLUTION = [1, 2, 4, 8, 16, 32]
 
-TIME_STEP_MIN_DAYS = 365
-TIME_STEP_MAX_DAYS = 366
+# A timestamp may sit one day off the date its convention asks for, so that a
+# model writing Dec 31 of year N rather than Jan 1 of year N+1 is not failed for
+# rounding a boundary the other way.
+TIME_STAMP_TOLERANCE = datetime.timedelta(days=1)
+
+# How many individual years or timestamps to name before summarising the rest.
+# A wrong time axis is usually wrong in one way repeated many times; printing
+# 286 variations of the same finding buries it rather than supporting it.
+MAX_REPORTED_TIME_MISMATCHES = 5
 
 # ISMIP7 CORE file naming convention:
 # {var}_{region}_{group}_{model}_{modelid}_{ESM}_{forcingid}_{experiment}_{configid}_{startyear}-{endyear}.nc
@@ -329,6 +357,208 @@ def _nominal_to_timestamp(year: int, var_type: str) -> datetime.datetime:
     if var_type == "ST":
         return datetime.datetime(year + 1, 1, 1)
     return datetime.datetime(year, 7, 1)
+
+
+def _timestamp_to_nominal_year(timestamp, var_type: str) -> int:
+    """Return the nominal simulation year a timestamp encodes.
+
+    The inverse of :func:`_nominal_to_timestamp`, tolerant of the same one-day
+    slack: an ST timestamp is Jan 1 of the year after its nominal year, so
+    Dec 31 of the nominal year has to land in the same place.
+    """
+    if var_type == "ST":
+        return (timestamp + TIME_STAMP_TOLERANCE).year - 1
+    return timestamp.year
+
+
+def _expected_nominal_years(exp: dict, start_year: int) -> list[int]:
+    """The nominal simulation years a file for this experiment should carry.
+
+    Every experiment but 'historical' pins its start year in
+    experiments_ismip7.csv, so the whole axis follows from the table alone.
+    'historical' may start anywhere in [start_year_min, start_year_max] (which
+    is what a duration of -1 records), so it needs one number from the file --
+    see :func:`_axis_start_year`.
+    """
+    if exp["duration"] != -1:
+        start_year = exp["start_year_min"]
+    return list(range(start_year, exp["end_year"] + 1))
+
+
+def _format_year_runs(years: list[int]) -> str:
+    """Render a sorted year list compactly, collapsing consecutive runs.
+
+    A gap of 99 years is one fact about a file, not 99 of them, so it is
+    reported as '2101-2199' rather than as every year in between.
+    """
+    runs: list[list[int]] = []
+    for year in years:
+        if runs and year == runs[-1][1] + 1:
+            runs[-1][1] = year
+        else:
+            runs.append([year, year])
+    text = ", ".join(str(lo) if lo == hi else f"{lo}-{hi}" for lo, hi in runs[:MAX_REPORTED_TIME_MISMATCHES])
+    if len(runs) > MAX_REPORTED_TIME_MISMATCHES:
+        text += f", and {len(runs) - MAX_REPORTED_TIME_MISMATCHES} further run(s)"
+    return text
+
+
+def _check_filename_year_range(exp: dict, filename_years) -> list[str]:
+    """Messages for a file name whose year range disagrees with the experiment."""
+    if filename_years is None:
+        return []
+
+    start_year, end_year = filename_years
+    messages = []
+    if not (exp["start_year_min"] <= start_year <= exp["start_year_max"]):
+        if exp["start_year_min"] == exp["start_year_max"]:
+            expected = f"must be {exp['start_year_min']}"
+        else:
+            expected = f"must be between {exp['start_year_min']} and {exp['start_year_max']}"
+        messages.append(
+            f"the file name starts at year {start_year}, but experiment"
+            f" '{exp['experiment']}' {expected}."
+        )
+    if end_year != exp["end_year"]:
+        messages.append(
+            f"the file name ends at year {end_year}, but experiment"
+            f" '{exp['experiment']}' must end at {exp['end_year']}."
+        )
+    return messages
+
+
+def _compare_time_axis(actual: list, expected_years: list[int], var_type: str) -> list[str]:
+    """Compare a file's time axis with the one its experiment calls for.
+
+    Three things can be wrong independently, and saying which one it is matters
+    more than counting them: the file may hold the wrong set of nominal years
+    (missing some, or carrying extra ones), or hold the right years with the
+    wrong timestamps on them -- an FL file written with the ST convention, say.
+    """
+    expected_at = {year: _nominal_to_timestamp(year, var_type) for year in expected_years}
+
+    # An axis that is entirely the other convention is one mistake, not several
+    # hundred, and every other message below would be a confusing way to say so.
+    other_type = "FL" if var_type == "ST" else "ST"
+    other_at = [_nominal_to_timestamp(year, other_type) for year in expected_years]
+    if len(actual) == len(other_at) and all(
+        abs(a - e) <= TIME_STAMP_TOLERANCE for a, e in zip(actual, other_at)
+    ):
+        return [
+            f"the time axis follows the {other_type} convention"
+            f" ({_describe_convention(other_type)}), but this variable is"
+            f" {var_type}, whose timestamps are"
+            f" {_describe_convention(var_type)}."
+        ]
+
+    actual_at = _nominal_year_index(actual, var_type)
+
+    messages = []
+    if len(actual) != len(expected_years):
+        messages.append(
+            f"the time axis has {len(actual)} time step(s);"
+            f" {len(expected_years)} expected for nominal years"
+            f" {expected_years[0]}-{expected_years[-1]}."
+        )
+
+    missing = sorted(set(expected_at) - set(actual_at))
+    if missing:
+        messages.append(
+            f"nominal year(s) missing from the time axis:"
+            f" {_format_year_runs(missing)} ({len(missing)} year(s))."
+        )
+
+    unexpected = sorted(set(actual_at) - set(expected_at))
+    if unexpected:
+        messages.append(
+            f"nominal year(s) on the time axis that the experiment does not"
+            f" call for: {_format_year_runs(unexpected)}"
+            f" ({len(unexpected)} year(s))."
+        )
+
+    mismatch = _timestamp_mismatch_message(
+        actual_at, sorted(set(expected_at) & set(actual_at)), var_type
+    )
+    if mismatch:
+        messages.append(mismatch)
+
+    return messages
+
+
+def _nominal_year_index(actual: list, var_type: str) -> dict:
+    """Index a file's timestamps by the nominal year each one encodes."""
+    index: dict[int, object] = {}
+    for timestamp in actual:
+        index.setdefault(_timestamp_to_nominal_year(timestamp, var_type), timestamp)
+    return index
+
+
+def _timestamp_mismatch_message(actual_at: dict, years: list[int], var_type: str):
+    """Report years whose timestamp does not sit where the convention puts it.
+
+    The years themselves are right here -- it is the date written against them
+    that is wrong, which is a different mistake from a missing or extra year and
+    reads badly if the two are merged.
+    """
+    misencoded = [
+        year
+        for year in years
+        if abs(actual_at[year] - _nominal_to_timestamp(year, var_type))
+        > TIME_STAMP_TOLERANCE
+    ]
+    if not misencoded:
+        return None
+
+    shown = ", ".join(
+        f"{year} is {actual_at[year].strftime('%Y-%m-%d')}"
+        f" (expected {_nominal_to_timestamp(year, var_type).strftime('%Y-%m-%d')})"
+        for year in misencoded[:MAX_REPORTED_TIME_MISMATCHES]
+    )
+    if len(misencoded) > MAX_REPORTED_TIME_MISMATCHES:
+        shown += f", and {len(misencoded) - MAX_REPORTED_TIME_MISMATCHES} more"
+    return (
+        f"{len(misencoded)} timestamp(s) do not match the {var_type}"
+        f" convention ({_describe_convention(var_type)}): {shown}."
+    )
+
+
+def _describe_convention(var_type: str) -> str:
+    if var_type == "ST":
+        return "Jan 1 of the year after the nominal year"
+    return "Jul 1 of the nominal year"
+
+
+# The nominal years an x,y,z,t variable (litemp) must carry a snapshot for,
+# whenever they fall inside the run.  Taken from the litemp Comment column of
+# ISMIP7_variable_request.csv: "(1900 if in historical), initial state, 2014,
+# 2100, 2200, and 2300".  The 2014 there is the last year of the historical
+# experiment, so it is covered by requiring the run's final year rather than by
+# naming a literal.
+CENTURY_SNAPSHOT_YEARS = frozenset({1900, 2100, 2200, 2300})
+
+# Accepted if a file carries it, never required.  The README, this checker and
+# the generator all used to require a snapshot at 2000; the data request does
+# not ask for one.  Tolerating it means a group that followed the README as
+# published is not failed for a year that is still in dispute -- see issue #12.
+TOLERATED_SNAPSHOT_YEARS = frozenset({2000})
+
+
+def _required_snapshot_years(exp: dict, run_years: list[int]) -> set[int]:
+    """The snapshot nominal years an x,y,z,t file must carry.
+
+    The final year of the run is always reported, as are the century marks
+    inside it.  The *first* year is only required where the protocol leaves it
+    open -- that is, for 'historical', whose start year is the modeller's choice
+    (duration -1) and so is not recorded anywhere else.  A projection's initial
+    state is the historical run's final state, already reported as historical's
+    last-year snapshot, so requiring it again in every projection would ask for
+    the same field twice.
+    """
+    required = {run_years[-1]}
+    required |= {y for y in CENTURY_SNAPSHOT_YEARS if run_years[0] <= y <= run_years[-1]}
+    if exp["duration"] == -1:
+        required.add(run_years[0])
+    return required
 
 
 def _run_compliance_checker(
@@ -750,17 +980,34 @@ def _process_single_file(
     }
 
 
+class NamingResult(NamedTuple):
+    """What the naming checks found, and what the later checks need from them.
+
+    The file name is where the year range under test comes from, so parsing it
+    is the naming check's job; comparing it to the time axis is the time
+    check's, which decodes the file anyway.
+
+    `can_continue` is what the other checks key off.  Most naming problems say
+    nothing about whether a file can be checked -- a mistyped ESM name is worth
+    reporting and worth nothing else -- so only the ones that genuinely leave
+    the later checks with nothing to read clear it.
+    """
+
+    errors: int
+    filename_years: tuple[int, int] | None
+    can_continue: bool = True
+
+
 def _check_naming(
     log_file,
-    ds,
     file_name: str,
     region: str,
     dim: set,
     isscalar: bool,
     report_naming_issues: list,
-    var_type: str = "",
-) -> int:
+) -> NamingResult:
     errors = 0
+    filename_years = None
 
     log_file.write("NAMING Tests \n")
 
@@ -775,16 +1022,21 @@ def _check_naming(
             "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing in "
             + file_name
         )
-        return errors + 1
+        # Without x and y there is no grid to check and no spatial variable to
+        # read: this is one of the few naming problems that really does stop
+        # everything else.
+        return NamingResult(errors + 1, filename_years, can_continue=False)
 
     if region not in ["AIS", "GrIS"]:
         log_file.write(
             " - ERROR: Region "
             + region
-            + " not recognized. It should be AIS or GrIS. The compliance check has been interrupted for this variable.\n"
+            + " not recognized. It should be AIS or GrIS. The checks that depend"
+            + " on the region (value range, grid extent and resolution, crs) are"
+            + " skipped for this file; the rest still run.\n"
         )
         report_naming_issues.append(
-            "Compliance check ignored: region (AIS/GrIS) not identified in the file "
+            "Region-dependent checks skipped: region (AIS/GrIS) not identified in the file "
             + file_name
             + " due to wrong naming."
         )
@@ -837,34 +1089,16 @@ def _check_naming(
                     f" - ERROR: year range '{year_range_field}': start year {fn_start_year} is after end year {fn_end_year}.\n"
                 )
                 errors += 1
-            elif "time" in ds.coords:
-                _decoded_time = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))["time"]
-                # ST timestamps are Jan 1 of year+1; subtract 1 to recover the nominal simulation year.
-                _yr_offset = 1 if var_type == "ST" else 0
-                actual_start = min(_decoded_time).item().year - _yr_offset
-                actual_end = max(_decoded_time).item().year - _yr_offset
-                is_snapshot = "z" in dim
-                yr_range_ok = True
-                if not is_snapshot:
-                    # For regular time-series variables the filename start year must match the first time step.
-                    if fn_start_year != actual_start:
-                        log_file.write(
-                            f" - ERROR: filename start year {fn_start_year} does not match first time step year {actual_start}.\n"
-                        )
-                        errors += 1
-                        yr_range_ok = False
-                if fn_end_year != actual_end:
-                    log_file.write(
-                        f" - ERROR: filename end year {fn_end_year} does not match last time step year {actual_end}.\n"
-                    )
-                    errors += 1
-                    yr_range_ok = False
-                if yr_range_ok:
-                    log_file.write(
-                        f" - Filename year range {fn_start_year}-{fn_end_year} matches time axis: OK\n"
-                    )
+            else:
+                # What the range means -- whether the experiment allows it, and
+                # whether the time axis delivers it -- is for _check_time, which
+                # decodes the file anyway.
+                filename_years = (fn_start_year, fn_end_year)
+                log_file.write(
+                    f" - Filename year range {fn_start_year}-{fn_end_year} is well formed: OK\n"
+                )
 
-    return errors
+    return NamingResult(errors, filename_years)
 
 
 # The data request writes a variable's dimensions innermost-first and calls the
@@ -1118,9 +1352,15 @@ def _check_numerical(
 
     log_file.write("NUMERICAL Tests \n")
 
-    var_units = ds[ivar].attrs["units"]
+    var_units = ds[ivar].attrs.get("units")
     expected_units = ismip_meta[var_index]["units"]
-    if var_units == expected_units:
+    if var_units is None:
+        log_file.write(
+            f" - ERROR: The variable '{ivar}' has no 'units' attribute. The data"
+            f" request asks for '{expected_units}'.\n"
+        )
+        errors += 1
+    elif var_units == expected_units:
         log_file.write(" - The unit is correct: " + var_units + "\n")
     elif _units_match(var_units, expected_units):
         log_file.write(
@@ -1140,7 +1380,12 @@ def _check_numerical(
         )
         errors += 1
 
-    if not isscalar:
+    if not isscalar and region not in ("AIS", "GrIS"):
+        log_file.write(
+            " - Value range: not checked (the allowed range depends on the"
+            " region, which the file name does not identify).\n"
+        )
+    elif not isscalar:
         if False in ds[ivar].isnull():
             if (
                 ds[ivar].min(skipna=True).item()
@@ -1247,7 +1492,17 @@ def _check_time(
     experiments: list,
     experiment_name: str,
     var_type: str = "",
+    requested_dim: str = "",
+    filename_years=None,
 ) -> int:
+    """Check a file's time axis against the one its experiment calls for.
+
+    The axis is checked by reconstructing the axis the file should have had and
+    comparing, rather than by measuring its endpoints and its first interval.
+    Endpoint reasoning cannot see a decimated or gappy axis: a ctrl file holding
+    2015, 2016, 2299, 2300 spans the right years with a 365-day first interval
+    and is 282 time steps short of what was asked for.
+    """
     errors = 0
 
     log_file.write("TIME Tests \n")
@@ -1273,26 +1528,11 @@ def _check_time(
 
     try:
         ds = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
-    except Exception as err:
+    except Exception:
         log_file.write(
             " - ERROR: The time coordinate could not be decoded.  Time checks cannot proceed.\n"
         )
-        errors += 1
         # we can't proceed because the next steps will crash
-        return errors
-      
-    start_exp = min(ds["time"]).values.astype("datetime64[D]")
-    end_exp = max(ds["time"]).values.astype("datetime64[D]")
-    duration_years = end_exp.item().year - start_exp.item().year + 1
-
-    index_exp = [dic["experiment"] for dic in experiments].index(experiment_name)
-    if not (
-        np.issubdtype(start_exp.dtype, np.datetime64)
-        & np.issubdtype(end_exp.dtype, np.datetime64)
-    ):
-        log_file.write(
-            " - ERROR: the time format of the Netcdf file is not recognized. Time Tests have been ignored.\n"
-        )
         return errors + 1
 
     if not _strictly_increasing(ds.coords["time"]):
@@ -1301,192 +1541,125 @@ def _check_time(
         )
         return errors + 1
 
-    is_snapshot_var = "z" in dim
-    if is_snapshot_var:
-        # x,y,z,t variable (e.g. litemp): sparse snapshot time axis.
-        # Each time value must be an ST-encoded timestamp for one of the known snapshot nominal years.
-        _LITEMP_SNAPSHOT_NOMINAL_YEARS = {1900, 2000, 2100, 2200, 2300}
-        _yr_offset = 1 if var_type == "ST" else 0
-        nominal_years = [t.year - _yr_offset for t in ds["time"].values]
-        exp_for_snaps = experiments[index_exp]
-        valid_snapshot_years = {nominal_years[-1]} | {
-            y for y in _LITEMP_SNAPSHOT_NOMINAL_YEARS
-            if exp_for_snaps["start_year_min"] <= y <= exp_for_snaps["end_year"]
-        }
-        if exp_for_snaps["experiment"] == "historical":
-            valid_snapshot_years.add(nominal_years[0])
-        snap_errors = 0
-        for ny in nominal_years:
-            if ny not in valid_snapshot_years:
-                log_file.write(
-                    f" - ERROR: time snapshot nominal year {ny} is not in the valid"
-                    f" snapshot set {sorted(valid_snapshot_years)}.\n"
-                )
-                snap_errors += 1
-        if snap_errors == 0:
-            log_file.write(
-                f" - Snapshot time axis nominal years {nominal_years} are all valid: OK\n"
-            )
-        errors += snap_errors
-    elif len(ds["time"].values) > 1:
-        if isinstance(ds["time"].values[1] - ds["time"].values[0], datetime.timedelta):
-            time_step = (ds["time"].values[1] - ds["time"].values[0]).days
-        elif isinstance(ds["time"].values[1] - ds["time"].values[0], np.timedelta64):
-            time_step = np.timedelta64(
-                ds["time"].values[1] - ds["time"].values[0], "D"
-            ) / np.timedelta64(1, "D")
-        else:
-            time_step = ds["time"].values[1] - ds["time"].values[0]
-
-        if TIME_STEP_MIN_DAYS <= time_step <= TIME_STEP_MAX_DAYS:
-            log_file.write(" - Time step: " + str(time_step) + " days\n")
-        else:
-            log_file.write(
-                " - ERROR: the time step ("
-                + str(time_step)
-                + ") should be comprised between ["
-                + str(TIME_STEP_MIN_DAYS)
-                + " and "
-                + str(TIME_STEP_MAX_DAYS)
-                + "].\n"
-            )
-            errors += 1
-    else:
-        log_file.write(" - Only one time step present; time step check skipped.\n")
-
+    index_exp = [dic["experiment"] for dic in experiments].index(experiment_name)
     exp = experiments[index_exp]
-    dateformat_end_exp = datetime.datetime(
-        end_exp.item().year, end_exp.item().month, end_exp.item().day
+    actual = list(ds["time"].values)
+
+    for message in _check_filename_year_range(exp, filename_years):
+        log_file.write(f" - ERROR: {message}\n")
+        errors += 1
+
+    # The nominal years the run as a whole covers.  The annual variables carry
+    # one time step for each of them; the snapshot variables carry a few.
+    run_years = _expected_nominal_years(
+        exp, _axis_start_year(exp, filename_years, actual, var_type)
     )
-
-    if is_snapshot_var:
+    if not run_years:
         log_file.write(
-            " - Duration / start / end timestamp checks: N/A (snapshot variable — time axis holds sparse snapshots only).\n"
+            f" - ERROR: the time axis starts in nominal year"
+            f" {_timestamp_to_nominal_year(actual[0], var_type)}, after experiment"
+            f" '{experiment_name}' ends in {exp['end_year']}. The expected time"
+            f" axis cannot be determined.\n"
         )
-        return errors
+        return errors + 1
 
-    # Compute expected timestamp windows from nominal years + var_type (±1 day tolerance).
-    _tol = datetime.timedelta(days=1)
-    startinf = _nominal_to_timestamp(exp["start_year_min"], var_type) - _tol
-    startsup  = _nominal_to_timestamp(exp["start_year_max"], var_type) + _tol
-    endinf    = _nominal_to_timestamp(exp["end_year"],       var_type) - _tol
-    endsup    = _nominal_to_timestamp(exp["end_year"],       var_type) + _tol
-
-    if exp["duration"] == -1:
-        # Undetermined length: only require >= 1 year, start and end date in range
-        if duration_years >= 1:
-            log_file.write(
-                " - Experiment lasts " + str(duration_years) + " years (>= 1 year required): OK\n"
-            )
-        else:
-            log_file.write(
-                " - ERROR: the experiment lasts "
-                + str(duration_years)
-                + " years but must be at least 1 year long.\n"
-            )
-            errors += 1
-
-        _yr_off = 1 if var_type == "ST" else 0
-        dateformat_start_exp = datetime.datetime(
-            start_exp.item().year, start_exp.item().month, start_exp.item().day
+    if requested_dim == "x,y,z,t":
+        return errors + _check_snapshot_time_axis(
+            log_file, actual, exp, var_type, run_years
         )
-        if startinf <= dateformat_start_exp <= startsup:
-            log_file.write(
-                " - First time stamp correctly set to "
-                + start_exp.item().strftime("%Y-%m-%d")
-                + f" (nominal year {start_exp.item().year - _yr_off}).\n"
-            )
-        else:
-            log_file.write(
-                " - ERROR: the experiment starts the "
-                + start_exp.item().strftime("%Y-%m-%d")
-                + ". The date should be comprised between "
-                + startinf.strftime("%Y-%m-%d")
-                + " and "
-                + startsup.strftime("%Y-%m-%d")
-                + "\n"
-            )
-            errors += 1
 
-        if endinf <= dateformat_end_exp <= endsup:
-            log_file.write(
-                " - Last time stamp correctly set to "
-                + end_exp.item().strftime("%Y-%m-%d")
-                + f" (nominal year {end_exp.item().year - _yr_off}).\n"
-            )
-        else:
-            log_file.write(
-                " - ERROR: the experiment ends on "
-                + end_exp.item().strftime("%Y-%m-%d")
-                + ". The date should be comprised between "
-                + endinf.strftime("%Y-%m-%d")
-                + " and "
-                + endsup.strftime("%Y-%m-%d")
-                + "\n"
-            )
-            errors += 1
-    else:
-        if duration_years == exp["duration"]:
-            log_file.write(" - Experiment lasts " + str(duration_years) + " years.\n")
-            _yr_off = 1 if var_type == "ST" else 0
-            dateformat_start_exp = datetime.datetime(
-                start_exp.item().year,
-                start_exp.item().month,
-                start_exp.item().day,
-            )
-            if startinf <= dateformat_start_exp <= startsup:
-                log_file.write(
-                    " - First time stamp correctly set to "
-                    + start_exp.item().strftime("%Y-%m-%d")
-                    + f" (nominal year {start_exp.item().year - _yr_off}).\n"
-                )
-            else:
-                log_file.write(
-                    " - ERROR: the experiment starts the "
-                    + start_exp.item().strftime("%Y-%m-%d")
-                    + ". The date should be comprised between "
-                    + startinf.strftime("%Y-%m-%d")
-                    + " and "
-                    + startsup.strftime("%Y-%m-%d")
-                    + "\n"
-                )
-                errors += 1
+    messages = _compare_time_axis(actual, run_years, var_type)
+    for message in messages:
+        log_file.write(f" - ERROR: {message}\n")
+    errors += len(messages)
 
-            if endinf <= dateformat_end_exp <= endsup:
-                log_file.write(
-                    " - Last time stamp correctly set to "
-                    + end_exp.item().strftime("%Y-%m-%d")
-                    + f" (nominal year {end_exp.item().year - _yr_off}).\n"
-                )
-            else:
-                log_file.write(
-                    " - ERROR: the experiment ends on "
-                    + end_exp.item().strftime("%Y-%m-%d")
-                    + ". The date should be comprised between "
-                    + endinf.strftime("%Y-%m-%d")
-                    + " and "
-                    + endsup.strftime("%Y-%m-%d")
-                    + "\n"
-                )
-                errors += 1
-        else:
-            end_date = start_exp + np.timedelta64(exp["duration"] * 365, "D")
-            log_file.write(
-                " - ERROR: the experiment lasts "
-                + str(duration_years)
-                + " years. The duration should be "
-                + str(exp["duration"])
-                + " years\n"
-            )
-            log_file.write(
-                " - As the experiment started on "
-                + start_exp.item().strftime("%Y-%m-%d")
-                + " , it should end on "
-                + end_date.item().strftime("%Y-%m-%d")
-                + "\n"
-            )
-            errors += 1
+    if not messages:
+        log_file.write(
+            f" - Time axis: {len(actual)} annual {var_type} time step(s) covering"
+            f" nominal years {run_years[0]}-{run_years[-1]}, as"
+            f" experiment '{experiment_name}' requires: OK\n"
+        )
 
+    return errors
+
+
+def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> int:
+    """The nominal year the expected time axis should begin at.
+
+    Only 'historical' has a say in the matter -- every other experiment pins its
+    start year in experiments_ismip7.csv -- and for it the file name is what
+    decides: it is the file's own declared claim about its contents, and any
+    start year in [start_year_min, start_year_max] is permitted, so there is
+    nothing else to measure the file against.
+
+    Falls back to the axis when the file name cannot supply a usable year, so
+    that the cadence and the end year are still checked rather than the file
+    being measured against a range nothing supports.
+    """
+    if filename_years is not None:
+        start_year = filename_years[0]
+        if exp["start_year_min"] <= start_year <= exp["start_year_max"]:
+            return start_year
+    return _timestamp_to_nominal_year(actual[0], var_type)
+
+
+def _check_snapshot_time_axis(
+    log_file, actual: list, exp: dict, var_type: str, run_years: list[int]
+) -> int:
+    """Check the sparse snapshot axis of an x,y,z,t variable (e.g. litemp).
+
+    Unlike the annual variables, these carry a handful of snapshots rather than
+    every year of the run, so the check is against a required *set* of nominal
+    years rather than a contiguous range.  It reports snapshots that should be
+    there and are not, which is the gap issue #12 asks about: the previous
+    version only validated the years a file happened to contain, and counted the
+    file's own last time step as valid whatever it was, so a file holding a
+    single snapshot at an arbitrary year passed.
+    """
+    required = _required_snapshot_years(exp, run_years)
+    permitted = required | {
+        y for y in TOLERATED_SNAPSHOT_YEARS if run_years[0] <= y <= run_years[-1]
+    }
+    actual_at = _nominal_year_index(actual, var_type)
+
+    errors = 0
+
+    missing = sorted(required - set(actual_at))
+    if missing:
+        log_file.write(
+            f" - ERROR: required snapshot nominal year(s) missing:"
+            f" {_format_year_runs(missing)}. Experiment '{exp['experiment']}'"
+            f" covering {run_years[0]}-{run_years[-1]} requires snapshots at"
+            f" {_format_year_runs(sorted(required))}.\n"
+        )
+        errors += 1
+
+    unexpected = sorted(set(actual_at) - permitted)
+    if unexpected:
+        log_file.write(
+            f" - ERROR: snapshot nominal year(s) the experiment does not call"
+            f" for: {_format_year_runs(unexpected)}. Required:"
+            f" {_format_year_runs(sorted(required))}.\n"
+        )
+        errors += 1
+
+    mismatch = _timestamp_mismatch_message(
+        actual_at, sorted(set(actual_at) & permitted), var_type
+    )
+    if mismatch:
+        log_file.write(f" - ERROR: {mismatch}\n")
+        errors += 1
+
+    if errors == 0:
+        log_file.write(
+            f" - Snapshot time axis: nominal year(s)"
+            f" {_format_year_runs(sorted(actual_at))} cover everything experiment"
+            f" '{exp['experiment']}' requires: OK\n"
+        )
+    log_file.write(
+        " - Annual cadence checks: N/A (snapshot variable — the time axis holds"
+        " sparse snapshots by design).\n"
+    )
     return errors
 
 
@@ -1513,7 +1686,12 @@ def _check_attributes(
             global_errors += 1
     expected_crs = "epsg:3413" if region == "GrIS" else "epsg:3031"
     actual_crs = ds.attrs.get("crs")
-    if actual_crs is None:
+    if region not in ("AIS", "GrIS"):
+        log_file.write(
+            " - Global attribute 'crs': not checked (the expected value depends"
+            " on the region, which the file name does not identify).\n"
+        )
+    elif actual_crs is None:
         log_file.write(" - ERROR (attributes): global attribute 'crs' is missing.\n")
         global_errors += 1
     elif actual_crs.lower() != expected_crs:
@@ -1698,9 +1876,9 @@ def _run_variable_checks(
     isscalar = ismip_meta[index]["dim"] == "t"
     var_type = ismip_meta[index].get("type", "")
 
-    n_err = _check_naming(log_file, ds, file_name, region, dim, isscalar, report_naming_issues, var_type)
-    var_naming_errors += n_err
-    if n_err > 0:
+    naming = _check_naming(log_file, file_name, region, dim, isscalar, report_naming_issues)
+    var_naming_errors += naming.errors
+    if not naming.can_continue:
         return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
 
     file_var_errors, has_variable = _check_file_variables(
@@ -1725,10 +1903,19 @@ def _run_variable_checks(
 
     var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
 
-    if not isscalar:
+    if not isscalar and region not in ("AIS", "GrIS"):
+        log_file.write("SPATIAL Tests \n")
+        log_file.write(
+            " - Not checked: the expected grid extent and resolutions depend on"
+            " the region, which the file name does not identify.\n"
+        )
+    elif not isscalar:
         var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
 
-    var_time_errors += _check_time(log_file, ds, dim, experiments, experiment_name, var_type)
+    var_time_errors += _check_time(
+        log_file, ds, dim, experiments, experiment_name, var_type,
+        ismip_meta[index]["dim"], naming.filename_years,
+    )
 
     var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, var_type, region)
 

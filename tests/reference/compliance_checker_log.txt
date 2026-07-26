@@ -38,7 +38,7 @@ Hint: Use Cltr+F to look for specific problems.
 Experiment: historical - File: acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'acabf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'acabf' dimensions (time, y, x) match the requested x,y,t: OK
@@ -54,10 +54,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -75,7 +72,7 @@ No warnings.
 Experiment: historical - File: base_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'base' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'base' dimensions (time, y, x) match the requested x,y,t: OK
@@ -91,10 +88,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -112,7 +106,7 @@ No warnings.
 Experiment: historical - File: dlithkdt_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'dlithkdt' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'dlithkdt' dimensions (time, y, x) match the requested x,y,t: OK
@@ -128,10 +122,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -149,7 +140,7 @@ No warnings.
 Experiment: historical - File: iareafl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'iareafl' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'iareafl' dimensions (time) match the requested t: OK
@@ -159,10 +150,7 @@ NUMERICAL Tests
  - The unit is correct: m^2
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -180,7 +168,7 @@ No warnings.
 Experiment: historical - File: iareagr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'iareagr' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'iareagr' dimensions (time) match the requested t: OK
@@ -190,10 +178,7 @@ NUMERICAL Tests
  - The unit is correct: m^2
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -211,7 +196,7 @@ No warnings.
 Experiment: historical - File: libmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'libmassbffl' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'libmassbffl' dimensions (time, y, x) match the requested x,y,t: OK
@@ -227,10 +212,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -248,7 +230,7 @@ No warnings.
 Experiment: historical - File: libmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'libmassbfgr' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'libmassbfgr' dimensions (time, y, x) match the requested x,y,t: OK
@@ -264,10 +246,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -285,7 +264,7 @@ No warnings.
 Experiment: historical - File: licalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'licalvf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'licalvf' dimensions (time, y, x) match the requested x,y,t: OK
@@ -301,10 +280,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -322,7 +298,7 @@ No warnings.
 Experiment: historical - File: lifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'lifmassbf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'lifmassbf' dimensions (time, y, x) match the requested x,y,t: OK
@@ -338,10 +314,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -359,7 +332,7 @@ No warnings.
 Experiment: historical - File: ligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'ligroundf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'ligroundf' dimensions (time, y, x) match the requested x,y,t: OK
@@ -375,10 +348,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -396,7 +366,7 @@ No warnings.
 Experiment: historical - File: lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'lim' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'lim' dimensions (time) match the requested t: OK
@@ -406,10 +376,7 @@ NUMERICAL Tests
  - The unit is correct: kg
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -427,7 +394,7 @@ No warnings.
 Experiment: historical - File: limnsw_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'limnsw' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'limnsw' dimensions (time) match the requested t: OK
@@ -437,10 +404,7 @@ NUMERICAL Tests
  - The unit is correct: kg
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -458,7 +422,7 @@ No warnings.
 Experiment: historical - File: lithk_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'lithk' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'lithk' dimensions (time, y, x) match the requested x,y,t: OK
@@ -474,10 +438,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -495,7 +456,7 @@ No warnings.
 Experiment: historical - File: orog_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'orog' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'orog' dimensions (time, y, x) match the requested x,y,t: OK
@@ -511,10 +472,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -532,7 +490,7 @@ No warnings.
 Experiment: historical - File: sftflf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'sftflf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'sftflf' dimensions (time, y, x) match the requested x,y,t: OK
@@ -548,10 +506,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -569,7 +524,7 @@ No warnings.
 Experiment: historical - File: sftgif_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'sftgif' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'sftgif' dimensions (time, y, x) match the requested x,y,t: OK
@@ -585,10 +540,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -606,7 +558,7 @@ No warnings.
 Experiment: historical - File: sftgrf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'sftgrf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'sftgrf' dimensions (time, y, x) match the requested x,y,t: OK
@@ -622,10 +574,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -643,7 +592,7 @@ No warnings.
 Experiment: historical - File: strbasemag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'strbasemag' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'strbasemag' dimensions (time, y, x) match the requested x,y,t: OK
@@ -659,10 +608,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -680,7 +626,7 @@ No warnings.
 Experiment: historical - File: tendacabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendacabf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendacabf' dimensions (time) match the requested t: OK
@@ -690,10 +636,7 @@ NUMERICAL Tests
  - The unit is correct: kg s-1
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -711,7 +654,7 @@ No warnings.
 Experiment: historical - File: tendlibmassbffl_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlibmassbffl' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlibmassbffl' dimensions (time) match the requested t: OK
@@ -721,10 +664,7 @@ NUMERICAL Tests
  - The unit is correct: kg s-1
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -742,7 +682,7 @@ No warnings.
 Experiment: historical - File: tendlibmassbfgr_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlibmassbfgr' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlibmassbfgr' dimensions (time) match the requested t: OK
@@ -752,10 +692,7 @@ NUMERICAL Tests
  - The unit is correct: kg s-1
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -773,7 +710,7 @@ No warnings.
 Experiment: historical - File: tendlicalvf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlicalvf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlicalvf' dimensions (time) match the requested t: OK
@@ -783,10 +720,7 @@ NUMERICAL Tests
  - The unit is correct: kg s-1
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -804,7 +738,7 @@ No warnings.
 Experiment: historical - File: tendlifmassbf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendlifmassbf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendlifmassbf' dimensions (time) match the requested t: OK
@@ -814,10 +748,7 @@ NUMERICAL Tests
  - The unit is correct: kg s-1
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -835,7 +766,7 @@ No warnings.
 Experiment: historical - File: tendligroundf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'tendligroundf' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'tendligroundf' dimensions (time) match the requested t: OK
@@ -845,10 +776,7 @@ NUMERICAL Tests
  - The unit is correct: kg s-1
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2013-07-01 (nominal year 2013).
- - Last time stamp correctly set to 2014-07-01 (nominal year 2014).
+ - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -866,7 +794,7 @@ No warnings.
 Experiment: historical - File: topg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'topg' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'topg' dimensions (time, y, x) match the requested x,y,t: OK
@@ -882,10 +810,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -903,7 +828,7 @@ No warnings.
 Experiment: historical - File: xvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'xvelmean' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'xvelmean' dimensions (time, y, x) match the requested x,y,t: OK
@@ -919,10 +844,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK
@@ -940,7 +862,7 @@ No warnings.
 Experiment: historical - File: yvelmean_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
  
 NAMING Tests 
- - Filename year range 2013-2014 matches time axis: OK
+ - Filename year range 2013-2014 is well formed: OK
  - Variable 'yvelmean' from the file name is present in the file: OK
  - No unexpected variables in the file: OK
  - Variable 'yvelmean' dimensions (time, y, x) match the requested x,y,t: OK
@@ -956,10 +878,7 @@ SPATIAL Tests
  - The grid resolution (16 km) was successfully verified.
 TIME Tests 
  - Time is a record (unlimited) dimension: OK
- - Time step: 365 days
- - Experiment lasts 2 years (>= 1 year required): OK
- - First time stamp correctly set to 2014-01-01 (nominal year 2013).
- - Last time stamp correctly set to 2015-01-01 (nominal year 2014).
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
 ATTRIBUTE Tests 
  - Global attributes: OK
  - Coordinate attributes: OK

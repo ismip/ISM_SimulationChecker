@@ -14,6 +14,8 @@ from datetime import datetime
 from pathlib import Path
 import netCDF4
 
+from .checker import CENTURY_SNAPSHOT_YEARS
+
 DATA_PACKAGE = f'{__package__}.data'
 
 # Synthetic data is drawn from a seeded generator so that a given seed always
@@ -494,9 +496,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
 
     # Process x,y,z,t variables (4D snapshots, e.g. litemp)
     if include_xyt:
-        _SNAPSHOT_NOMINAL_YEARS = {1900, 2000, 2100, 2200, 2300}
+        # The required set comes from the checker so that the two cannot drift
+        # apart: files generated here are meant to be exactly what it asks for.
         end_year = start_year + nyears - 1
-        snap_set = {end_year} | {y for y in _SNAPSHOT_NOMINAL_YEARS if start_year <= y <= end_year}
+        snap_set = {end_year} | {
+            y for y in CENTURY_SNAPSHOT_YEARS if start_year <= y <= end_year
+        }
         if scenario == 'historical':
             snap_set.add(start_year)
         snapshot_years = sorted(snap_set)

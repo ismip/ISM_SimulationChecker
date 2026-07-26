@@ -75,6 +75,48 @@ def baseline_xyt_core_dir(tmp_path_factory):
     return core_dir
 
 
+@pytest.fixture(scope="session")
+def baseline_ctrl_core_dir(tmp_path_factory):
+    """A full-length ctrl baseline: 286 nominal years, 2015-2300.
+
+    The short historical runs the other fixtures use cannot express a decimated
+    or sparsely sampled axis, which is the failure the endpoint-based checks
+    used to miss. This is also the only fixture that exercises the real ISMIP7
+    projection length end to end.
+    """
+    baseline_root = tmp_path_factory.mktemp("baseline_ctrl_checker_data")
+    created_files = generate_test_files.create_netcdf_file(
+        None,
+        grid_name="GrIS_16000m",
+        scenario="ctrl",
+        start_year=2015,
+        nyears=286,
+        include_scalars=True,
+        include_xyt=False,
+        output_root=baseline_root,
+    )
+    assert created_files, "Synthetic baseline generation did not create any files."
+
+    core_dir = baseline_root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "C001"
+    baseline_summary = checker.run_checker(
+        source_path=str(core_dir),
+        variable_list="ismip7_scalars",
+        version="tests",
+    )
+    assert baseline_summary["total_errors"] == 0, (
+        "A full-length ctrl run should pass the checker, but found "
+        f"{baseline_summary['total_errors']} errors.\n{baseline_summary['log_text']}"
+    )
+    return core_dir
+
+
+@pytest.fixture
+def ctrl_case_dir(tmp_path, baseline_ctrl_core_dir):
+    case_root = tmp_path / "CORE" / "C001"
+    shutil.copytree(baseline_ctrl_core_dir, case_root)
+    return case_root
+
+
 @pytest.fixture
 def case_dir(tmp_path, baseline_core_dir):
     case_root = tmp_path / "CORE" / "C001"
@@ -125,6 +167,55 @@ def set_time_values(file_path: Path, datetimes) -> None:
             units=time_var.units,
             calendar=getattr(time_var, "calendar", "standard"),
         )
+
+
+def set_time_axis(file_path: Path, datetimes) -> None:
+    """Rewrite a file with a different number of time steps.
+
+    netCDF cannot shrink a dimension in place, so the file is rebuilt. Data is
+    taken from the first `len(datetimes)` steps of every time-varying variable
+    and everything else is copied across unchanged, which is what keeps the
+    checks other than the one under test seeing exactly what they saw before.
+    """
+    rebuilt = file_path.with_name(file_path.name + ".rebuilt")
+    with netCDF4.Dataset(file_path) as source, netCDF4.Dataset(rebuilt, "w") as target:
+        target.setncatts(source.__dict__)
+        for name, dimension in source.dimensions.items():
+            target.createDimension(
+                name, None if dimension.isunlimited() else len(dimension)
+            )
+        for name, variable in source.variables.items():
+            fill_value = (
+                variable.getncattr("_FillValue")
+                if "_FillValue" in variable.ncattrs()
+                else None
+            )
+            created = target.createVariable(
+                name, variable.datatype, variable.dimensions, fill_value=fill_value
+            )
+            created.setncatts(
+                {k: v for k, v in variable.__dict__.items() if k != "_FillValue"}
+            )
+            values = variable[:]
+            if "time" in variable.dimensions:
+                values = values[: len(datetimes)]
+            created[:] = values
+        target.variables["time"][:] = netCDF4.date2num(
+            datetimes,
+            units=source.variables["time"].units,
+            calendar=getattr(source.variables["time"], "calendar", "standard"),
+        )
+    rebuilt.replace(file_path)
+
+
+def state_timestamps(nominal_years):
+    """The ST encoding of a list of nominal years: Jan 1 of the year after."""
+    return [datetime(year + 1, 1, 1) for year in nominal_years]
+
+
+def flux_timestamps(nominal_years):
+    """The FL encoding of a list of nominal years: Jul 1 of the year itself."""
+    return [datetime(year, 7, 1) for year in nominal_years]
 
 
 def remove_global_attribute(file_path: Path, attr_name: str) -> None:
@@ -243,6 +334,56 @@ def test_checker_reports_invalid_esm_in_filename(case_dir):
     assert "is not a recognised CMIP6/CMIP7 model name" in summary["log_text"]
 
 
+def test_checker_still_checks_a_file_with_an_unrecognised_esm(case_dir):
+    """A mistyped file name must not hide the problems inside the file.
+
+    A naming error used to abandon the file, so a modeller fixed the name, ran
+    again, and only then found out about the time axis. Nothing about an ESM
+    name affects whether the rest of the file can be read.
+    """
+    target_file = dataset_for_variable(case_dir, "lim")
+    set_time_values(target_file, state_timestamps([2012, 2013]))
+    rename_file_part(
+        target_file, checker.ISMIP7_FILENAME_ESM_IDX, "NOT-A-CMIP-MODEL"
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert summary["total_time_errors"] >= 1
+    assert "is not a recognised CMIP6/CMIP7 model name" in summary["log_text"]
+    assert "nominal year(s) missing from the time axis: 2014" in summary["log_text"]
+
+
+def test_checker_skips_only_region_dependent_checks_for_a_bad_region(xyt_case_dir):
+    """An unrecognised region costs the checks that need it, and no others.
+
+    Value range, grid extent/resolution and crs are all defined per ice sheet,
+    so they cannot be checked; the time axis does not depend on the region at
+    all, and previously went unchecked purely because the region check ran
+    first.
+    """
+    target_file = dataset_for_variable(xyt_case_dir, "lithk")
+    set_time_values(target_file, state_timestamps([2012, 2013]))
+    renamed = rename_file_part(target_file, checker.ISMIP7_FILENAME_REGION_IDX, "XXX")
+    assert renamed.exists()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_naming_errors"] == 1
+    assert "Region XXX not recognized" in summary["log_text"]
+
+    # The checks that genuinely depend on the region say so rather than
+    # silently falling back to one ice sheet's criteria.
+    assert "Value range: not checked" in summary["log_text"]
+    assert "the expected grid extent and resolutions depend on" in summary["log_text"]
+    assert "Global attribute 'crs': not checked" in summary["log_text"]
+
+    # ... and the ones that do not, still run.
+    assert summary["total_time_errors"] >= 1
+    assert "nominal year(s) missing from the time axis: 2014" in summary["log_text"]
+
+
 def test_checker_reports_invalid_year_range_format(case_dir):
     rename_file_part(
         first_dataset(case_dir),
@@ -276,7 +417,153 @@ def test_checker_reports_historical_time_range_violation(case_dir):
 
     assert summary["total_time_errors"] >= 2
     assert summary["total_naming_errors"] == 0
-    assert "The date should be comprised between" in summary["log_text"]
+    assert (
+        "the file name starts at year 2015, but experiment 'historical' must be"
+        " between 1850 and 2014" in summary["log_text"]
+    )
+    assert (
+        "the file name ends at year 2016, but experiment 'historical' must end"
+        " at 2014" in summary["log_text"]
+    )
+
+
+def test_checker_reports_time_axis_hollowed_out_between_correct_endpoints(
+    ctrl_case_dir,
+):
+    """The case the old endpoint reasoning could not see, in its purest form.
+
+    2015, 2016, 2299, 2300 starts in the right year, ends in the right year, and
+    has a 365-day first interval, so a duration computed from the endpoints and
+    a cadence read off the first pair both agreed it was a 286-year run. It is
+    282 time steps short.
+    """
+    set_time_axis(
+        dataset_for_variable(ctrl_case_dir, "lim"),
+        state_timestamps([2015, 2016, 2299, 2300]),
+    )
+
+    summary = run_checker(ctrl_case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "the time axis has 4 time step(s); 286 expected for nominal years"
+        " 2015-2300" in summary["log_text"]
+    )
+    assert (
+        "nominal year(s) missing from the time axis: 2017-2298 (282 year(s))"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_decimated_time_axis(ctrl_case_dir):
+    """Every tenth year of a ctrl run, which also exercises run summarising.
+
+    257 missing years fall into 29 runs, far more than are worth printing, so
+    the message names the first few and counts the rest.
+    """
+    set_time_axis(
+        dataset_for_variable(ctrl_case_dir, "lim"),
+        state_timestamps(list(range(2015, 2300, 10))),
+    )
+
+    summary = run_checker(ctrl_case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "the time axis has 29 time step(s); 286 expected for nominal years"
+        " 2015-2300" in summary["log_text"]
+    )
+    assert (
+        "missing from the time axis: 2016-2024, 2026-2034, 2036-2044,"
+        " 2046-2054, 2056-2064, and 24 further run(s) (257 year(s))"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_gap_in_time_axis(case_dir):
+    """Correct first and last year, eight years missing in between."""
+    target_file = dataset_for_variable(case_dir, "lim")
+    set_time_values(target_file, state_timestamps([2005, 2014]))
+    rename_file_part(
+        target_file, checker.ISMIP7_FILENAME_YEAR_RANGE_IDX, "2005-2014.nc"
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "the time axis has 2 time step(s); 10 expected for nominal years"
+        " 2005-2014" in summary["log_text"]
+    )
+    assert (
+        "nominal year(s) missing from the time axis: 2006-2013 (8 year(s))"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_time_axis_shifted_by_one_year(case_dir):
+    """The right number of steps, all of them a year early.
+
+    A count check on its own would pass this, which is why the check compares
+    the years themselves rather than just how many there are.
+    """
+    set_time_values(
+        dataset_for_variable(case_dir, "lim"), state_timestamps([2012, 2013])
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "nominal year(s) missing from the time axis: 2014" in summary["log_text"]
+    )
+    assert (
+        "nominal year(s) on the time axis that the experiment does not call"
+        " for: 2012" in summary["log_text"]
+    )
+
+
+def test_checker_reports_duplicated_time_steps(case_dir):
+    set_time_values(
+        dataset_for_variable(case_dir, "lim"), state_timestamps([2013, 2013])
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert "not monotonically increasing" in summary["log_text"]
+
+
+def test_checker_reports_filename_start_year_disagreeing_with_axis(case_dir):
+    """The name claims five years of historical; the axis carries two."""
+    rename_file_part(
+        dataset_for_variable(case_dir, "lim"),
+        checker.ISMIP7_FILENAME_YEAR_RANGE_IDX,
+        "2010-2014.nc",
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "the time axis has 2 time step(s); 5 expected for nominal years"
+        " 2010-2014" in summary["log_text"]
+    )
+
+
+def test_checker_reports_flux_variable_with_state_timestamps(case_dir):
+    """An FL file written with the ST convention is one mistake, said once."""
+    set_time_values(
+        dataset_for_variable(case_dir, "tendacabf"), state_timestamps([2013, 2014])
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_time_errors"] == 1
+    assert (
+        "the time axis follows the ST convention (Jan 1 of the year after the"
+        " nominal year), but this variable is FL" in summary["log_text"]
+    )
 
 
 @pytest.mark.parametrize(
@@ -398,6 +685,73 @@ def test_generated_xyt_dataset_passes_checker(xyt_case_dir):
     # remaining form, t, belongs to the scalar baseline above.
     for requested_dim in ("x,y", "x,y,t", "x,y,z,t"):
         assert f"match the requested {requested_dim}: OK" in summary["log_text"]
+
+
+def test_checker_reports_litemp_missing_required_snapshot(xyt_case_dir):
+    """A single snapshot where two are required.
+
+    This is the snapshot half of issue #12. The old check validated only the
+    years a file happened to contain, and treated the file's own last time step
+    as valid whatever it was, so this passed.
+    """
+    set_time_axis(
+        dataset_for_variable(xyt_case_dir, "litemp"), state_timestamps([2014])
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "required snapshot nominal year(s) missing: 2013" in summary["log_text"]
+    )
+
+
+def test_checker_reports_litemp_snapshot_year_not_requested(xyt_case_dir):
+    set_time_values(
+        dataset_for_variable(xyt_case_dir, "litemp"), state_timestamps([1975, 2014])
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_time_errors"] >= 1
+    assert (
+        "snapshot nominal year(s) the experiment does not call for: 1975"
+        in summary["log_text"]
+    )
+
+
+def test_checker_accepts_litemp_snapshot_at_2000(tmp_path):
+    """2000 is tolerated but not required, pending issue #12.
+
+    The generator no longer writes it and the data request does not ask for it,
+    but the README did until now, so a group that followed the README must not
+    be failed for a year that is still in dispute. Nothing else covers the
+    'permitted but not required' path once the generator stops emitting it.
+    """
+    root = tmp_path / "gen"
+    generate_test_files.create_netcdf_file(
+        None,
+        grid_name="GrIS_16000m",
+        scenario="historical",
+        start_year=1995,
+        nyears=20,
+        include_scalars=False,
+        include_xyt=True,
+        include_non_mandatory=True,
+        output_root=root,
+    )
+    core_dir = root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "C001"
+    litemp = dataset_for_variable(core_dir, "litemp")
+
+    # The generator writes 1995 and 2014; add the disputed 2000 alongside them.
+    set_time_axis(litemp, state_timestamps([1995, 2000, 2014]))
+
+    summary = checker.run_checker(
+        source_path=str(core_dir), variable_list="ismip7_xyt", version="tests"
+    )
+
+    assert summary["total_time_errors"] == 0, summary["log_text"]
+    assert "does not call for" not in summary["log_text"]
 
 
 def test_checker_reports_missing_variable_dimension(xyt_case_dir):

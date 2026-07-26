@@ -2,11 +2,13 @@
 
 Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data request conventions](https://www.ismip.org/). The following categories are validated for every file:
 
-1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (`YYYY-YYYY` matching the actual time axis). Inside the file: the variable the file name names is the one the file contains, with the dimensions the data request asks for, in the conventional `(time, z, y, x)` order, and the file holds nothing else beyond its coordinates and any bounds or grid-mapping variables.
+1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (well formed `YYYY-YYYY`; what the range *means* is checked under **Time**). Inside the file: the variable the file name names is the one the file contains, with the dimensions the data request asks for, in the conventional `(time, z, y, x)` order, and the file holds nothing else beyond its coordinates and any bounds or grid-mapping variables.
 2. **Numerical** — units match the data request, in any UDUNITS spelling (`m2`, `m^2` and `m**2` are all accepted, as are `kg m-2 s-1`, `kg.m-2.s-1` and `kg/m2/s`); all values lie within the allowed min/max range for the relevant region; array is not entirely fill values.
 3. **Spatial** *(xyt variables only)* — grid corners lie within the expected AIS or GrIS extents; resolution is one of the allowed values; x and y cell size are equal.
-4. **Time** — time dimension is present, unlimited, and monotonically increasing; annual cadence for `x,y,t` and `t` variables; sparse snapshot timestamps for `x,y,z,t` variables (see [Time encoding](#time-encoding)); experiment start/end dates and duration match `experiments_ismip7.csv` for `x,y,t` and `t` variables.
+4. **Time** — time dimension is present, unlimited, and monotonically increasing; the file name's year range is one the experiment allows; and the time axis is **exactly** the axis the experiment calls for. For `x,y,t` and `t` variables that means every nominal year from `experiments_ismip7.csv`, each carrying the timestamp its ST/FL convention prescribes; for `x,y,z,t` variables it means the required set of sparse snapshots (see [Time encoding](#time-encoding)).
 5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
+
+Every file is checked as far as it can be. A naming problem stops the other checks only where it leaves them nothing to read — a missing `x` or `y` dimension, or a file that does not contain the variable its name promises. Everything else (a mistyped ESM name, a malformed year range, an unrecognised region) is reported and the file is checked on, so one run tells you everything that is wrong rather than only the first thing. An unrecognised region costs just the checks that depend on it: value range, grid extent and resolution, and `crs`.
 
 Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). Together with the grid definitions in `isschecker/data/gdfs/`, these files are bundled with the package.
 
@@ -33,10 +35,14 @@ The filename year range (`YYYY-YYYY`) always refers to the **nominal simulation 
 
 | Experiment | Required snapshots |
 |---|---|
-| `historical` | first year of run, 1900 (if in range), 2000 (if in range), last year of run |
+| `historical` | first year of run, 1900 (if in range), last year of run (2014) |
 | projection (e.g. `ssp585`, `ctrl`) | 2100, 2200, 2300 (each if within the experiment's year range) |
 
-Together, a `historical` run ending at 2014 and a projection starting at 2015 provide snapshots at 100-year intervals (1900, 2000, 2100, 2200, 2300) as well as at the first and last years of the historical run. The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year. Duration and start/end timestamp checks are not applied to snapshot variables.
+Together, a `historical` run and a projection provide snapshots at 1900, 2014, 2100, 2200 and 2300, plus the first year of the historical run. The first year is required only for `historical`, whose start year the modeller chooses; a projection's initial state is the historical run's final state, already reported as historical's last-year snapshot.
+
+The checker reports **missing** required snapshots as well as snapshots the experiment does not call for. The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year, and the annual cadence checks do not apply.
+
+> **A snapshot at 2000 is accepted but not required.** Earlier versions of this README, the checker and the generator all required one; `ISMIP7_variable_request.csv` does not ask for one. The data request is being followed until [issue #12](https://github.com/ismip/ISM_SimulationChecker/issues/12) settles it, and 2000 is tolerated in the meantime so that files written to the earlier guidance still pass.
 
 Reference lookup tables are available in the companion repository [`ismip7-time-encoding`](https://github.com/ismip/ismip7-time-encoding).
 
