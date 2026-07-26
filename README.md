@@ -14,6 +14,24 @@ Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv`
 
 ---
 
+## Errors and warnings
+
+Findings come at two severities, and the difference is worth stating precisely, because a check that reports at the wrong one either fails a submission that is fine or waves through one that is not.
+
+**ERROR** — the file, as written, is unusable for the intended analysis, departs from the protocol in a way that changes the science, or fails the data-hygiene requirements this archive is committing to. That last clause is deliberate: the output will be served to the broader community for analysis for years, so uniformity of encoding is a product requirement rather than a stylistic preference, and "a reader could cope with it" is not grounds for a warning.
+
+**WARNING** — the file is usable, the science is unaffected, and nothing downstream has to work around it, but it departs from what the data request asked for in a way you should look at and may reasonably have intended.
+
+Three consequences follow, and they are what make a warning safe to leave alone:
+
+- Warnings never enter the error count and never change a file's verdict. A file with warnings and no errors is compliant, and the log says so: `No errors. Good job !`, followed by the number of warnings to review.
+- Warnings never affect the exit status. Errors do.
+- A check whose failure means the checker could not read something is always an error. A warning never stops any later check from running.
+
+The synthesis block at the top of the log counts both severities, broken down by the same categories.
+
+---
+
 ## Time encoding
 
 ISMIP7 uses the standard (Gregorian) CF calendar with time recorded as **days since 1850-01-01 00:00:00**. The encoding convention differs by variable type:

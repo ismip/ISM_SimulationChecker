@@ -60,6 +60,35 @@
 # else (a mistyped ESM name, a malformed year range, an unrecognised region) is
 # reported and the file is checked on, so that one run tells a modeller
 # everything that is wrong rather than only the first thing.
+#
+#
+# Errors and warnings
+# -------------------
+#
+# One rule, stated here once so that a new check is classified by citing it
+# rather than by arguing the case again:
+#
+#   ERROR   -- the file, as written, is unusable for the intended analysis,
+#              departs from the protocol in a way that changes the science, or
+#              fails the data-hygiene requirements this archive is committing
+#              to.  That last clause is deliberate: the output will be served
+#              to the broader community for analysis for years, so uniformity
+#              of encoding is a product requirement rather than a stylistic
+#              preference, and "a reader could cope with it" is not grounds for
+#              a warning.
+#
+#   WARNING -- the file is usable, the science is unaffected, and nothing
+#              downstream has to work around it, but it departs from what the
+#              request asked for in a way the modeller should look at and may
+#              reasonably have intended.
+#
+# Three corollaries keep warnings from quietly becoming errors:
+#
+#   - Warnings never enter the error count and never change a file's verdict.
+#     A file with warnings and no errors is compliant, and is told so.
+#   - Warnings never affect the exit status.  Errors do.
+#   - A check whose failure means the checker could not read something stays an
+#     error.  Warnings never suppress later checks.
 
 
 import datetime
