@@ -30,6 +30,25 @@ Three consequences follow, and they are what make a warning safe to leave alone:
 
 The synthesis block at the top of the log counts both severities, broken down by the same categories.
 
+### Variables your model does not represent
+
+An experiment that carries no files for a non-mandatory variable gets one warning naming all of them. This is expected if your model does not represent those variables — GIA is the obvious case — and it is listed only so that a variable lost from a submission does not pass unnoticed. It is scoped to the `--variable-list` you selected, so a run over `ismip7_scalars` says nothing about the `x,y,t` variables it was never asked to look at.
+
+To make that warning go quiet, put an optional `not_modelled.txt` in the `--source-path` directory: one variable name per line, blank lines ignored and `#` starting a comment, so you can record alongside each name why the variable is absent.
+
+```
+# ISMIP7: variables this model does not represent.
+dlithkdt      # no GIA in this configuration
+litemp
+```
+
+Two rules keep the file from becoming a way to hide problems, and both are errors rather than silent no-ops:
+
+- A **mandatory** variable named in it is still a missing-mandatory error, and the claim itself is reported as a further error. The list is a statement about optional variables; a submission cannot opt out of the data request with it.
+- A name that is **not in the data request** at all is an error. It is either a typo or a misunderstanding, and both are better said plainly than left to be inferred from a warning that did not go away.
+
+Whatever the file declares is echoed into the log, so the archived record of a run shows what was claimed rather than merely that a warning did not appear. If the file is absent, nothing changes.
+
 ---
 
 ## Time encoding

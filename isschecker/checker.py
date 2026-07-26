@@ -93,6 +93,10 @@
 #   - Warnings never affect the exit status.  Errors do.
 #   - A check whose failure means the checker could not read something stays an
 #     error.  Warnings never suppress later checks.
+#
+# An optional not_modelled.txt in the source directory silences the warning
+# about non-mandatory variables an experiment carries no files for, and nothing
+# else -- see _read_not_modelled.
 
 
 import datetime
@@ -348,9 +352,13 @@ def run_checker(
 ):
     version = _describe_version() if version is None else version
     experiments_ismip7 = _load_experiments_csv()
-    ismip_meta, ismip_var, mandatory_variables, all_request_variables = _load_criteria(
-        variable_list
-    )
+    (
+        ismip_meta,
+        ismip_var,
+        mandatory_variables,
+        all_request_variables,
+        all_mandatory_variables,
+    ) = _load_criteria(variable_list)
 
     summary = _run_compliance_checker(
         source_path=source_path,
@@ -359,6 +367,7 @@ def run_checker(
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
         all_request_variables=all_request_variables,
+        all_mandatory_variables=all_mandatory_variables,
         experiments=experiments_ismip7,
         criteria_file=VARIABLE_REQUEST_CSV,
     )
@@ -450,6 +459,15 @@ def _load_criteria(variable_list: str):
     # rather than reported: checking the scalars of a directory says nothing
     # about the x,y,t files sitting beside them.
     all_request_variables = set(df["Variable Name"])
+    # Which of them are mandatory, before the narrowing too: not_modelled.txt is
+    # a statement about the submission rather than about one run of the checker,
+    # so a mandatory variable named in it has to be caught whichever list the
+    # run happens to have selected.
+    all_mandatory_variables = set(
+        df.loc[
+            df["Mandatory (yes/no)"].astype(str).str.lower() == "yes", "Variable Name"
+        ]
+    )
 
     if variable_list == "ismip7_xyt":
         df = df[df["Dim"].isin(["x,y,t", "x,y,z,t", "x,y"])]
@@ -478,7 +496,13 @@ def _load_criteria(variable_list: str):
 
     ismip_var = [d["variable"] for d in ismip_meta]
     ismip_mandatory_var = [d["variable"] for d in ismip_meta if d["mandatory"] == 1]
-    return ismip_meta, ismip_var, ismip_mandatory_var, all_request_variables
+    return (
+        ismip_meta,
+        ismip_var,
+        ismip_mandatory_var,
+        all_request_variables,
+        all_mandatory_variables,
+    )
 
 
 def _load_experiments_csv(filename: str = EXPERIMENTS_ISMIP7_CSV_FILENAME):
@@ -711,6 +735,7 @@ def _run_compliance_checker(
     ismip_var,
     mandatory_variables,
     all_request_variables,
+    all_mandatory_variables,
     experiments,
     criteria_file,
 ):
@@ -738,6 +763,7 @@ def _run_compliance_checker(
                 experiment_groups=experiment_groups,
                 mandatory_variables=mandatory_variables,
                 all_request_variables=all_request_variables,
+                all_mandatory_variables=all_mandatory_variables,
                 experiments=experiments,
                 ismip_var=ismip_var,
                 ismip_meta=ismip_meta,
@@ -795,11 +821,26 @@ def _process_experiments(
     experiment_groups: dict,
     mandatory_variables,
     all_request_variables,
+    all_mandatory_variables,
     experiments,
     ismip_var,
     ismip_meta,
 ):
     report_naming_issues = []
+
+    # A declaration is about the submission as a whole, so it is read and
+    # reported once, before the first experiment.
+    declared = _read_not_modelled(source_path)
+    not_modelled = (
+        set()
+        if declared is None
+        else _report_not_modelled(
+            reporter.category("file", bullet=""),
+            declared,
+            all_mandatory_variables,
+            all_request_variables,
+        )
+    )
 
     file_counter = 0
     exp_counter = 0
@@ -813,6 +854,7 @@ def _process_experiments(
             experiment_name=experiment_name,
             exp_files=exp_files,
             mandatory_variables=mandatory_variables,
+            not_modelled=not_modelled,
             all_request_variables=all_request_variables,
             experiments=experiments,
             ismip_var=ismip_var,
@@ -851,6 +893,88 @@ def _process_experiments(
         "total_file_warnings": reporter.warning_count("file"),
         "report_naming_issues": report_naming_issues,
     }
+
+
+NOT_MODELLED_FILENAME = "not_modelled.txt"
+
+
+def _read_not_modelled(source_path: str) -> list[str] | None:
+    """The variable names declared in not_modelled.txt, or None if there is none.
+
+    Groups already submit a README explaining what they have submitted and why
+    some variables are absent, so the checker has no need to ask for that list
+    again -- and an explanatory list does not belong on a command line, where it
+    would be long and would have to be retyped for every run.  What is worth
+    offering is a way to make the 'not submitted' warning go quiet once.
+
+    One name per line; blank lines are ignored and '#' starts a comment, so a
+    group can say alongside each name why the variable is absent.  An absent
+    file changes nothing.
+    """
+    path = os.path.join(source_path, NOT_MODELLED_FILENAME)
+    if not os.path.isfile(path):
+        return None
+
+    declared = []
+    with open(path, "r") as f:
+        for line in f:
+            name = line.split("#", 1)[0].strip()
+            if name:
+                declared.append(name)
+    return declared
+
+
+def _report_not_modelled(
+    reporter: Reporter,
+    declared: list[str],
+    all_mandatory_variables,
+    all_request_variables,
+) -> set[str]:
+    """Echo the declaration, fault what it should not contain, return what it silences.
+
+    Two rules keep the file from becoming a way to hide problems.  A mandatory
+    variable named in it is still a missing-mandatory error, and the claim
+    itself is reported as a further error rather than honoured: the list is a
+    statement about optional variables, and a group cannot opt out of the data
+    request with it.  A name that is not in the data request at all is an error
+    too -- it is either a typo or a misunderstanding, and both are better said
+    plainly than left to be inferred from a warning that did not go away, which
+    would protect nothing while looking like protection.
+
+    What was declared is echoed either way, so the archived record of a run
+    shows what was claimed rather than merely that a warning did not appear.
+    """
+    reporter.write(
+        f"Declared not modelled ({NOT_MODELLED_FILENAME}): {declared}\n"
+    )
+
+    suppressed = set()
+    for name in declared:
+        if name in all_mandatory_variables:
+            reporter.error(
+                f"{NOT_MODELLED_FILENAME} lists '{name}', which the data request"
+                f" makes mandatory. A submission cannot opt out of a mandatory"
+                f" variable, so the declaration is not honoured and the missing"
+                f" files are still reported."
+            )
+        elif name not in all_request_variables:
+            message = (
+                f"{NOT_MODELLED_FILENAME} lists '{name}', which is not a"
+                f" variable of the data request {VARIABLE_REQUEST_CSV}."
+            )
+            # Sorted, so that two equally close names do not resolve by set
+            # iteration order and give one log on one run and another on the next.
+            near_misses = difflib.get_close_matches(
+                name, sorted(all_request_variables), n=1
+            )
+            if near_misses:
+                message += f" The closest requested name is '{near_misses[0]}'."
+            reporter.error(message)
+        else:
+            suppressed.add(name)
+
+    reporter.write(" \n")
+    return suppressed
 
 
 def _report_variables_not_submitted(
@@ -895,6 +1019,7 @@ def _process_single_experiment(
     experiment_name: str,
     exp_files: list,
     mandatory_variables,
+    not_modelled,
     all_request_variables,
     experiments,
     ismip_var,
@@ -913,8 +1038,14 @@ def _process_single_experiment(
     # Scoped to the selected --variable-list, exactly as the mandatory check is:
     # a run over ismip7_scalars says nothing about the x,y,t variables it was
     # never asked to look at.
+    # A declaration in not_modelled.txt silences the warning below, and nothing
+    # else: it cannot reach the mandatory-variable check above it.
     not_submitted = [
-        v for v in ismip_var if v not in mandatory_variables and v not in submitted
+        v
+        for v in ismip_var
+        if v not in mandatory_variables
+        and v not in submitted
+        and v not in not_modelled
     ]
 
     file_counter = 0
@@ -1058,7 +1189,7 @@ def _process_single_file(
             f" {VARIABLE_REQUEST_CSV}."
         )
         near_misses = difflib.get_close_matches(
-            considered_variable, all_request_variables, n=1
+            considered_variable, sorted(all_request_variables), n=1
         )
         if near_misses:
             message += f" The closest requested name is '{near_misses[0]}'."

@@ -398,6 +398,87 @@ def test_a_file_with_warnings_and_no_errors_still_passes(xyt_case_dir):
     assert " error(s). Please review before sharing." not in summary["log_text"]
 
 
+def write_not_modelled(case_dir: Path, text: str) -> None:
+    (case_dir / "not_modelled.txt").write_text(text)
+
+
+def test_not_modelled_suppresses_the_not_submitted_warning(xyt_case_dir):
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+    write_not_modelled(
+        xyt_case_dir,
+        "# ISMIP7: variables this model does not represent.\n"
+        "\n"
+        "litemp      # no 3D temperature in this configuration\n",
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_warnings"] == 0
+    assert "carries no files for the non-mandatory" not in summary["log_text"]
+    # What was claimed is on the record, not merely the absence of a warning.
+    assert (
+        "Declared not modelled (not_modelled.txt): ['litemp']"
+        in summary["log_text"]
+    )
+
+
+def test_not_modelled_cannot_opt_out_of_a_mandatory_variable(xyt_case_dir):
+    """The declaration is about optional variables, and says so twice over.
+
+    The missing mandatory file is still an error, and claiming it as not
+    modelled is an error of its own -- a silent no-op would look like
+    protection while protecting nothing.
+    """
+    dataset_for_variable(xyt_case_dir, "lithk").unlink()
+    write_not_modelled(xyt_case_dir, "lithk\n")
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_file_errors"] == 2
+    assert "mandatory variable(s) is (are) missing: ['lithk']" in summary["log_text"]
+    assert (
+        "ERROR: not_modelled.txt lists 'lithk', which the data request makes"
+        " mandatory" in summary["log_text"]
+    )
+
+
+def test_not_modelled_faults_a_mandatory_variable_outside_the_selected_list(case_dir):
+    """A declaration is about the submission, not about one run of the checker."""
+    write_not_modelled(case_dir, "lithk\n")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_file_errors"] == 1
+    assert (
+        "ERROR: not_modelled.txt lists 'lithk', which the data request makes"
+        " mandatory" in summary["log_text"]
+    )
+
+
+def test_not_modelled_faults_a_name_that_is_not_in_the_data_request(xyt_case_dir):
+    write_not_modelled(xyt_case_dir, "litempbot\n")
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_file_errors"] == 1
+    assert (
+        "ERROR: not_modelled.txt lists 'litempbot', which is not a variable of"
+        " the data request" in summary["log_text"]
+    )
+    assert "The closest requested name is 'litempbotgr'" in summary["log_text"]
+
+
+def test_no_not_modelled_file_changes_nothing(xyt_case_dir):
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0
+    assert summary["total_warnings"] == 1
+    assert "Declared not modelled" not in summary["log_text"]
+
+
 def test_checker_reports_invalid_esm_in_filename(case_dir):
     rename_file_part(
         first_dataset(case_dir),
