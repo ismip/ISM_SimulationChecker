@@ -52,7 +52,8 @@
 #    - Variable standard_name matches data request (if specified).
 #    - _FillValue must be present and equal the default netCDF4 fill value for the variable's dtype.
 #      If missing_value is also present, it must equal _FillValue.
-#    - Main variable and time coordinate are single-precision float (float32 / f4).
+#    - Main variable is single-precision float (float32 / f4); so is the time
+#      coordinate (warning -- one number per record cannot inflate a file).
 #    - scale_factor and add_offset are not allowed on the main variable.
 #
 # A file is checked as far as it can be.  A naming problem stops the other
@@ -1840,8 +1841,14 @@ def _check_attributes(
     if reporter.total_errors == errors_before:
         reporter.ok("Fill value attributes: OK")
 
-    # Sub-test 5: main variable and time must be single-precision float (f4)
+    # Sub-test 5: main variable and time must be single-precision float (f4).
+    # The two are not the same finding.  A float64 data variable is twice the
+    # size it should be, for the archive and for everyone who has to move it,
+    # so it is an error.  A time axis is one number per record, so storing it
+    # as float64 cannot meaningfully inflate a file and the size argument does
+    # not reach it: it is a warning.
     errors_before = reporter.total_errors
+    warnings_before = reporter.total_warnings
     if ivar in ds and ds[ivar].dtype != np.float32:
         reporter.error(
             f"variable '{ivar}' dtype is {ds[ivar].dtype},"
@@ -1851,11 +1858,14 @@ def _check_attributes(
         # xarray decodes CF time to datetime objects in memory; check the on-disk dtype from encoding
         time_encoded_dtype = ds[time_coord].encoding.get("dtype", ds[time_coord].dtype)
         if time_encoded_dtype != np.float32:
-            reporter.error(
+            reporter.warning(
                 f"coordinate '{time_coord}' on-disk dtype is {time_encoded_dtype},"
                 f" expected float32 (f4)."
             )
-    if reporter.total_errors == errors_before:
+    if (
+        reporter.total_errors == errors_before
+        and reporter.total_warnings == warnings_before
+    ):
         reporter.ok("Dtype attributes: OK")
 
     # Sub-test 6: scale_factor and add_offset must not be present

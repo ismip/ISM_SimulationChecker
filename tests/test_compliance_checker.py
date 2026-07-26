@@ -868,6 +868,71 @@ def test_checker_ignores_variables_outside_the_selected_list(xyt_case_dir):
     assert summary["total_naming_errors"] == 0
 
 
+def set_variable_dtype(file_path: Path, variable_name: str, datatype: str) -> None:
+    """Rewrite one variable with a different on-disk dtype.
+
+    netCDF cannot retype a variable in place, so the file is rebuilt; every
+    other variable, every attribute and the unlimited dimension are copied
+    across unchanged.
+    """
+    rebuilt = file_path.with_name(file_path.name + ".rebuilt")
+    with netCDF4.Dataset(file_path) as source, netCDF4.Dataset(rebuilt, "w") as target:
+        target.setncatts(source.__dict__)
+        for name, dimension in source.dimensions.items():
+            target.createDimension(
+                name, None if dimension.isunlimited() else len(dimension)
+            )
+        for name, variable in source.variables.items():
+            fill_value = (
+                variable.getncattr("_FillValue")
+                if "_FillValue" in variable.ncattrs()
+                else None
+            )
+            created = target.createVariable(
+                name,
+                datatype if name == variable_name else variable.datatype,
+                variable.dimensions,
+                fill_value=fill_value,
+            )
+            created.setncatts(
+                {k: v for k, v in variable.__dict__.items() if k != "_FillValue"}
+            )
+            created[:] = variable[:]
+    rebuilt.replace(file_path)
+
+
+def test_checker_warns_about_a_time_coordinate_that_is_not_float32(case_dir):
+    """A float64 time axis is a warning; a float64 data variable is an error.
+
+    The size argument that governs the data variable does not reach the time
+    axis: it is one number per record, so double precision cannot meaningfully
+    inflate a file.
+    """
+    set_variable_dtype(dataset_for_variable(case_dir, "lim"), "time", "f8")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_attr_warnings"] == 1
+    assert (
+        "WARNING (attributes): coordinate 'time' on-disk dtype is float64"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_a_main_variable_that_is_not_float32(case_dir):
+    """The other half of the split: the data variable keeps erroring."""
+    set_variable_dtype(dataset_for_variable(case_dir, "lim"), "lim", "f8")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_attr_errors"] == 1
+    assert summary["total_errors"] == 1
+    assert (
+        "ERROR (attributes): variable 'lim' dtype is float64" in summary["log_text"]
+    )
+
+
 def test_checker_reports_missing_contact_email_attribute(case_dir):
     remove_global_attribute(first_dataset(case_dir), "contact_email")
 
