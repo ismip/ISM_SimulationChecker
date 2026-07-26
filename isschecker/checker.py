@@ -181,6 +181,100 @@ VALID_ESM_NAMES: set[str] = {
 }
 
 
+class Reporter:
+    """Writes the log and counts what it wrote, by severity and category.
+
+    Every finding has to reach two places at once: the line a modeller reads in
+    the log, and the counter the synthesis block at the top of that log adds up.
+    Keeping those in step by hand meant every check returning a count and every
+    caller adding it on, sixty call sites of bookkeeping running in parallel with
+    sixty writes.  Here the write is the count: a check says what it found, at
+    the severity it means, and the arithmetic follows from that alone.
+
+    Reporters nest.  :meth:`category` scopes findings to one of the checker's
+    reporting categories, and :meth:`child` opens a sub-total -- one file's
+    worth, say -- that still rolls up into its parent, so a file's own footer and
+    the run-wide synthesis count the same events rather than counting separately
+    and hoping to agree.
+    """
+
+    def __init__(
+        self,
+        log_file,
+        parent: "Reporter | None" = None,
+        category: str = "",
+        qualifier: str | None = None,
+        bullet: str = " - ",
+    ):
+        self.log_file = log_file
+        self._parent = parent
+        self._category = category
+        # _check_attributes has always labelled its findings 'ERROR
+        # (attributes)'.  The qualifier reproduces that without every other
+        # check growing a label of its own.
+        self._qualifier = qualifier
+        # File-level findings are bulleted list items under the file's heading;
+        # experiment-level ones are written flush left.
+        self._bullet = bullet
+        self.errors: dict[str, int] = {}
+
+    def category(
+        self, name: str, qualifier: str | None = None, bullet: str = " - "
+    ) -> "Reporter":
+        """A reporter that counts what it writes under reporting category `name`."""
+        return Reporter(
+            self.log_file,
+            parent=self,
+            category=name,
+            qualifier=qualifier,
+            bullet=bullet,
+        )
+
+    def child(self) -> "Reporter":
+        """A reporter with its own sub-totals that still roll up into this one."""
+        return Reporter(
+            self.log_file,
+            parent=self,
+            category=self._category,
+            qualifier=self._qualifier,
+            bullet=self._bullet,
+        )
+
+    @property
+    def total_errors(self) -> int:
+        return sum(self.errors.values())
+
+    def error_count(self, category: str) -> int:
+        return self.errors.get(category, 0)
+
+    def write(self, text: str) -> None:
+        """Write to the log without reporting a finding: headings and footers."""
+        self.log_file.write(text)
+
+    def error(self, message: str) -> None:
+        """Report a file that is unusable, or that departs from the protocol."""
+        self._report("ERROR", message)
+
+    def ok(self, message: str) -> None:
+        """Record a check that passed."""
+        self.write(f"{self._bullet}{message}\n")
+
+    def note(self, message: str) -> None:
+        """Record a check that did not run: not applicable, or nothing to read."""
+        self.write(f"{self._bullet}{message}\n")
+
+    def _report(self, label: str, message: str) -> None:
+        prefix = label if self._qualifier is None else f"{label} ({self._qualifier})"
+        self.write(f"{self._bullet}{prefix}: {message}\n")
+        self._count(label, self._category)
+
+    def _count(self, label: str, category: str) -> None:
+        counter = self.errors
+        counter[category] = counter.get(category, 0) + 1
+        if self._parent is not None:
+            self._parent._count(label, category)
+
+
 def main() -> None:
     args = _parse_args()
     source_path = args.source_path
@@ -993,29 +1087,27 @@ class NamingResult(NamedTuple):
     the later checks with nothing to read clear it.
     """
 
-    errors: int
     filename_years: tuple[int, int] | None
     can_continue: bool = True
 
 
 def _check_naming(
-    log_file,
+    reporter: Reporter,
     file_name: str,
     region: str,
     dim: set,
     isscalar: bool,
     report_naming_issues: list,
 ) -> NamingResult:
-    errors = 0
     filename_years = None
 
-    log_file.write("NAMING Tests \n")
+    reporter.write("NAMING Tests \n")
 
     if not isscalar and not {"x", "y"}.issubset(dim):
-        log_file.write(
-            " - ERROR: Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing.\n"
+        reporter.error(
+            "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing."
         )
-        log_file.write(
+        reporter.write(
             "                                    Only " + str(list(dim)) + " has been detected.\n"
         )
         report_naming_issues.append(
@@ -1025,80 +1117,73 @@ def _check_naming(
         # Without x and y there is no grid to check and no spatial variable to
         # read: this is one of the few naming problems that really does stop
         # everything else.
-        return NamingResult(errors + 1, filename_years, can_continue=False)
+        return NamingResult(filename_years, can_continue=False)
 
     if region not in ["AIS", "GrIS"]:
-        log_file.write(
-            " - ERROR: Region "
+        reporter.error(
+            "Region "
             + region
             + " not recognized. It should be AIS or GrIS. The checks that depend"
             + " on the region (value range, grid extent and resolution, crs) are"
-            + " skipped for this file; the rest still run.\n"
+            + " skipped for this file; the rest still run."
         )
         report_naming_issues.append(
             "Region-dependent checks skipped: region (AIS/GrIS) not identified in the file "
             + file_name
             + " due to wrong naming."
         )
-        errors += 1
 
     parts = file_name.split("_")
     if len(parts) == ISMIP7_FILENAME_PARTS:
         ism_member = parts[ISMIP7_FILENAME_ISM_MEMBER_IDX]
         if not re.fullmatch(r"m\d{3}", ism_member):
-            log_file.write(
-                f" - ERROR: ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001).\n"
+            reporter.error(
+                f"ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001)."
             )
-            errors += 1
 
         esm_name = parts[ISMIP7_FILENAME_ESM_IDX]
         if esm_name not in VALID_ESM_NAMES:
-            log_file.write(
-                f" - ERROR: ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is not a recognised CMIP6/CMIP7 model name.\n"
+            reporter.error(
+                f"ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is not a recognised CMIP6/CMIP7 model name."
             )
-            errors += 1
 
         forcing_member = parts[ISMIP7_FILENAME_FORCING_MEMBER_IDX]
         if not re.fullmatch(r"f\d{3}", forcing_member):
-            log_file.write(
-                f" - ERROR: forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001).\n"
+            reporter.error(
+                f"forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001)."
             )
-            errors += 1
 
         set_counter = parts[ISMIP7_FILENAME_SET_COUNTER_IDX]
         if not re.fullmatch(r"[CEP]\d{3}", set_counter):
-            log_file.write(
-                f" - ERROR: set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132).\n"
+            reporter.error(
+                f"set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132)."
             )
-            errors += 1
 
         is_static = not ({"time", "t"} & dim)
         year_range_field = parts[ISMIP7_FILENAME_YEAR_RANGE_IDX].removesuffix(".nc")
         if is_static:
-            log_file.write(f" - Filename year range: N/A (static spatial variable)\n")
+            reporter.note("Filename year range: N/A (static spatial variable)")
         elif not (year_range_match := re.fullmatch(r"(\d{4})-(\d{4})", year_range_field)):
-            log_file.write(
-                f" - ERROR: year range '{year_range_field}' (field {ISMIP7_FILENAME_YEAR_RANGE_IDX}) does not match expected format YYYY-YYYY (e.g. 2015-2300).\n"
+            reporter.error(
+                f"year range '{year_range_field}' (field {ISMIP7_FILENAME_YEAR_RANGE_IDX}) does not match expected format YYYY-YYYY (e.g. 2015-2300)."
             )
-            errors += 1
         else:
             fn_start_year = int(year_range_match.group(1))
             fn_end_year = int(year_range_match.group(2))
             if fn_start_year > fn_end_year:
-                log_file.write(
-                    f" - ERROR: year range '{year_range_field}': start year {fn_start_year} is after end year {fn_end_year}.\n"
+                reporter.error(
+                    f"year range '{year_range_field}': start year {fn_start_year} is after end year {fn_end_year}."
                 )
-                errors += 1
             else:
                 # What the range means -- whether the experiment allows it, and
                 # whether the time axis delivers it -- is for _check_time, which
                 # decodes the file anyway.
                 filename_years = (fn_start_year, fn_end_year)
-                log_file.write(
-                    f" - Filename year range {fn_start_year}-{fn_end_year} is well formed: OK\n"
+                reporter.ok(
+                    f"Filename year range {fn_start_year}-{fn_end_year} is well formed: OK"
                 )
 
-    return NamingResult(errors, filename_years)
+    return NamingResult(filename_years)
 
 
 # The data request writes a variable's dimensions innermost-first and calls the
@@ -1114,20 +1199,20 @@ REQUESTED_DIMENSIONS: dict[str, tuple[str, ...]] = {
 
 
 def _check_variable_dimensions(
-    log_file,
+    reporter: Reporter,
     ds,
     considered_variable: str,
     requested_dim: str,
-) -> int:
+) -> None:
     """Check a variable's dimensions against the 'Dim' column of the request."""
     expected = REQUESTED_DIMENSIONS.get(requested_dim)
     if expected is None:
-        log_file.write(
-            f" - Variable '{considered_variable}' dimensions: not checked (the"
+        reporter.note(
+            f"Variable '{considered_variable}' dimensions: not checked (the"
             f" data request gives Dim '{requested_dim}', which this checker does"
-            f" not know).\n"
+            f" not know)."
         )
-        return 0
+        return
 
     # 't' is an accepted spelling of the time dimension throughout the checker.
     actual = tuple(
@@ -1135,26 +1220,25 @@ def _check_variable_dimensions(
     )
 
     if set(actual) != set(expected):
-        log_file.write(
-            f" - ERROR: variable '{considered_variable}' has dimensions"
+        reporter.error(
+            f"variable '{considered_variable}' has dimensions"
             f" {actual}; the data request asks for {requested_dim}, that is"
-            f" {expected}.\n"
+            f" {expected}."
         )
-        return 1
+        return
 
     if actual != expected:
-        log_file.write(
-            f" - ERROR: variable '{considered_variable}' has dimensions"
+        reporter.error(
+            f"variable '{considered_variable}' has dimensions"
             f" {actual}; the data request asks for {requested_dim} in the"
-            f" conventional order {expected}.\n"
+            f" conventional order {expected}."
         )
-        return 1
+        return
 
-    log_file.write(
-        f" - Variable '{considered_variable}' dimensions ({', '.join(actual)})"
-        f" match the requested {requested_dim}: OK\n"
+    reporter.ok(
+        f"Variable '{considered_variable}' dimensions ({', '.join(actual)})"
+        f" match the requested {requested_dim}: OK"
     )
-    return 0
 
 
 def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
@@ -1185,24 +1269,22 @@ def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
 
 
 def _check_file_variables(
-    log_file,
+    reporter: Reporter,
     ds,
     file_name: str,
     considered_variable: str,
     file_variables,
     requested_dim: str,
     report_naming_issues: list,
-) -> tuple[int, bool]:
+) -> bool:
     """Check the variables a file contains against the one its name promises.
 
     The file name states which variable of the data request a file carries, and
     every other check reads that variable, so a file that does not contain it
-    has nothing to check: the second element of the return value is False, and
-    the caller skips the remaining checks for the file rather than reporting a
-    clean bill of health on a variable that was never looked at.
+    has nothing to check: the return value is False, and the caller skips the
+    remaining checks for the file rather than reporting a clean bill of health
+    on a variable that was never looked at.
     """
-    errors = 0
-
     if considered_variable not in file_variables:
         message = (
             f"the file name promises variable '{considered_variable}', but the"
@@ -1217,35 +1299,32 @@ def _check_file_variables(
                 f" '{near_misses[0]}' may be a misspelling of"
                 f" '{considered_variable}'."
             )
-        log_file.write(f" - ERROR: {message}\n")
+        reporter.error(message)
         report_naming_issues.append(
             f"Compliance check ignored: in the file {file_name}, {message}"
         )
-        return errors + 1, False
+        return False
 
-    log_file.write(
-        f" - Variable '{considered_variable}' from the file name is present in"
-        f" the file: OK\n"
+    reporter.ok(
+        f"Variable '{considered_variable}' from the file name is present in"
+        f" the file: OK"
     )
 
     allowed = _allowed_file_variables(ds, considered_variable)
     unexpected = sorted(name for name in file_variables if name not in allowed)
     for name in unexpected:
-        log_file.write(
-            f" - ERROR: unexpected variable '{name}' in the file. A file holds"
+        reporter.error(
+            f"unexpected variable '{name}' in the file. A file holds"
             f" one variable of the data request -- here '{considered_variable}'"
             f" -- along with its coordinates and any bounds or grid-mapping"
-            f" variables, and nothing else.\n"
+            f" variables, and nothing else."
         )
-        errors += 1
     if not unexpected:
-        log_file.write(" - No unexpected variables in the file: OK\n")
+        reporter.ok("No unexpected variables in the file: OK")
 
-    errors += _check_variable_dimensions(
-        log_file, ds, considered_variable, requested_dim
-    )
+    _check_variable_dimensions(reporter, ds, considered_variable, requested_dim)
 
-    return errors, True
+    return True
 
 
 # CF requires only that the units attribute be "a string that can be recognized
@@ -1340,50 +1419,46 @@ def _units_match(actual: str, expected: str) -> bool:
 
 
 def _check_numerical(
-    log_file,
+    reporter: Reporter,
     ds,
     ivar: str,
     ismip_meta: list,
     var_index: int,
     region: str,
     isscalar: bool,
-) -> int:
-    errors = 0
-
-    log_file.write("NUMERICAL Tests \n")
+) -> None:
+    reporter.write("NUMERICAL Tests \n")
 
     var_units = ds[ivar].attrs.get("units")
     expected_units = ismip_meta[var_index]["units"]
     if var_units is None:
-        log_file.write(
-            f" - ERROR: The variable '{ivar}' has no 'units' attribute. The data"
-            f" request asks for '{expected_units}'.\n"
+        reporter.error(
+            f"The variable '{ivar}' has no 'units' attribute. The data"
+            f" request asks for '{expected_units}'."
         )
-        errors += 1
     elif var_units == expected_units:
-        log_file.write(" - The unit is correct: " + var_units + "\n")
+        reporter.ok("The unit is correct: " + var_units)
     elif _units_match(var_units, expected_units):
-        log_file.write(
-            " - The unit is correct: "
+        reporter.ok(
+            "The unit is correct: "
             + var_units
             + " (equivalent to the requested "
             + expected_units
-            + ")\n"
+            + ")"
         )
     else:
-        log_file.write(
-            " - ERROR: The unit of the variable is "
+        reporter.error(
+            "The unit of the variable is "
             + var_units
             + " and should be "
             + expected_units
-            + " \n"
+            + " "
         )
-        errors += 1
 
     if not isscalar and region not in ("AIS", "GrIS"):
-        log_file.write(
-            " - Value range: not checked (the allowed range depends on the"
-            " region, which the file name does not identify).\n"
+        reporter.note(
+            "Value range: not checked (the allowed range depends on the"
+            " region, which the file name does not identify)."
         )
     elif not isscalar:
         if False in ds[ivar].isnull():
@@ -1391,47 +1466,38 @@ def _check_numerical(
                 ds[ivar].min(skipna=True).item()
                 >= ismip_meta[var_index]["min_value_" + region.lower()]
             ):
-                log_file.write(" - The minimum value successfully verified.\n")
+                reporter.ok("The minimum value successfully verified.")
             else:
-                log_file.write(
-                    " - ERROR: The minimum value ("
+                reporter.error(
+                    "The minimum value ("
                     + str(ds[ivar].min(skipna=True).values.item(0))
                     + ") is out of range. Min value accepted: "
                     + str(ismip_meta[var_index]["min_value_" + region.lower()])
-                    + "\n"
                 )
-                errors += 1
 
             if (
                 ds[ivar].max(skipna=True).item()
                 <= ismip_meta[var_index]["max_value_" + region.lower()]
             ):
-                log_file.write(" - The maximum value successfully verified.\n")
+                reporter.ok("The maximum value successfully verified.")
             else:
-                log_file.write(
-                    " - ERROR: The maximum value ("
+                reporter.error(
+                    "The maximum value ("
                     + str(ds[ivar].max(skipna=True).values.item(0))
                     + ") is out of range. Max value accepted: "
                     + str(ismip_meta[var_index]["max_value_" + region.lower()])
-                    + "\n"
                 )
-                errors += 1
         else:
-            log_file.write(" - ERROR: The array only contains missing values.\n")
-            errors += 1
-
-    return errors
+            reporter.error("The array only contains missing values.")
 
 
 def _check_spatial(
-    log_file,
+    reporter: Reporter,
     ds,
     grid_extent: list,
     possible_resolution: list,
-) -> int:
-    errors = 0
-
-    log_file.write("SPATIAL Tests \n")
+) -> None:
+    reporter.write("SPATIAL Tests \n")
     coords = ds.coords.to_dataset()
     Xbottomleft = int(min(coords["x"]).values.item())
     Ybottomleft = int(min(coords["y"]).values.item())
@@ -1439,54 +1505,49 @@ def _check_spatial(
     Ytopright = int(max(coords["y"]).values.item())
 
     if Xbottomleft == grid_extent[0] and Ybottomleft == grid_extent[1]:
-        log_file.write(" - Grid: Lowest left corner is well defined.\n")
+        reporter.ok("Grid: Lowest left corner is well defined.")
     else:
-        log_file.write(
-            " - ERROR: Lowest left corner of the grid ["
+        reporter.error(
+            "Lowest left corner of the grid ["
             + str(Xbottomleft) + "," + str(Ybottomleft)
             + "] is not correctly defined. ["
             + str(grid_extent[0]) + "," + str(grid_extent[1])
-            + "] Expected\n"
+            + "] Expected"
         )
-        errors += 1
 
     if Xtopright == grid_extent[2] and Ytopright == grid_extent[3]:
-        log_file.write(" - Grid: Upper right corner is well defined.\n")
+        reporter.ok("Grid: Upper right corner is well defined.")
     else:
-        log_file.write(
-            " - ERROR: Upper right corner of the grid ["
+        reporter.error(
+            "Upper right corner of the grid ["
             + str(Xtopright) + "," + str(Ytopright)
             + "] is not correctly defined. ["
             + str(grid_extent[2]) + "," + str(grid_extent[3])
-            + "] Expected\n"
+            + "] Expected"
         )
-        errors += 1
 
     Xresolution = round((coords["x"][1].values - coords["x"][0].values) / 1000, 0)
     Yresolution = round((coords["y"][1].values - coords["y"][0].values) / 1000, 0)
     if Xresolution in set(possible_resolution) and Yresolution in set(possible_resolution):
-        log_file.write(
-            " - The grid resolution ("
+        reporter.ok(
+            "The grid resolution ("
             + str(int(Xresolution))
-            + " km) was successfully verified.\n"
+            + " km) was successfully verified."
         )
     else:
-        log_file.write(
-            " - ERROR: resolution x="
+        reporter.error(
+            "resolution x="
             + str(Xresolution)
             + " km, y="
             + str(Yresolution)
             + " km is not an authorized grid resolution. Allowed: "
             + str(possible_resolution)
-            + " km\n"
+            + " km"
         )
-        errors += 1
-
-    return errors
 
 
 def _check_time(
-    log_file,
+    reporter: Reporter,
     ds,
     dim: set,
     experiments: list,
@@ -1494,7 +1555,7 @@ def _check_time(
     var_type: str = "",
     requested_dim: str = "",
     filename_years=None,
-) -> int:
+) -> None:
     """Check a file's time axis against the one its experiment calls for.
 
     The axis is checked by reconstructing the axis the file should have had and
@@ -1503,51 +1564,47 @@ def _check_time(
     2015, 2016, 2299, 2300 spans the right years with a 365-day first interval
     and is 282 time steps short of what was asked for.
     """
-    errors = 0
-
-    log_file.write("TIME Tests \n")
+    reporter.write("TIME Tests \n")
     if not ({"t"}.issubset(dim) or {"time"}.issubset(dim)):
         if {"x", "y"}.issubset(dim):
             # Static spatial variable (x,y) — no time axis is expected.
-            log_file.write(" - Time axis: N/A (static spatial variable)\n")
-            return errors
-        log_file.write(
-            " - ERROR: The time dimension is missing. Time Tests have been ignored.\n"
+            reporter.note("Time axis: N/A (static spatial variable)")
+            return
+        reporter.error(
+            "The time dimension is missing. Time Tests have been ignored."
         )
-        return errors + 1
+        return
 
     time_dim = "time" if "time" in ds.dims else "t"
     unlimited_dims = ds.encoding.get("unlimited_dims", set())
     if time_dim in unlimited_dims:
-        log_file.write(" - Time is a record (unlimited) dimension: OK\n")
+        reporter.ok("Time is a record (unlimited) dimension: OK")
     else:
-        log_file.write(
-            f" - ERROR: dimension '{time_dim}' is not a record (unlimited) dimension.\n"
+        reporter.error(
+            f"dimension '{time_dim}' is not a record (unlimited) dimension."
         )
-        errors += 1
 
     try:
         ds = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
     except Exception:
-        log_file.write(
-            " - ERROR: The time coordinate could not be decoded.  Time checks cannot proceed.\n"
+        reporter.error(
+            "The time coordinate could not be decoded.  Time checks cannot proceed."
         )
         # we can't proceed because the next steps will crash
-        return errors + 1
+        return
 
     if not _strictly_increasing(ds.coords["time"]):
-        log_file.write(
-            " - ERROR: the time series is not monotonically increasing. Time segments may have been concatenated in the wrong order.\n"
+        reporter.error(
+            "the time series is not monotonically increasing. Time segments may have been concatenated in the wrong order."
         )
-        return errors + 1
+        return
 
     index_exp = [dic["experiment"] for dic in experiments].index(experiment_name)
     exp = experiments[index_exp]
     actual = list(ds["time"].values)
 
     for message in _check_filename_year_range(exp, filename_years):
-        log_file.write(f" - ERROR: {message}\n")
-        errors += 1
+        reporter.error(message)
 
     # The nominal years the run as a whole covers.  The annual variables carry
     # one time step for each of them; the snapshot variables carry a few.
@@ -1555,32 +1612,28 @@ def _check_time(
         exp, _axis_start_year(exp, filename_years, actual, var_type)
     )
     if not run_years:
-        log_file.write(
-            f" - ERROR: the time axis starts in nominal year"
+        reporter.error(
+            f"the time axis starts in nominal year"
             f" {_timestamp_to_nominal_year(actual[0], var_type)}, after experiment"
             f" '{experiment_name}' ends in {exp['end_year']}. The expected time"
-            f" axis cannot be determined.\n"
+            f" axis cannot be determined."
         )
-        return errors + 1
+        return
 
     if requested_dim == "x,y,z,t":
-        return errors + _check_snapshot_time_axis(
-            log_file, actual, exp, var_type, run_years
-        )
+        _check_snapshot_time_axis(reporter, actual, exp, var_type, run_years)
+        return
 
     messages = _compare_time_axis(actual, run_years, var_type)
     for message in messages:
-        log_file.write(f" - ERROR: {message}\n")
-    errors += len(messages)
+        reporter.error(message)
 
     if not messages:
-        log_file.write(
-            f" - Time axis: {len(actual)} annual {var_type} time step(s) covering"
+        reporter.ok(
+            f"Time axis: {len(actual)} annual {var_type} time step(s) covering"
             f" nominal years {run_years[0]}-{run_years[-1]}, as"
-            f" experiment '{experiment_name}' requires: OK\n"
+            f" experiment '{experiment_name}' requires: OK"
         )
-
-    return errors
 
 
 def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> int:
@@ -1604,8 +1657,8 @@ def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> 
 
 
 def _check_snapshot_time_axis(
-    log_file, actual: list, exp: dict, var_type: str, run_years: list[int]
-) -> int:
+    reporter: Reporter, actual: list, exp: dict, var_type: str, run_years: list[int]
+) -> None:
     """Check the sparse snapshot axis of an x,y,z,t variable (e.g. litemp).
 
     Unlike the annual variables, these carry a handful of snapshots rather than
@@ -1622,49 +1675,45 @@ def _check_snapshot_time_axis(
     }
     actual_at = _nominal_year_index(actual, var_type)
 
-    errors = 0
+    errors_before = reporter.total_errors
 
     missing = sorted(required - set(actual_at))
     if missing:
-        log_file.write(
-            f" - ERROR: required snapshot nominal year(s) missing:"
+        reporter.error(
+            f"required snapshot nominal year(s) missing:"
             f" {_format_year_runs(missing)}. Experiment '{exp['experiment']}'"
             f" covering {run_years[0]}-{run_years[-1]} requires snapshots at"
-            f" {_format_year_runs(sorted(required))}.\n"
+            f" {_format_year_runs(sorted(required))}."
         )
-        errors += 1
 
     unexpected = sorted(set(actual_at) - permitted)
     if unexpected:
-        log_file.write(
-            f" - ERROR: snapshot nominal year(s) the experiment does not call"
+        reporter.error(
+            f"snapshot nominal year(s) the experiment does not call"
             f" for: {_format_year_runs(unexpected)}. Required:"
-            f" {_format_year_runs(sorted(required))}.\n"
+            f" {_format_year_runs(sorted(required))}."
         )
-        errors += 1
 
     mismatch = _timestamp_mismatch_message(
         actual_at, sorted(set(actual_at) & permitted), var_type
     )
     if mismatch:
-        log_file.write(f" - ERROR: {mismatch}\n")
-        errors += 1
+        reporter.error(mismatch)
 
-    if errors == 0:
-        log_file.write(
-            f" - Snapshot time axis: nominal year(s)"
+    if reporter.total_errors == errors_before:
+        reporter.ok(
+            f"Snapshot time axis: nominal year(s)"
             f" {_format_year_runs(sorted(actual_at))} cover everything experiment"
-            f" '{exp['experiment']}' requires: OK\n"
+            f" '{exp['experiment']}' requires: OK"
         )
-    log_file.write(
-        " - Annual cadence checks: N/A (snapshot variable — the time axis holds"
-        " sparse snapshots by design).\n"
+    reporter.note(
+        "Annual cadence checks: N/A (snapshot variable — the time axis holds"
+        " sparse snapshots by design)."
     )
-    return errors
 
 
 def _check_attributes(
-    log_file,
+    reporter: Reporter,
     ds,
     ivar: str,
     ismip_meta: list,
@@ -1672,40 +1721,34 @@ def _check_attributes(
     isscalar: bool,
     var_type: str,
     region: str,
-) -> int:
-    errors = 0
-
-    log_file.write("ATTRIBUTE Tests \n")
+) -> None:
+    reporter.write("ATTRIBUTE Tests \n")
 
     # Sub-test 1: global attributes
     required_global = ["group", "model", "contact_name", "contact_email"]
-    global_errors = 0
+    errors_before = reporter.total_errors
     for attr in required_global:
         if attr not in ds.attrs:
-            log_file.write(f" - ERROR (attributes): global attribute '{attr}' is missing.\n")
-            global_errors += 1
+            reporter.error(f"global attribute '{attr}' is missing.")
     expected_crs = "epsg:3413" if region == "GrIS" else "epsg:3031"
     actual_crs = ds.attrs.get("crs")
     if region not in ("AIS", "GrIS"):
-        log_file.write(
-            " - Global attribute 'crs': not checked (the expected value depends"
-            " on the region, which the file name does not identify).\n"
+        reporter.note(
+            "Global attribute 'crs': not checked (the expected value depends"
+            " on the region, which the file name does not identify)."
         )
     elif actual_crs is None:
-        log_file.write(" - ERROR (attributes): global attribute 'crs' is missing.\n")
-        global_errors += 1
+        reporter.error("global attribute 'crs' is missing.")
     elif actual_crs.lower() != expected_crs:
-        log_file.write(
-            f" - ERROR (attributes): global attribute 'crs' is '{actual_crs}',"
-            f" expected '{expected_crs}' (case-insensitive) for region {region}.\n"
+        reporter.error(
+            f"global attribute 'crs' is '{actual_crs}',"
+            f" expected '{expected_crs}' (case-insensitive) for region {region}."
         )
-        global_errors += 1
-    if global_errors == 0:
-        log_file.write(" - Global attributes: OK\n")
-    errors += global_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Global attributes: OK")
 
     # Sub-test 2: coordinate attributes
-    coord_errors = 0
+    errors_before = reporter.total_errors
     time_coord = None
     for name in ("time", "t"):
         if name in ds.coords:
@@ -1713,10 +1756,9 @@ def _check_attributes(
             break
     is_static_spatial = time_coord is None and {"x", "y"}.issubset(set(ds.coords))
     if time_coord is None and not is_static_spatial:
-        log_file.write(" - ERROR (attributes): coordinate 'time' not found.\n")
-        coord_errors += 1
+        reporter.error("coordinate 'time' not found.")
     elif time_coord is None and is_static_spatial:
-        log_file.write(" - Time coordinate: N/A (static spatial variable)\n")
+        reporter.note("Time coordinate: N/A (static spatial variable)")
     else:
         # xarray decodes 'units' and 'calendar' into .encoding; 'bounds' stays in .attrs
         time_var = ds[time_coord]
@@ -1726,61 +1768,50 @@ def _check_attributes(
             time_attrs_required.append("bounds")
         for attr in time_attrs_required:
             if attr not in combined:
-                log_file.write(
-                    f" - ERROR (attributes): coordinate '{time_coord}' missing attribute '{attr}'.\n"
+                reporter.error(
+                    f"coordinate '{time_coord}' missing attribute '{attr}'."
                 )
-                coord_errors += 1
         if "units" in combined and combined["units"] != "days since 1850-01-01":
-            log_file.write(
-                f" - ERROR (attributes): time 'units' is '{combined['units']}', expected 'days since 1850-01-01'.\n"
+            reporter.error(
+                f"time 'units' is '{combined['units']}', expected 'days since 1850-01-01'."
             )
-            coord_errors += 1
         if "calendar" in combined and combined["calendar"] != "standard":
-            log_file.write(
-                f" - ERROR (attributes): time 'calendar' is '{combined['calendar']}', expected 'standard'.\n"
+            reporter.error(
+                f"time 'calendar' is '{combined['calendar']}', expected 'standard'."
             )
-            coord_errors += 1
     if not isscalar:
         spatial_coords = ("x", "y", "z") if "z" in ds.coords else ("x", "y")
         for coord in spatial_coords:
             if coord in ds.coords:
                 if "units" not in ds[coord].attrs:
-                    log_file.write(
-                        f" - ERROR (attributes): coordinate '{coord}' missing attribute 'units'.\n"
+                    reporter.error(
+                        f"coordinate '{coord}' missing attribute 'units'."
                     )
-                    coord_errors += 1
             else:
-                log_file.write(
-                    f" - ERROR (attributes): coordinate '{coord}' not found.\n"
-                )
-                coord_errors += 1
-    if coord_errors == 0:
-        log_file.write(" - Coordinate attributes: OK\n")
-    errors += coord_errors
+                reporter.error(f"coordinate '{coord}' not found.")
+    if reporter.total_errors == errors_before:
+        reporter.ok("Coordinate attributes: OK")
 
     # Sub-test 3: variable standard_name
-    var_errors = 0
+    errors_before = reporter.total_errors
     expected_standard_name = ismip_meta[var_index].get("standard_name")
     if expected_standard_name is not None and ivar in ds:
         if "standard_name" not in ds[ivar].attrs:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' missing 'standard_name' attribute.\n"
+            reporter.error(
+                f"variable '{ivar}' missing 'standard_name' attribute."
             )
-            var_errors += 1
         elif ds[ivar].attrs["standard_name"] != expected_standard_name:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' standard_name"
+            reporter.error(
+                f"variable '{ivar}' standard_name"
                 f" '{ds[ivar].attrs['standard_name']}'"
-                f" does not match expected '{expected_standard_name}'.\n"
+                f" does not match expected '{expected_standard_name}'."
             )
-            var_errors += 1
-    if var_errors == 0:
-        log_file.write(" - Variable attributes: OK\n")
-    errors += var_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Variable attributes: OK")
 
     # Sub-test 4: _FillValue must equal the default netCDF4 fill value;
     #             if missing_value is also present it must equal _FillValue.
-    fill_errors = 0
+    errors_before = reporter.total_errors
     if ivar in ds:
         dtype = ds[ivar].dtype
         nc4_dtype_key = dtype.kind + str(dtype.itemsize)
@@ -1789,61 +1820,50 @@ def _check_attributes(
         # xarray moves missing_value from attrs to encoding on read (CF fill-value handling)
         missing_value = ds[ivar].attrs.get("missing_value") or ds[ivar].encoding.get("missing_value")
         if fill_value is None:
-            log_file.write(f" - ERROR (attributes): variable '{ivar}' missing '_FillValue'.\n")
-            fill_errors += 1
+            reporter.error(f"variable '{ivar}' missing '_FillValue'.")
         elif default_fill is not None and fill_value != default_fill:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
-                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}.\n"
+            reporter.error(
+                f"variable '{ivar}' _FillValue {fill_value}"
+                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}."
             )
-            fill_errors += 1
         if fill_value is not None and missing_value is not None and fill_value != missing_value:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
-                f" and missing_value {missing_value} are not equal.\n"
+            reporter.error(
+                f"variable '{ivar}' _FillValue {fill_value}"
+                f" and missing_value {missing_value} are not equal."
             )
-            fill_errors += 1
-    if fill_errors == 0:
-        log_file.write(" - Fill value attributes: OK\n")
-    errors += fill_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Fill value attributes: OK")
 
     # Sub-test 5: main variable and time must be single-precision float (f4)
-    dtype_errors = 0
+    errors_before = reporter.total_errors
     if ivar in ds and ds[ivar].dtype != np.float32:
-        log_file.write(
-            f" - ERROR (attributes): variable '{ivar}' dtype is {ds[ivar].dtype},"
-            f" expected float32 (f4).\n"
+        reporter.error(
+            f"variable '{ivar}' dtype is {ds[ivar].dtype},"
+            f" expected float32 (f4)."
         )
-        dtype_errors += 1
     if time_coord is not None:
         # xarray decodes CF time to datetime objects in memory; check the on-disk dtype from encoding
         time_encoded_dtype = ds[time_coord].encoding.get("dtype", ds[time_coord].dtype)
         if time_encoded_dtype != np.float32:
-            log_file.write(
-                f" - ERROR (attributes): coordinate '{time_coord}' on-disk dtype is {time_encoded_dtype},"
-                f" expected float32 (f4).\n"
+            reporter.error(
+                f"coordinate '{time_coord}' on-disk dtype is {time_encoded_dtype},"
+                f" expected float32 (f4)."
             )
-            dtype_errors += 1
-    if dtype_errors == 0:
-        log_file.write(" - Dtype attributes: OK\n")
-    errors += dtype_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Dtype attributes: OK")
 
     # Sub-test 6: scale_factor and add_offset must not be present
-    pack_errors = 0
+    errors_before = reporter.total_errors
     if ivar in ds:
         # xarray moves these to .encoding on decode; check both locations
         combined = {**ds[ivar].attrs, **ds[ivar].encoding}
         for forbidden in ("scale_factor", "add_offset"):
             if forbidden in combined:
-                log_file.write(
-                    f" - ERROR (attributes): variable '{ivar}' must not have '{forbidden}'.\n"
+                reporter.error(
+                    f"variable '{ivar}' must not have '{forbidden}'."
                 )
-                pack_errors += 1
-    if pack_errors == 0:
-        log_file.write(" - Packing attributes: OK\n")
-    errors += pack_errors
-
-    return errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Packing attributes: OK")
 
 
 def _run_variable_checks(
@@ -1859,11 +1879,21 @@ def _run_variable_checks(
     experiments,
     report_naming_issues,
 ):
-    var_naming_errors = 0
-    var_num_errors = 0
-    var_spatial_errors = 0
-    var_time_errors = 0
-    var_attr_errors = 0
+    reporter = Reporter(log_file)
+    naming_reporter = reporter.category("naming")
+    num_reporter = reporter.category("num")
+    spatial_reporter = reporter.category("spatial")
+    time_reporter = reporter.category("time")
+    attr_reporter = reporter.category("attr", qualifier="attributes")
+
+    def counts():
+        return (
+            reporter.error_count("naming"),
+            reporter.error_count("num"),
+            reporter.error_count("spatial"),
+            reporter.error_count("time"),
+            reporter.error_count("attr"),
+        )
 
     log_file.write(" \n")
     log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
@@ -1876,18 +1906,18 @@ def _run_variable_checks(
     isscalar = ismip_meta[index]["dim"] == "t"
     var_type = ismip_meta[index].get("type", "")
 
-    naming = _check_naming(log_file, file_name, region, dim, isscalar, report_naming_issues)
-    var_naming_errors += naming.errors
+    naming = _check_naming(
+        naming_reporter, file_name, region, dim, isscalar, report_naming_issues
+    )
     if not naming.can_continue:
-        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+        return counts()
 
-    file_var_errors, has_variable = _check_file_variables(
-        log_file, ds, file_name, considered_variable, file_variables,
+    has_variable = _check_file_variables(
+        naming_reporter, ds, file_name, considered_variable, file_variables,
         ismip_meta[index]["dim"], report_naming_issues,
     )
-    var_naming_errors += file_var_errors
     if not has_variable:
-        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+        return counts()
 
     grid_extent = AIS_GRID_EXTENT if region == "AIS" else GrIS_GRID_EXTENT
     possible_resolution = AIS_POSSIBLE_RESOLUTION if region == "AIS" else GrIS_POSSIBLE_RESOLUTION
@@ -1901,25 +1931,27 @@ def _run_variable_checks(
     log_file.write("** Tested Variable: " + ivar + "\n")
     log_file.write(" \n")
 
-    var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
+    _check_numerical(num_reporter, ds, ivar, ismip_meta, var_index, region, isscalar)
 
     if not isscalar and region not in ("AIS", "GrIS"):
-        log_file.write("SPATIAL Tests \n")
-        log_file.write(
-            " - Not checked: the expected grid extent and resolutions depend on"
-            " the region, which the file name does not identify.\n"
+        spatial_reporter.write("SPATIAL Tests \n")
+        spatial_reporter.note(
+            "Not checked: the expected grid extent and resolutions depend on"
+            " the region, which the file name does not identify."
         )
     elif not isscalar:
-        var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
+        _check_spatial(spatial_reporter, ds, grid_extent, possible_resolution)
 
-    var_time_errors += _check_time(
-        log_file, ds, dim, experiments, experiment_name, var_type,
+    _check_time(
+        time_reporter, ds, dim, experiments, experiment_name, var_type,
         ismip_meta[index]["dim"], naming.filename_years,
     )
 
-    var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, var_type, region)
+    _check_attributes(
+        attr_reporter, ds, ivar, ismip_meta, var_index, isscalar, var_type, region
+    )
 
-    return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+    return counts()
 
 
 def _print_experiment_summary(experiment_name: str, exp_errors: int) -> None:
