@@ -4,8 +4,9 @@
 # 1. Naming (_check_naming, _check_file_variables)
 #    - Variable field of the filename is a variable of the data request.
 #    - The variable named in the filename is present in the file.
-#    - The file holds no variables beyond that one, its coordinates, and any
-#      bounds or grid-mapping variables they refer to.
+#    - The file holds no variables beyond that one, its coordinates, and the
+#      companion variables CF lets them name: bounds, grid mapping, cell
+#      measures and ancillary variables.
 #    - The variable's dimensions are the ones the data request asks for, in the
 #      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
@@ -1235,8 +1236,11 @@ def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
     A file carries one variable of the data request, but CF lets that variable
     bring companions: the bounds of a coordinate (which is how 'time_bounds'
     reaches every FL file), the container variable a 'grid_mapping' points at,
-    and any auxiliary coordinates the variable names.  Those belong in the
-    file; anything else is something the data request did not ask for.
+    the auxiliary coordinates a variable names, the cell measures it is
+    normalised by, and the ancillary variables that qualify it.  Every one of
+    those is a variable the file has to carry for the requested variable to
+    mean what it says, so none of them is an extra; anything else is something
+    the data request did not ask for.
     """
     allowed = {considered_variable} | set(ds.coords)
 
@@ -1252,6 +1256,14 @@ def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
     if grid_mapping:
         allowed.add(str(grid_mapping))
     allowed.update(str(attributes.get("coordinates", "")).split())
+    allowed.update(str(attributes.get("ancillary_variables", "")).split())
+    # cell_measures names each variable after the measure it supplies
+    # ('area: areacello volume: volcello'), so the keywords are dropped.
+    allowed.update(
+        token
+        for token in str(attributes.get("cell_measures", "")).split()
+        if not token.endswith(":")
+    )
 
     return allowed
 
@@ -1304,8 +1316,9 @@ def _check_file_variables(
         reporter.error(
             f"unexpected variable '{name}' in the file. A file holds"
             f" one variable of the data request -- here '{considered_variable}'"
-            f" -- along with its coordinates and any bounds or grid-mapping"
-            f" variables, and nothing else."
+            f" -- along with its coordinates and the companion variables CF"
+            f" lets it name (bounds, grid mapping, cell measures, ancillary"
+            f" variables), and nothing else."
         )
     if not unexpected:
         reporter.ok("No unexpected variables in the file: OK")

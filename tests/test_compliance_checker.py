@@ -246,6 +246,16 @@ def add_variable_to_file(file_path: Path, name: str) -> None:
         dataset.createVariable(name, "f4", ("time",))
 
 
+def add_companion_variable(
+    file_path: Path, name: str, attribute: str, value: str
+) -> None:
+    """Add a variable and have the requested one name it, the CF way."""
+    variable_name = file_path.name.split("_")[0]
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        dataset.createVariable(name, "f4", ("time",))
+        dataset.variables[variable_name].setncattr(attribute, value)
+
+
 def _laid_out_as(values, old_dimensions, new_dimensions):
     """Re-lay values from `old_dimensions` to `new_dimensions`.
 
@@ -673,6 +683,31 @@ def test_checker_reports_unexpected_variable_in_file(case_dir):
     # An extra variable does not make the file uncheckable, so the requested
     # one is still checked.
     assert "** Tested Variable: lim\n" in summary["log_text"]
+
+
+@pytest.mark.parametrize(
+    "attribute, value",
+    [
+        ("cell_measures", "area: cellarea"),
+        ("ancillary_variables", "cellarea"),
+    ],
+)
+def test_checker_accepts_cf_companion_variables(case_dir, attribute, value):
+    """A companion the requested variable names is part of the file, not an extra.
+
+    The allowlist already understood bounds, grid_mapping and coordinates, so a
+    CF-legal cell_measures or ancillary_variables companion -- carried precisely
+    so that the requested variable means what it says -- was reported as a
+    violation for no reason.
+    """
+    add_companion_variable(
+        dataset_for_variable(case_dir, "lim"), "cellarea", attribute, value
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert "ERROR: unexpected variable" not in summary["log_text"]
 
 
 def test_generated_xyt_dataset_passes_checker(xyt_case_dir):
