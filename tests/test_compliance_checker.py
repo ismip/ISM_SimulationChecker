@@ -1,9 +1,11 @@
+import io
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 import netCDF4
 import pytest
+import xarray as xr
 
 # The installed package is what is tested: run `pip install --no-deps
 # --no-build-isolation -e .` (or without -e) before pytest.
@@ -1093,6 +1095,63 @@ def test_checker_reports_a_main_variable_that_is_not_float32(case_dir):
     assert (
         "ERROR (attributes): variable 'lim' dtype is float64" in summary["log_text"]
     )
+
+
+@pytest.mark.parametrize(
+    "range_severity, errors, warnings",
+    [
+        ("error", 2, 0),
+        ("warning", 0, 2),
+        # A blank cell, an unrecognised value and a missing column all have to
+        # mean what the checker did before the column existed.
+        (None, 2, 0),
+        ("nonsense", 2, 0),
+    ],
+)
+def test_range_severity_is_honoured(xyt_case_dir, range_severity, errors, warnings):
+    """Driven by a synthetic criteria row, not by editing the shipped CSV.
+
+    The mechanism and the data are then tested independently: every shipped row
+    is `error` today (see test_shipped_range_severities_are_all_errors), so
+    nothing here would be exercised by a run over the real request.
+    """
+    criteria = {
+        "variable": "lithk",
+        "dim": "x,y,t",
+        "units": "m",
+        "standard_name": "land_ice_thickness",
+        "type": "ST",
+        # Bounds no data can satisfy, so both ends fire.
+        "min_value_gris": 1.0e9,
+        "max_value_gris": -1.0e9,
+    }
+    if range_severity is not None:
+        criteria["range_severity"] = range_severity
+
+    log = io.StringIO()
+    reporter = checker.Reporter(log).category("num")
+    with xr.open_dataset(
+        dataset_for_variable(xyt_case_dir, "lithk"), decode_times=False
+    ) as ds:
+        checker._check_numerical(
+            reporter, ds, "lithk", [criteria], 0, "GrIS", isscalar=False
+        )
+
+    assert reporter.total_errors == errors, log.getvalue()
+    assert reporter.total_warnings == warnings, log.getvalue()
+    assert "is out of range" in log.getvalue()
+
+
+def test_shipped_range_severities_are_all_errors():
+    """The mechanism ships with no classification changed.
+
+    Which variables have bounds a legitimate model can exceed is case-by-case
+    work, done as data-only changes after this. Until then every row is `error`,
+    so behaviour is exactly what it was.
+    """
+    ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
+
+    assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
 
 
 def test_checker_reports_missing_contact_email_attribute(case_dir):

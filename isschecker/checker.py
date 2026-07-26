@@ -23,7 +23,9 @@
 # 2. Numerical (_check_numerical)
 #    - Variable units match the data request (any UDUNITS spelling of the
 #      requested unit is accepted: 'm2', 'm^2' and 'm**2' are all the same).
-#    - All values lie within the allowed min/max range for the relevant region.
+#    - All values lie within the allowed min/max range for the relevant region,
+#      at the severity that variable's 'range_severity' names (error unless the
+#      data request says otherwise).
 #    - Array is not entirely fill/missing values.
 #
 # 3. Spatial (_check_spatial)  [xyt variables only]
@@ -441,6 +443,25 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _range_severity(value) -> str:
+    """How a value outside a variable's min/max range should be reported.
+
+    Issue #10 is that some of these bounds "are dependent on the forcing, input
+    data and model implementation", so failing a run on them is too strong --
+    but which ones is a per-variable question that the checker cannot answer
+    from its side.  So the severity lives in the data request, one cell per
+    variable row, and switching a variable is a data-only diff that needs no
+    reasoning about the checker.
+
+    Anything the column does not say is an error, which is what makes the
+    column safe to add before it is filled in: a blank cell, a missing column
+    and an unrecognised value all mean what the checker did before.
+    """
+    if value is not None and pd.notna(value) and str(value).strip().lower() == "warning":
+        return "warning"
+    return "error"
+
+
 def _load_criteria(variable_list: str):
     try:
         df = _read_data_csv(VARIABLE_REQUEST_CSV)
@@ -483,6 +504,7 @@ def _load_criteria(variable_list: str):
             "mandatory": 1 if str(row["Mandatory (yes/no)"]).lower() == "yes" else 0,
             "standard_name": str(row["standard_name"]) if pd.notna(row["standard_name"]) else None,
             "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
+            "range_severity": _range_severity(row.get("range_severity")),
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -1637,6 +1659,13 @@ def _check_numerical(
             " region, which the file name does not identify)."
         )
     elif not isscalar:
+        # The severity of an out-of-range value is per variable, from the
+        # range_severity column of the data request; see _range_severity.
+        report_range = (
+            reporter.warning
+            if ismip_meta[var_index].get("range_severity") == "warning"
+            else reporter.error
+        )
         if False in ds[ivar].isnull():
             if (
                 ds[ivar].min(skipna=True).item()
@@ -1644,7 +1673,7 @@ def _check_numerical(
             ):
                 reporter.ok("The minimum value successfully verified.")
             else:
-                reporter.error(
+                report_range(
                     "The minimum value ("
                     + str(ds[ivar].min(skipna=True).values.item(0))
                     + ") is out of range. Min value accepted: "
@@ -1657,7 +1686,7 @@ def _check_numerical(
             ):
                 reporter.ok("The maximum value successfully verified.")
             else:
-                reporter.error(
+                report_range(
                     "The maximum value ("
                     + str(ds[ivar].max(skipna=True).values.item(0))
                     + ") is out of range. Max value accepted: "

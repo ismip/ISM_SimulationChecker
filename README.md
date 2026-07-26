@@ -49,6 +49,12 @@ Two rules keep the file from becoming a way to hide problems, and both are error
 
 Whatever the file declares is echoed into the log, so the archived record of a run shows what was claimed rather than merely that a warning did not appear. If the file is absent, nothing changes.
 
+### Value ranges
+
+Some of the `min_value_*` / `max_value_*` bounds in the data request "are dependent on the forcing, input data and model implementation" ([issue #10](https://github.com/ismip/ISM_SimulationChecker/issues/10)), and some are not, so the severity of an out-of-range value is a per-variable question. It is answered by the `range_severity` column of `ISMIP7_variable_request.csv`, which holds `error` or `warning` for each variable row. Anything the column does not say — a blank cell, an unrecognised value, or the column being absent altogether — means `error`.
+
+Every shipped row is currently `error`, so this changes nothing today. Moving a variable to `warning` is a one-cell change to the data request that needs no reasoning about the checker.
+
 ---
 
 ## Time encoding
