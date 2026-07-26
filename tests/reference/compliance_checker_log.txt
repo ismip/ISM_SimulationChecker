@@ -21,6 +21,12 @@ Verified directory: <source-path>
   - Attribute Tests    : 0 error(s)
  
 0 warning(s) detected.
+  - Mandatory variables: 0 warning(s)
+  - Naming Tests       : 0 warning(s)
+  - Numerical Tests    : 0 warning(s)
+  - Spatial Tests      : 0 warning(s)
+  - Time Tests         : 0 warning(s)
+  - Attribute Tests    : 0 warning(s)
  
  
 ====================================================================================

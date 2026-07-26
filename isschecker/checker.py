@@ -217,6 +217,7 @@ class Reporter:
         # experiment-level ones are written flush left.
         self._bullet = bullet
         self.errors: dict[str, int] = {}
+        self.warnings: dict[str, int] = {}
 
     def category(
         self, name: str, qualifier: str | None = None, bullet: str = " - "
@@ -244,8 +245,15 @@ class Reporter:
     def total_errors(self) -> int:
         return sum(self.errors.values())
 
+    @property
+    def total_warnings(self) -> int:
+        return sum(self.warnings.values())
+
     def error_count(self, category: str) -> int:
         return self.errors.get(category, 0)
+
+    def warning_count(self, category: str) -> int:
+        return self.warnings.get(category, 0)
 
     def write(self, text: str) -> None:
         """Write to the log without reporting a finding: headings and footers."""
@@ -259,6 +267,15 @@ class Reporter:
         but that are still four findings and not one.
         """
         self._report("ERROR", message, count)
+
+    def warning(self, message: str, count: int = 1) -> None:
+        """Report a departure from the request that leaves the file usable.
+
+        Warnings do not enter the error count, do not change a file's verdict
+        and do not affect the exit status; they say 'look at this', not 'fix
+        this'.  See the policy note at the top of this module.
+        """
+        self._report("WARNING", message, count)
 
     def ok(self, message: str) -> None:
         """Record a check that passed."""
@@ -274,7 +291,7 @@ class Reporter:
         self._count(label, self._category, count)
 
     def _count(self, label: str, category: str, count: int) -> None:
-        counter = self.errors
+        counter = self.errors if label == "ERROR" else self.warnings
         counter[category] = counter.get(category, 0) + count
         if self._parent is not None:
             self._parent._count(label, category, count)
@@ -699,19 +716,7 @@ def _run_compliance_checker(
                 ismip_meta=ismip_meta,
             )
 
-        _insert_synthesis(
-            source_path=source_path,
-            exp_counter=summary["exp_counter"],
-            file_counter=summary["file_counter"],
-            total_errors=summary["total_errors"],
-            total_file_errors=summary["total_file_errors"],
-            total_naming_errors=summary["total_naming_errors"],
-            total_num_errors=summary["total_num_errors"],
-            total_spatial_errors=summary["total_spatial_errors"],
-            total_time_errors=summary["total_time_errors"],
-            total_attr_errors=summary["total_attr_errors"],
-            report_naming_issues=summary["report_naming_issues"],
-        )
+        _insert_synthesis(source_path=source_path, summary=summary)
         return summary
 
     except TypeError as err:
@@ -733,6 +738,13 @@ def _empty_summary() -> dict:
         "total_time_errors": 0,
         "total_attr_errors": 0,
         "total_file_errors": 0,
+        "total_warnings": 0,
+        "total_naming_warnings": 0,
+        "total_num_warnings": 0,
+        "total_spatial_warnings": 0,
+        "total_time_warnings": 0,
+        "total_attr_warnings": 0,
+        "total_file_warnings": 0,
         "report_naming_issues": [],
     }
 
@@ -784,9 +796,14 @@ def _process_experiments(
         _print_experiment_summary(
             experiment_name=experiment_name,
             exp_errors=exp_reporter.total_errors,
+            exp_warnings=exp_reporter.total_warnings,
         )
 
-    _print_total_summary(source_path=source_path, total_errors=reporter.total_errors)
+    _print_total_summary(
+        source_path=source_path,
+        total_errors=reporter.total_errors,
+        total_warnings=reporter.total_warnings,
+    )
 
     return {
         "exp_counter": exp_counter,
@@ -798,6 +815,13 @@ def _process_experiments(
         "total_time_errors": reporter.error_count("time"),
         "total_attr_errors": reporter.error_count("attr"),
         "total_file_errors": reporter.error_count("file"),
+        "total_warnings": reporter.total_warnings,
+        "total_naming_warnings": reporter.warning_count("naming"),
+        "total_num_warnings": reporter.warning_count("num"),
+        "total_spatial_warnings": reporter.warning_count("spatial"),
+        "total_time_warnings": reporter.warning_count("time"),
+        "total_attr_warnings": reporter.warning_count("attr"),
+        "total_file_warnings": reporter.warning_count("file"),
         "report_naming_issues": report_naming_issues,
     }
 
@@ -987,6 +1011,7 @@ def _process_single_file(
         )
 
     var_errors = file_reporter.total_errors
+    var_warnings = file_reporter.total_warnings
 
     file_reporter.write("\n")
     file_reporter.write("----------------------------------------------------------\n")
@@ -998,8 +1023,13 @@ def _process_single_file(
             str(var_errors) + " error(s). Please review before sharing.\n"
         )
     else:
+        # Warnings never change the verdict: a file with warnings and no errors
+        # is compliant, and is told so.
         file_reporter.write("No errors. Good job !\n")
-    file_reporter.write("No warnings.\n")
+    if var_warnings > 0:
+        file_reporter.write(str(var_warnings) + " warning(s). Please review.\n")
+    else:
+        file_reporter.write("No warnings.\n")
     file_reporter.write("----------------------------------------------------------\n")
 
 
@@ -1871,28 +1901,47 @@ def _run_variable_checks(
     )
 
 
-def _print_experiment_summary(experiment_name: str, exp_errors: int) -> None:
+def _warning_phrase(warnings: int) -> str:
+    """How the console mentions warnings, when there are any to mention.
+
+    Phrased so that it cannot be read as a failure: a run that reports only
+    warnings has passed.
+    """
+    if warnings == 0:
+        return ""
+    return f" ({warnings} warning(s) — see the log)"
+
+
+def _print_experiment_summary(
+    experiment_name: str, exp_errors: int, exp_warnings: int = 0
+) -> None:
     print(experiment_name, ": compliance check processed.")
     if exp_errors > 0:
         print(
-            "Found", exp_errors, "errors. Check compliance_checker_log.txt for details."
+            "Found",
+            exp_errors,
+            f"errors{_warning_phrase(exp_warnings)}."
+            " Check compliance_checker_log.txt for details.",
         )
     else:
-        print("Successfully verified with no errors")
+        print("Successfully verified with no errors" + _warning_phrase(exp_warnings))
     print()
 
 
-def _print_total_summary(source_path: str, total_errors: int) -> None:
+def _print_total_summary(
+    source_path: str, total_errors: int, total_warnings: int = 0
+) -> None:
     print("-------------------------------------------------------------------------")
     print(source_path, ": compliance check processed.")
     if total_errors > 0:
         print(
             "Found a total of",
             total_errors,
-            "errors. Check compliance_checker_log.txt for details.",
+            f"errors{_warning_phrase(total_warnings)}."
+            " Check compliance_checker_log.txt for details.",
         )
     else:
-        print("Successfully verified with no errors")
+        print("Successfully verified with no errors" + _warning_phrase(total_warnings))
     print("-------------------------------------------------------------------------")
 
 
@@ -1941,43 +1990,51 @@ def _write_log_header(
     log_file.write(" \n")
 
 
-def _insert_synthesis(
-    source_path: str,
-    exp_counter: int,
-    file_counter: int,
-    total_errors: int,
-    total_file_errors: int,
-    total_naming_errors: int,
-    total_num_errors: int,
-    total_spatial_errors: int,
-    total_time_errors: int,
-    total_attr_errors: int,
-    report_naming_issues,
-) -> None:
+# The reporting categories, in the order the synthesis block lists them, with
+# the label each one carries there.
+SYNTHESIS_CATEGORIES = (
+    ("file", "Mandatory variables"),
+    ("naming", "Naming Tests       "),
+    ("num", "Numerical Tests    "),
+    ("spatial", "Spatial Tests      "),
+    ("time", "Time Tests         "),
+    ("attr", "Attribute Tests    "),
+)
+
+# The summary key each category's counts live under, by severity.
+_SUMMARY_KEYS = {
+    "file": "total_file_{severity}s",
+    "naming": "total_naming_{severity}s",
+    "num": "total_num_{severity}s",
+    "spatial": "total_spatial_{severity}s",
+    "time": "total_time_{severity}s",
+    "attr": "total_attr_{severity}s",
+}
+
+
+def _insert_synthesis(source_path: str, summary: dict) -> None:
+    report_naming_issues = summary["report_naming_issues"]
+
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "r") as f:
         contents = f.readlines()
 
     iline = 11
-    contents.insert(iline, str(exp_counter) + " experiments checked.\n")
+    contents.insert(iline, str(summary["exp_counter"]) + " experiments checked.\n")
     iline += 1
-    contents.insert(iline, str(file_counter) + " files checked.\n")
+    contents.insert(iline, str(summary["file_counter"]) + " files checked.\n")
     iline += 2
-    contents.insert(iline, str(total_errors) + " error(s) detected.\n")
-    iline += 1
-    contents.insert(iline, "  - Mandatory variables: " + str(total_file_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Naming Tests       : " + str(total_naming_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Numerical Tests    : " + str(total_num_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Spatial Tests      : " + str(total_spatial_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Time Tests         : " + str(total_time_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Attribute Tests    : " + str(total_attr_errors) + " error(s)\n")
-    iline += 2
-    contents.insert(iline, "0 warning(s) detected.\n")
-    iline += 2
+    for severity in ("error", "warning"):
+        contents.insert(
+            iline, str(summary[f"total_{severity}s"]) + f" {severity}(s) detected.\n"
+        )
+        iline += 1
+        for category, label in SYNTHESIS_CATEGORIES:
+            count = summary[_SUMMARY_KEYS[category].format(severity=severity)]
+            contents.insert(iline, f"  - {label}: {count} {severity}(s)\n")
+            iline += 1
+        # Step over one of the blank lines the header left behind, so that each
+        # block is separated from the next.
+        iline += 1
     if report_naming_issues:
         contents.insert(iline, "Naming tests errors report: \n")
         iline += 1
