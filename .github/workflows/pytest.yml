@@ -63,4 +63,8 @@ jobs:
         # package: a data file or entry point that did not make it into the
         # wheel then fails here instead of passing against the source tree.
         working-directory: ${{ runner.temp }}
-        run: pytest -v "$GITHUB_WORKSPACE/tests/test_compliance_checker.py"
+        # The whole directory, not one file: test_golden_log.py exists to catch
+        # a dependency release inside the supported ranges changing the log, and
+        # that is exactly what running it here at both the floor and the latest
+        # environment is for.
+        run: pytest -v "$GITHUB_WORKSPACE/tests"

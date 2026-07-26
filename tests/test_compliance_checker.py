@@ -1,9 +1,11 @@
+import io
 import shutil
 from datetime import datetime
 from pathlib import Path
 
 import netCDF4
 import pytest
+import xarray as xr
 
 # The installed package is what is tested: run `pip install --no-deps
 # --no-build-isolation -e .` (or without -e) before pytest.
@@ -246,6 +248,16 @@ def add_variable_to_file(file_path: Path, name: str) -> None:
         dataset.createVariable(name, "f4", ("time",))
 
 
+def add_companion_variable(
+    file_path: Path, name: str, attribute: str, value: str
+) -> None:
+    """Add a variable and have the requested one name it, the CF way."""
+    variable_name = file_path.name.split("_")[0]
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        dataset.createVariable(name, "f4", ("time",))
+        dataset.variables[variable_name].setncattr(attribute, value)
+
+
 def _laid_out_as(values, old_dimensions, new_dimensions):
     """Re-lay values from `old_dimensions` to `new_dimensions`.
 
@@ -318,6 +330,155 @@ def test_checker_reports_missing_mandatory_variable(case_dir):
     assert summary["total_file_errors"] == 1
     assert summary["total_errors"] == 1
     assert "mandatory variable(s) is (are) missing" in summary["log_text"]
+
+
+def test_checker_warns_about_non_mandatory_variables_not_submitted(xyt_case_dir):
+    """A dropped optional file gets a signal, and never gets called an error.
+
+    Nothing reported this before, so a group that meant to submit litemp and
+    lost it in a script heard nothing at all.
+    """
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_file_warnings"] == 1
+    assert summary["total_warnings"] == 1
+    assert (
+        "WARNING: experiment historical carries no files for the non-mandatory"
+        " variable(s): ['litemp']" in summary["log_text"]
+    )
+    # Wording, not accusation: a model that does not represent a variable is the
+    # common case, and the line has to read that way.
+    assert (
+        "This is expected if your model does not represent them"
+        in summary["log_text"]
+    )
+    # And it is not a fault, so it stays out of the list of faults.
+    synthesis = summary["log_text"].split("DETAILED RESULTS")[0]
+    assert "Naming tests errors report:" not in synthesis
+
+
+def test_non_mandatory_warning_names_every_variable_on_one_line(xyt_case_dir):
+    """One line per experiment, not one warning per variable.
+
+    A model with a narrow scope would otherwise look far worse than one that
+    dropped a single file, which is the opposite of what this is for.
+    """
+    for variable in ("litemp", "refgeoid", "tfbase"):
+        dataset_for_variable(xyt_case_dir, variable).unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_warnings"] == 1
+    assert summary["log_text"].count("carries no files for the non-mandatory") == 1
+    for variable in ("litemp", "refgeoid", "tfbase"):
+        assert f"'{variable}'" in summary["log_text"]
+
+
+def test_non_mandatory_warning_is_scoped_to_the_selected_variable_list(xyt_case_dir):
+    """A scalars-only run says nothing about x,y,t variables it never looked at."""
+    summary = checker.run_checker(
+        source_path=str(xyt_case_dir),
+        variable_list="ismip7_scalars",
+        version="tests",
+    )
+
+    assert "carries no files for the non-mandatory" not in summary["log_text"]
+
+
+def test_a_file_with_warnings_and_no_errors_still_passes(xyt_case_dir):
+    """Warnings never change a verdict, at any level of the report."""
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0
+    assert summary["total_warnings"] > 0
+    assert "No errors. Good job !" in summary["log_text"]
+    assert " error(s). Please review before sharing." not in summary["log_text"]
+
+
+def write_not_modelled(case_dir: Path, text: str) -> None:
+    (case_dir / "not_modelled.txt").write_text(text)
+
+
+def test_not_modelled_suppresses_the_not_submitted_warning(xyt_case_dir):
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+    write_not_modelled(
+        xyt_case_dir,
+        "# ISMIP7: variables this model does not represent.\n"
+        "\n"
+        "litemp      # no 3D temperature in this configuration\n",
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_warnings"] == 0
+    assert "carries no files for the non-mandatory" not in summary["log_text"]
+    # What was claimed is on the record, not merely the absence of a warning.
+    assert (
+        "Declared not modelled (not_modelled.txt): ['litemp']"
+        in summary["log_text"]
+    )
+
+
+def test_not_modelled_cannot_opt_out_of_a_mandatory_variable(xyt_case_dir):
+    """The declaration is about optional variables, and says so twice over.
+
+    The missing mandatory file is still an error, and claiming it as not
+    modelled is an error of its own -- a silent no-op would look like
+    protection while protecting nothing.
+    """
+    dataset_for_variable(xyt_case_dir, "lithk").unlink()
+    write_not_modelled(xyt_case_dir, "lithk\n")
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_file_errors"] == 2
+    assert "mandatory variable(s) is (are) missing: ['lithk']" in summary["log_text"]
+    assert (
+        "ERROR: not_modelled.txt lists 'lithk', which the data request makes"
+        " mandatory" in summary["log_text"]
+    )
+
+
+def test_not_modelled_faults_a_mandatory_variable_outside_the_selected_list(case_dir):
+    """A declaration is about the submission, not about one run of the checker."""
+    write_not_modelled(case_dir, "lithk\n")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_file_errors"] == 1
+    assert (
+        "ERROR: not_modelled.txt lists 'lithk', which the data request makes"
+        " mandatory" in summary["log_text"]
+    )
+
+
+def test_not_modelled_faults_a_name_that_is_not_in_the_data_request(xyt_case_dir):
+    write_not_modelled(xyt_case_dir, "litempbot\n")
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_file_errors"] == 1
+    assert (
+        "ERROR: not_modelled.txt lists 'litempbot', which is not a variable of"
+        " the data request" in summary["log_text"]
+    )
+    assert "The closest requested name is 'litempbotgr'" in summary["log_text"]
+
+
+def test_no_not_modelled_file_changes_nothing(xyt_case_dir):
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0
+    assert summary["total_warnings"] == 1
+    assert "Declared not modelled" not in summary["log_text"]
 
 
 def test_checker_reports_invalid_esm_in_filename(case_dir):
@@ -662,17 +823,53 @@ def test_checker_reports_swapped_variable_in_file(case_dir):
     assert "does not match expected 'land_ice_mass" not in summary["log_text"]
 
 
-def test_checker_reports_unexpected_variable_in_file(case_dir):
+def test_checker_warns_about_unexpected_variable_in_file(case_dir):
+    """An extra variable is a warning: the requested one is still fully checked.
+
+    Nothing downstream has to work around a companion the data request did not
+    ask for, so this is a 'look at this', not a 'fix this'.
+    """
     add_variable_to_file(dataset_for_variable(case_dir, "lim"), "mask")
 
     summary = run_checker(case_dir)
 
-    assert summary["total_naming_errors"] == 1
-    assert summary["total_errors"] == 1
-    assert "unexpected variable 'mask' in the file" in summary["log_text"]
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_naming_warnings"] == 1
+    assert summary["total_warnings"] == 1
+    assert (
+        "WARNING: unexpected variable 'mask' in the file" in summary["log_text"]
+    )
     # An extra variable does not make the file uncheckable, so the requested
-    # one is still checked.
+    # one is still checked...
     assert "** Tested Variable: lim\n" in summary["log_text"]
+    # ... and the file's verdict is unchanged by the warning.
+    assert "No errors. Good job !" in summary["log_text"]
+    assert "1 warning(s). Please review." in summary["log_text"]
+
+
+@pytest.mark.parametrize(
+    "attribute, value",
+    [
+        ("cell_measures", "area: cellarea"),
+        ("ancillary_variables", "cellarea"),
+    ],
+)
+def test_checker_accepts_cf_companion_variables(case_dir, attribute, value):
+    """A companion the requested variable names is part of the file, not an extra.
+
+    The allowlist already understood bounds, grid_mapping and coordinates, so a
+    CF-legal cell_measures or ancillary_variables companion -- carried precisely
+    so that the requested variable means what it says -- was reported as a
+    violation for no reason.
+    """
+    add_companion_variable(
+        dataset_for_variable(case_dir, "lim"), "cellarea", attribute, value
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert "ERROR: unexpected variable" not in summary["log_text"]
 
 
 def test_generated_xyt_dataset_passes_checker(xyt_case_dir):
@@ -706,27 +903,36 @@ def test_checker_reports_litemp_missing_required_snapshot(xyt_case_dir):
     )
 
 
-def test_checker_reports_litemp_snapshot_year_not_requested(xyt_case_dir):
+def test_checker_warns_about_litemp_snapshot_year_not_requested(xyt_case_dir):
+    """An unasked-for snapshot is a warning, not an error.
+
+    The data request specifies the snapshot years as a minimum set, so
+    over-delivering 3D temperature is not non-compliance. It is still worth
+    naming: a year nobody asked for is usually a sign of a mistake.
+    """
     set_time_values(
         dataset_for_variable(xyt_case_dir, "litemp"), state_timestamps([1975, 2014])
     )
 
     summary = run_xyt_checker(xyt_case_dir)
 
-    assert summary["total_time_errors"] >= 1
+    # 1975 replaces the required 2013 snapshot here, so the missing one is
+    # still an error; what changed is that the extra one no longer is.
+    assert summary["total_time_warnings"] == 1
     assert (
-        "snapshot nominal year(s) the experiment does not call for: 1975"
+        "WARNING: snapshot nominal year(s) the experiment does not call for: 1975"
         in summary["log_text"]
     )
 
 
-def test_checker_accepts_litemp_snapshot_at_2000(tmp_path):
-    """2000 is tolerated but not required, pending issue #12.
+def test_checker_warns_about_litemp_snapshot_at_2000(tmp_path):
+    """2000 is not required, and is now said out loud rather than tolerated.
 
     The generator no longer writes it and the data request does not ask for it,
-    but the README did until now, so a group that followed the README must not
-    be failed for a year that is still in dispute. Nothing else covers the
-    'permitted but not required' path once the generator stops emitting it.
+    but the README did until recently, so a group that followed the README must
+    not be failed for a year that is still in dispute (issue #12). Silently
+    accepting it told such a group nothing at all; a warning is the honest
+    report -- it is here, it was not asked for, it is not held against you.
     """
     root = tmp_path / "gen"
     generate_test_files.create_netcdf_file(
@@ -750,8 +956,12 @@ def test_checker_accepts_litemp_snapshot_at_2000(tmp_path):
         source_path=str(core_dir), variable_list="ismip7_xyt", version="tests"
     )
 
-    assert summary["total_time_errors"] == 0, summary["log_text"]
-    assert "does not call for" not in summary["log_text"]
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_time_warnings"] == 1
+    assert (
+        "WARNING: snapshot nominal year(s) the experiment does not call for: 2000"
+        in summary["log_text"]
+    )
 
 
 def test_checker_reports_missing_variable_dimension(xyt_case_dir):
@@ -820,6 +1030,176 @@ def test_checker_ignores_variables_outside_the_selected_list(xyt_case_dir):
 
     assert "is not a variable in the data request" not in summary["log_text"]
     assert summary["total_naming_errors"] == 0
+
+
+def set_variable_dtype(file_path: Path, variable_name: str, datatype: str) -> None:
+    """Rewrite one variable with a different on-disk dtype.
+
+    netCDF cannot retype a variable in place, so the file is rebuilt; every
+    other variable, every attribute and the unlimited dimension are copied
+    across unchanged.
+    """
+    rebuilt = file_path.with_name(file_path.name + ".rebuilt")
+    with netCDF4.Dataset(file_path) as source, netCDF4.Dataset(rebuilt, "w") as target:
+        target.setncatts(source.__dict__)
+        for name, dimension in source.dimensions.items():
+            target.createDimension(
+                name, None if dimension.isunlimited() else len(dimension)
+            )
+        for name, variable in source.variables.items():
+            fill_value = (
+                variable.getncattr("_FillValue")
+                if "_FillValue" in variable.ncattrs()
+                else None
+            )
+            created = target.createVariable(
+                name,
+                datatype if name == variable_name else variable.datatype,
+                variable.dimensions,
+                fill_value=fill_value,
+            )
+            created.setncatts(
+                {k: v for k, v in variable.__dict__.items() if k != "_FillValue"}
+            )
+            created[:] = variable[:]
+    rebuilt.replace(file_path)
+
+
+def test_checker_warns_about_a_time_coordinate_that_is_not_float32(case_dir):
+    """A float64 time axis is a warning; a float64 data variable is an error.
+
+    The size argument that governs the data variable does not reach the time
+    axis: it is one number per record, so double precision cannot meaningfully
+    inflate a file.
+    """
+    set_variable_dtype(dataset_for_variable(case_dir, "lim"), "time", "f8")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_attr_warnings"] == 1
+    assert (
+        "WARNING (attributes): coordinate 'time' on-disk dtype is float64"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_a_main_variable_that_is_not_float32(case_dir):
+    """The other half of the split: the data variable keeps erroring."""
+    set_variable_dtype(dataset_for_variable(case_dir, "lim"), "lim", "f8")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_attr_errors"] == 1
+    assert summary["total_errors"] == 1
+    assert (
+        "ERROR (attributes): variable 'lim' dtype is float64" in summary["log_text"]
+    )
+
+
+@pytest.mark.parametrize(
+    "range_severity, errors, warnings",
+    [
+        ("error", 2, 0),
+        ("warning", 0, 2),
+        # A blank cell, an unrecognised value and a missing column all have to
+        # mean what the checker did before the column existed.
+        (None, 2, 0),
+        ("nonsense", 2, 0),
+    ],
+)
+def test_range_severity_is_honoured(xyt_case_dir, range_severity, errors, warnings):
+    """Driven by a synthetic criteria row, not by editing the shipped CSV.
+
+    The mechanism and the data are then tested independently: every shipped row
+    is `error` today (see test_shipped_range_severities_are_all_errors), so
+    nothing here would be exercised by a run over the real request.
+    """
+    criteria = {
+        "variable": "lithk",
+        "dim": "x,y,t",
+        "units": "m",
+        "standard_name": "land_ice_thickness",
+        "type": "ST",
+        # Bounds no data can satisfy, so both ends fire.
+        "min_value_gris": 1.0e9,
+        "max_value_gris": -1.0e9,
+    }
+    if range_severity is not None:
+        criteria["range_severity"] = range_severity
+
+    log = io.StringIO()
+    reporter = checker.Reporter(log).category("num")
+    with xr.open_dataset(
+        dataset_for_variable(xyt_case_dir, "lithk"), decode_times=False
+    ) as ds:
+        checker._check_numerical(
+            reporter, ds, "lithk", [criteria], 0, "GrIS", isscalar=False
+        )
+
+    assert reporter.total_errors == errors, log.getvalue()
+    assert reporter.total_warnings == warnings, log.getvalue()
+    assert "is out of range" in log.getvalue()
+
+
+def test_shipped_range_severities_are_all_errors():
+    """The mechanism ships with no classification changed.
+
+    Which variables have bounds a legitimate model can exceed is case-by-case
+    work, done as data-only changes after this. Until then every row is `error`,
+    so behaviour is exactly what it was.
+    """
+    ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
+
+    assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
+
+
+def run_main(monkeypatch, source_path, variable_list="ismip7_scalars") -> int:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "ismip7-compliance-checker",
+            "--source-path",
+            str(source_path),
+            "--variable-list",
+            variable_list,
+        ],
+    )
+    return checker.main()
+
+
+def test_exit_status_is_zero_for_a_compliant_submission(monkeypatch, case_dir):
+    assert run_main(monkeypatch, case_dir) == 0
+
+
+def test_exit_status_is_non_zero_when_there_are_errors(monkeypatch, case_dir):
+    first_dataset(case_dir).unlink()
+
+    assert run_main(monkeypatch, case_dir) != 0
+
+
+def test_exit_status_is_zero_when_there_are_only_warnings(monkeypatch, xyt_case_dir):
+    """The whole point of a warning is that it does not fail a run."""
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+    assert summary["total_warnings"] > 0 and summary["total_errors"] == 0
+
+    assert run_main(monkeypatch, xyt_case_dir, "ismip7_xyt") == 0
+
+
+def test_exit_status_is_non_zero_for_a_missing_source_directory(monkeypatch, tmp_path):
+    """Nothing was checked, so the zero error count is not a pass."""
+    assert run_main(monkeypatch, tmp_path / "nowhere") != 0
+
+
+def test_exit_status_is_non_zero_for_a_source_directory_with_no_files(
+    monkeypatch, tmp_path
+):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    assert run_main(monkeypatch, empty) != 0
 
 
 def test_checker_reports_missing_contact_email_attribute(case_dir):

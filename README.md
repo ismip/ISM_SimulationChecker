@@ -2,15 +2,58 @@
 
 Checks ISMIP7 NetCDF simulation datasets for compliance with the [ISMIP7 data request conventions](https://www.ismip.org/). The following categories are validated for every file:
 
-1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (well formed `YYYY-YYYY`; what the range *means* is checked under **Time**). Inside the file: the variable the file name names is the one the file contains, with the dimensions the data request asks for, in the conventional `(time, z, y, x)` order, and the file holds nothing else beyond its coordinates and any bounds or grid-mapping variables.
+1. **Naming** — variable name, region field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (well formed `YYYY-YYYY`; what the range *means* is checked under **Time**). Inside the file: the variable the file name names is the one the file contains, with the dimensions the data request asks for, in the conventional `(time, z, y, x)` order, and the file holds nothing else beyond its coordinates and the companion variables CF lets them name (`bounds`, `grid_mapping`, `coordinates`, `cell_measures`, `ancillary_variables`) — anything further is a warning.
 2. **Numerical** — units match the data request, in any UDUNITS spelling (`m2`, `m^2` and `m**2` are all accepted, as are `kg m-2 s-1`, `kg.m-2.s-1` and `kg/m2/s`); all values lie within the allowed min/max range for the relevant region; array is not entirely fill values.
 3. **Spatial** *(xyt variables only)* — grid corners lie within the expected AIS or GrIS extents; resolution is one of the allowed values; x and y cell size are equal.
 4. **Time** — time dimension is present, unlimited, and monotonically increasing; the file name's year range is one the experiment allows; and the time axis is **exactly** the axis the experiment calls for. For `x,y,t` and `t` variables that means every nominal year from `experiments_ismip7.csv`, each carrying the timestamp its ST/FL convention prescribes; for `x,y,z,t` variables it means the required set of sparse snapshots (see [Time encoding](#time-encoding)).
-5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; variable and time are float32; `scale_factor` and `add_offset` are not allowed.
+5. **Attributes** — required global and coordinate attributes are present and have correct values; `standard_name` matches data request; `_FillValue` equals the NetCDF4 default for the variable's dtype; the variable is float32, and so is the time coordinate (a warning — one number per record cannot inflate a file); `scale_factor` and `add_offset` are not allowed.
 
 Every file is checked as far as it can be. A naming problem stops the other checks only where it leaves them nothing to read — a missing `x` or `y` dimension, or a file that does not contain the variable its name promises. Everything else (a mistyped ESM name, a malformed year range, an unrecognised region) is reported and the file is checked on, so one run tells you everything that is wrong rather than only the first thing. An unrecognised region costs just the checks that depend on it: value range, grid extent and resolution, and `crs`.
 
 Compliance criteria are defined in `isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and `isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and durations). Together with the grid definitions in `isschecker/data/gdfs/`, these files are bundled with the package.
+
+---
+
+## Errors and warnings
+
+Findings come at two severities, and the difference is worth stating precisely, because a check that reports at the wrong one either fails a submission that is fine or waves through one that is not.
+
+**ERROR** — the file, as written, is unusable for the intended analysis, departs from the protocol in a way that changes the science, or fails the data-hygiene requirements this archive is committing to. That last clause is deliberate: the output will be served to the broader community for analysis for years, so uniformity of encoding is a product requirement rather than a stylistic preference, and "a reader could cope with it" is not grounds for a warning.
+
+**WARNING** — the file is usable, the science is unaffected, and nothing downstream has to work around it, but it departs from what the data request asked for in a way you should look at and may reasonably have intended.
+
+Three consequences follow, and they are what make a warning safe to leave alone:
+
+- Warnings never enter the error count and never change a file's verdict. A file with warnings and no errors is compliant, and the log says so: `No errors. Good job !`, followed by the number of warnings to review.
+- Warnings never affect the exit status. Errors do.
+- A check whose failure means the checker could not read something is always an error. A warning never stops any later check from running.
+
+The synthesis block at the top of the log counts both severities, broken down by the same categories.
+
+### Variables your model does not represent
+
+An experiment that carries no files for a non-mandatory variable gets one warning naming all of them. This is expected if your model does not represent those variables — GIA is the obvious case — and it is listed only so that a variable lost from a submission does not pass unnoticed. It is scoped to the `--variable-list` you selected, so a run over `ismip7_scalars` says nothing about the `x,y,t` variables it was never asked to look at.
+
+To make that warning go quiet, put an optional `not_modelled.txt` in the `--source-path` directory: one variable name per line, blank lines ignored and `#` starting a comment, so you can record alongside each name why the variable is absent.
+
+```
+# ISMIP7: variables this model does not represent.
+dlithkdt      # no GIA in this configuration
+litemp
+```
+
+Two rules keep the file from becoming a way to hide problems, and both are errors rather than silent no-ops:
+
+- A **mandatory** variable named in it is still a missing-mandatory error, and the claim itself is reported as a further error. The list is a statement about optional variables; a submission cannot opt out of the data request with it.
+- A name that is **not in the data request** at all is an error. It is either a typo or a misunderstanding, and both are better said plainly than left to be inferred from a warning that did not go away.
+
+Whatever the file declares is echoed into the log, so the archived record of a run shows what was claimed rather than merely that a warning did not appear. If the file is absent, nothing changes.
+
+### Value ranges
+
+Some of the `min_value_*` / `max_value_*` bounds in the data request "are dependent on the forcing, input data and model implementation" ([issue #10](https://github.com/ismip/ISM_SimulationChecker/issues/10)), and some are not, so the severity of an out-of-range value is a per-variable question. It is answered by the `range_severity` column of `ISMIP7_variable_request.csv`, which holds `error` or `warning` for each variable row. Anything the column does not say — a blank cell, an unrecognised value, or the column being absent altogether — means `error`.
+
+Every shipped row is currently `error`, so this changes nothing today. Moving a variable to `warning` is a one-cell change to the data request that needs no reasoning about the checker.
 
 ---
 
@@ -40,9 +83,11 @@ The filename year range (`YYYY-YYYY`) always refers to the **nominal simulation 
 
 Together, a `historical` run and a projection provide snapshots at 1900, 2014, 2100, 2200 and 2300, plus the first year of the historical run. The first year is required only for `historical`, whose start year the modeller chooses; a projection's initial state is the historical run's final state, already reported as historical's last-year snapshot.
 
-The checker reports **missing** required snapshots as well as snapshots the experiment does not call for. The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year, and the annual cadence checks do not apply.
+A **missing** required snapshot is an error. A snapshot the experiment does not call for is a **warning**: the data request specifies these years as a minimum set, so over-delivering 3D temperature is not non-compliance, but a year nobody asked for is usually a sign that something was written by mistake. (The annual time axis is treated the other way round — an extra year there is an error — because that axis is pinned end to end by `experiments_ismip7.csv`, so an extra year means the file does not match the experiment it names.)
 
-> **A snapshot at 2000 is accepted but not required.** Earlier versions of this README, the checker and the generator all required one; `ISMIP7_variable_request.csv` does not ask for one. The data request is being followed until [issue #12](https://github.com/ismip/ISM_SimulationChecker/issues/12) settles it, and 2000 is tolerated in the meantime so that files written to the earlier guidance still pass.
+The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year, and the annual cadence checks do not apply.
+
+> **A snapshot at 2000 is not required.** Earlier versions of this README, the checker and the generator all required one; `ISMIP7_variable_request.csv` does not ask for one. A file carrying one is reported as an unrequested snapshot — that is, warned about and not failed — until [issue #12](https://github.com/ismip/ISM_SimulationChecker/issues/12) settles it. Files written to the earlier guidance still pass.
 
 Reference lookup tables are available in the companion repository [`ismip7-time-encoding`](https://github.com/ismip/ismip7-time-encoding).
 
@@ -112,6 +157,10 @@ ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --
 | `--version` | — | Print the installed version and exit; quote it when reporting a problem |
 
 `experiments_ismip7.csv` defines the allowed nominal year ranges and durations for each experiment. The checker derives the expected FL and ST timestamps from these year values at runtime (see [Time encoding](#time-encoding)).
+
+### Exit status
+
+The checker exits **non-zero** when it found errors, or when it could not check anything at all — the `--source-path` does not exist, or holds no `.nc` files. It exits **zero** when the submission is compliant, including when there are warnings to review; see [Errors and warnings](#errors-and-warnings). Both `ismip7-compliance-checker` and `python -m isschecker` behave the same way, so either can be used in a script.
 
 ---
 

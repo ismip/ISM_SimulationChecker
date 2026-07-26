@@ -4,8 +4,9 @@
 # 1. Naming (_check_naming, _check_file_variables)
 #    - Variable field of the filename is a variable of the data request.
 #    - The variable named in the filename is present in the file.
-#    - The file holds no variables beyond that one, its coordinates, and any
-#      bounds or grid-mapping variables they refer to.
+#    - The file holds no variables beyond that one, its coordinates, and the
+#      companion variables CF lets them name: bounds, grid mapping, cell
+#      measures and ancillary variables.  (warning)
 #    - The variable's dimensions are the ones the data request asks for, in the
 #      conventional (time, z, y, x) order.
 #    - Region field in filename matches the region inferred from the grid (AIS/GrIS).
@@ -22,7 +23,9 @@
 # 2. Numerical (_check_numerical)
 #    - Variable units match the data request (any UDUNITS spelling of the
 #      requested unit is accepted: 'm2', 'm^2' and 'm**2' are all the same).
-#    - All values lie within the allowed min/max range for the relevant region.
+#    - All values lie within the allowed min/max range for the relevant region,
+#      at the severity that variable's 'range_severity' names (error unless the
+#      data request says otherwise).
 #    - Array is not entirely fill/missing values.
 #
 # 3. Spatial (_check_spatial)  [xyt variables only]
@@ -40,9 +43,11 @@
 #      cadence reasoning cannot see.
 #    - For x,y,z,t snapshot variables the axis is instead checked against the
 #      required set of snapshot nominal years: the run's last year, the century
-#      marks inside it, and (for historical only) the run's first year.  Both
-#      missing and unasked-for snapshots are reported.  A snapshot at 2000 is
-#      tolerated but not required -- see issue #12.
+#      marks inside it, and (for historical only) the run's first year.  A
+#      missing snapshot is an error; an unasked-for one is a warning, since the
+#      request specifies the snapshots as a minimum set.  That includes a
+#      snapshot at 2000, which the data request does not ask for -- see
+#      issue #12.
 #
 # 5. Attributes (_check_attributes)
 #    - Global attributes present: group, model, contact_name, contact_email, crs
@@ -51,7 +56,8 @@
 #    - Variable standard_name matches data request (if specified).
 #    - _FillValue must be present and equal the default netCDF4 fill value for the variable's dtype.
 #      If missing_value is also present, it must equal _FillValue.
-#    - Main variable and time coordinate are single-precision float (float32 / f4).
+#    - Main variable is single-precision float (float32 / f4); so is the time
+#      coordinate (warning -- one number per record cannot inflate a file).
 #    - scale_factor and add_offset are not allowed on the main variable.
 #
 # A file is checked as far as it can be.  A naming problem stops the other
@@ -60,6 +66,39 @@
 # else (a mistyped ESM name, a malformed year range, an unrecognised region) is
 # reported and the file is checked on, so that one run tells a modeller
 # everything that is wrong rather than only the first thing.
+#
+#
+# Errors and warnings
+# -------------------
+#
+# One rule, stated here once so that a new check is classified by citing it
+# rather than by arguing the case again:
+#
+#   ERROR   -- the file, as written, is unusable for the intended analysis,
+#              departs from the protocol in a way that changes the science, or
+#              fails the data-hygiene requirements this archive is committing
+#              to.  That last clause is deliberate: the output will be served
+#              to the broader community for analysis for years, so uniformity
+#              of encoding is a product requirement rather than a stylistic
+#              preference, and "a reader could cope with it" is not grounds for
+#              a warning.
+#
+#   WARNING -- the file is usable, the science is unaffected, and nothing
+#              downstream has to work around it, but it departs from what the
+#              request asked for in a way the modeller should look at and may
+#              reasonably have intended.
+#
+# Three corollaries keep warnings from quietly becoming errors:
+#
+#   - Warnings never enter the error count and never change a file's verdict.
+#     A file with warnings and no errors is compliant, and is told so.
+#   - Warnings never affect the exit status.  Errors do.
+#   - A check whose failure means the checker could not read something stays an
+#     error.  Warnings never suppress later checks.
+#
+# An optional not_modelled.txt in the source directory silences the warning
+# about non-mandatory variables an experiment carries no files for, and nothing
+# else -- see _read_not_modelled.
 
 
 import datetime
@@ -181,15 +220,139 @@ VALID_ESM_NAMES: set[str] = {
 }
 
 
-def main() -> None:
+class Reporter:
+    """Writes the log and counts what it wrote, by severity and category.
+
+    Every finding has to reach two places at once: the line a modeller reads in
+    the log, and the counter the synthesis block at the top of that log adds up.
+    Keeping those in step by hand meant every check returning a count and every
+    caller adding it on, sixty call sites of bookkeeping running in parallel with
+    sixty writes.  Here the write is the count: a check says what it found, at
+    the severity it means, and the arithmetic follows from that alone.
+
+    Reporters nest.  :meth:`category` scopes findings to one of the checker's
+    reporting categories, and :meth:`child` opens a sub-total -- one file's
+    worth, say -- that still rolls up into its parent, so a file's own footer and
+    the run-wide synthesis count the same events rather than counting separately
+    and hoping to agree.
+    """
+
+    def __init__(
+        self,
+        log_file,
+        parent: "Reporter | None" = None,
+        category: str = "",
+        qualifier: str | None = None,
+        bullet: str = " - ",
+    ):
+        self.log_file = log_file
+        self._parent = parent
+        self._category = category
+        # _check_attributes has always labelled its findings 'ERROR
+        # (attributes)'.  The qualifier reproduces that without every other
+        # check growing a label of its own.
+        self._qualifier = qualifier
+        # File-level findings are bulleted list items under the file's heading;
+        # experiment-level ones are written flush left.
+        self._bullet = bullet
+        self.errors: dict[str, int] = {}
+        self.warnings: dict[str, int] = {}
+
+    def category(
+        self, name: str, qualifier: str | None = None, bullet: str = " - "
+    ) -> "Reporter":
+        """A reporter that counts what it writes under reporting category `name`."""
+        return Reporter(
+            self.log_file,
+            parent=self,
+            category=name,
+            qualifier=qualifier,
+            bullet=bullet,
+        )
+
+    def child(self) -> "Reporter":
+        """A reporter with its own sub-totals that still roll up into this one."""
+        return Reporter(
+            self.log_file,
+            parent=self,
+            category=self._category,
+            qualifier=self._qualifier,
+            bullet=self._bullet,
+        )
+
+    @property
+    def total_errors(self) -> int:
+        return sum(self.errors.values())
+
+    @property
+    def total_warnings(self) -> int:
+        return sum(self.warnings.values())
+
+    def error_count(self, category: str) -> int:
+        return self.errors.get(category, 0)
+
+    def warning_count(self, category: str) -> int:
+        return self.warnings.get(category, 0)
+
+    def write(self, text: str) -> None:
+        """Write to the log without reporting a finding: headings and footers."""
+        self.log_file.write(text)
+
+    def error(self, message: str, count: int = 1) -> None:
+        """Report a file that is unusable, or that departs from the protocol.
+
+        `count` is for the findings that read better as one line than as
+        several -- four mandatory variables missing from an experiment, say --
+        but that are still four findings and not one.
+        """
+        self._report("ERROR", message, count)
+
+    def warning(self, message: str, count: int = 1) -> None:
+        """Report a departure from the request that leaves the file usable.
+
+        Warnings do not enter the error count, do not change a file's verdict
+        and do not affect the exit status; they say 'look at this', not 'fix
+        this'.  See the policy note at the top of this module.
+        """
+        self._report("WARNING", message, count)
+
+    def ok(self, message: str) -> None:
+        """Record a check that passed."""
+        self.write(f"{self._bullet}{message}\n")
+
+    def note(self, message: str) -> None:
+        """Record a check that did not run: not applicable, or nothing to read."""
+        self.write(f"{self._bullet}{message}\n")
+
+    def _report(self, label: str, message: str, count: int) -> None:
+        prefix = label if self._qualifier is None else f"{label} ({self._qualifier})"
+        self.write(f"{self._bullet}{prefix}: {message}\n")
+        self._count(label, self._category, count)
+
+    def _count(self, label: str, category: str, count: int) -> None:
+        counter = self.errors if label == "ERROR" else self.warnings
+        counter[category] = counter.get(category, 0) + count
+        if self._parent is not None:
+            self._parent._count(label, category, count)
+
+
+def main() -> int:
+    """Run the checker and return the process exit status.
+
+    Non-zero when there are errors, or when the run could not check anything at
+    all; zero when there are only warnings, which is the whole point of having
+    them.
+    """
     args = _parse_args()
     source_path = args.source_path
     variable_list = args.variable_list
 
-    run_checker(
+    summary = run_checker(
         source_path=source_path,
         variable_list=variable_list,
     )
+
+    return 1 if summary["fatal"] or summary["total_errors"] > 0 else 0
 
 
 def run_checker(
@@ -199,9 +362,13 @@ def run_checker(
 ):
     version = _describe_version() if version is None else version
     experiments_ismip7 = _load_experiments_csv()
-    ismip_meta, ismip_var, mandatory_variables, all_request_variables = _load_criteria(
-        variable_list
-    )
+    (
+        ismip_meta,
+        ismip_var,
+        mandatory_variables,
+        all_request_variables,
+        all_mandatory_variables,
+    ) = _load_criteria(variable_list)
 
     summary = _run_compliance_checker(
         source_path=source_path,
@@ -210,6 +377,7 @@ def run_checker(
         ismip_var=ismip_var,
         mandatory_variables=mandatory_variables,
         all_request_variables=all_request_variables,
+        all_mandatory_variables=all_mandatory_variables,
         experiments=experiments_ismip7,
         criteria_file=VARIABLE_REQUEST_CSV,
     )
@@ -283,6 +451,25 @@ def _parse_args() -> argparse.Namespace:
     return parser.parse_args()
 
 
+def _range_severity(value) -> str:
+    """How a value outside a variable's min/max range should be reported.
+
+    Issue #10 is that some of these bounds "are dependent on the forcing, input
+    data and model implementation", so failing a run on them is too strong --
+    but which ones is a per-variable question that the checker cannot answer
+    from its side.  So the severity lives in the data request, one cell per
+    variable row, and switching a variable is a data-only diff that needs no
+    reasoning about the checker.
+
+    Anything the column does not say is an error, which is what makes the
+    column safe to add before it is filled in: a blank cell, a missing column
+    and an unrecognised value all mean what the checker did before.
+    """
+    if value is not None and pd.notna(value) and str(value).strip().lower() == "warning":
+        return "warning"
+    return "error"
+
+
 def _load_criteria(variable_list: str):
     try:
         df = _read_data_csv(VARIABLE_REQUEST_CSV)
@@ -301,6 +488,15 @@ def _load_criteria(variable_list: str):
     # rather than reported: checking the scalars of a directory says nothing
     # about the x,y,t files sitting beside them.
     all_request_variables = set(df["Variable Name"])
+    # Which of them are mandatory, before the narrowing too: not_modelled.txt is
+    # a statement about the submission rather than about one run of the checker,
+    # so a mandatory variable named in it has to be caught whichever list the
+    # run happens to have selected.
+    all_mandatory_variables = set(
+        df.loc[
+            df["Mandatory (yes/no)"].astype(str).str.lower() == "yes", "Variable Name"
+        ]
+    )
 
     if variable_list == "ismip7_xyt":
         df = df[df["Dim"].isin(["x,y,t", "x,y,z,t", "x,y"])]
@@ -316,6 +512,7 @@ def _load_criteria(variable_list: str):
             "mandatory": 1 if str(row["Mandatory (yes/no)"]).lower() == "yes" else 0,
             "standard_name": str(row["standard_name"]) if pd.notna(row["standard_name"]) else None,
             "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
+            "range_severity": _range_severity(row.get("range_severity")),
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -329,7 +526,13 @@ def _load_criteria(variable_list: str):
 
     ismip_var = [d["variable"] for d in ismip_meta]
     ismip_mandatory_var = [d["variable"] for d in ismip_meta if d["mandatory"] == 1]
-    return ismip_meta, ismip_var, ismip_mandatory_var, all_request_variables
+    return (
+        ismip_meta,
+        ismip_var,
+        ismip_mandatory_var,
+        all_request_variables,
+        all_mandatory_variables,
+    )
 
 
 def _load_experiments_csv(filename: str = EXPERIMENTS_ISMIP7_CSV_FILENAME):
@@ -536,12 +739,6 @@ def _describe_convention(var_type: str) -> str:
 # naming a literal.
 CENTURY_SNAPSHOT_YEARS = frozenset({1900, 2100, 2200, 2300})
 
-# Accepted if a file carries it, never required.  The README, this checker and
-# the generator all used to require a snapshot at 2000; the data request does
-# not ask for one.  Tolerating it means a group that followed the README as
-# published is not failed for a year that is still in dispute -- see issue #12.
-TOLERATED_SNAPSHOT_YEARS = frozenset({2000})
-
 
 def _required_snapshot_years(exp: dict, run_years: list[int]) -> set[int]:
     """The snapshot nominal years an x,y,z,t file must carry.
@@ -568,6 +765,7 @@ def _run_compliance_checker(
     ismip_var,
     mandatory_variables,
     all_request_variables,
+    all_mandatory_variables,
     experiments,
     criteria_file,
 ):
@@ -590,29 +788,18 @@ def _run_compliance_checker(
                 return _empty_summary()
 
             summary = _process_experiments(
-                log_file=f,
+                reporter=Reporter(f),
                 source_path=source_path,
                 experiment_groups=experiment_groups,
                 mandatory_variables=mandatory_variables,
                 all_request_variables=all_request_variables,
+                all_mandatory_variables=all_mandatory_variables,
                 experiments=experiments,
                 ismip_var=ismip_var,
                 ismip_meta=ismip_meta,
             )
 
-        _insert_synthesis(
-            source_path=source_path,
-            exp_counter=summary["exp_counter"],
-            file_counter=summary["file_counter"],
-            total_errors=summary["total_errors"],
-            total_file_errors=summary["total_file_errors"],
-            total_naming_errors=summary["total_naming_errors"],
-            total_num_errors=summary["total_num_errors"],
-            total_spatial_errors=summary["total_spatial_errors"],
-            total_time_errors=summary["total_time_errors"],
-            total_attr_errors=summary["total_attr_errors"],
-            report_naming_issues=summary["report_naming_issues"],
-        )
+        _insert_synthesis(source_path=source_path, summary=summary)
         return summary
 
     except TypeError as err:
@@ -624,7 +811,15 @@ def _run_compliance_checker(
 
 
 def _empty_summary() -> dict:
+    """The summary of a run that could not check anything.
+
+    Its error counts are all zero, because nothing was checked -- which on an
+    error-based exit status would otherwise mean success.  `fatal` is what tells
+    the two apart, and it is set here rather than at the call sites because
+    every path that reaches this function is a path where the checker gave up.
+    """
     return {
+        "fatal": True,
         "exp_counter": 0,
         "file_counter": 0,
         "total_errors": 0,
@@ -634,6 +829,13 @@ def _empty_summary() -> dict:
         "total_time_errors": 0,
         "total_attr_errors": 0,
         "total_file_errors": 0,
+        "total_warnings": 0,
+        "total_naming_warnings": 0,
+        "total_num_warnings": 0,
+        "total_spatial_warnings": 0,
+        "total_time_warnings": 0,
+        "total_attr_warnings": 0,
+        "total_file_warnings": 0,
         "report_naming_issues": [],
     }
 
@@ -652,34 +854,45 @@ def _group_files_by_experiment(source_path: str) -> dict:
 
 
 def _process_experiments(
-    log_file,
+    reporter: Reporter,
     source_path: str,
     experiment_groups: dict,
     mandatory_variables,
     all_request_variables,
+    all_mandatory_variables,
     experiments,
     ismip_var,
     ismip_meta,
 ):
-    total_naming_errors = 0
-    total_num_errors = 0
-    total_spatial_errors = 0
-    total_time_errors = 0
-    total_attr_errors = 0
-    total_file_errors = 0
     report_naming_issues = []
+
+    # A declaration is about the submission as a whole, so it is read and
+    # reported once, before the first experiment.
+    declared = _read_not_modelled(source_path)
+    not_modelled = (
+        set()
+        if declared is None
+        else _report_not_modelled(
+            reporter.category("file", bullet=""),
+            declared,
+            all_mandatory_variables,
+            all_request_variables,
+        )
+    )
 
     file_counter = 0
     exp_counter = 0
     for experiment_name, exp_files in experiment_groups.items():
         exp_counter += 1
 
-        exp_summary = _process_single_experiment(
-            log_file=log_file,
+        exp_reporter = reporter.child()
+        file_counter += _process_single_experiment(
+            reporter=exp_reporter,
             source_path=source_path,
             experiment_name=experiment_name,
             exp_files=exp_files,
             mandatory_variables=mandatory_variables,
+            not_modelled=not_modelled,
             all_request_variables=all_request_variables,
             experiments=experiments,
             ismip_var=ismip_var,
@@ -687,95 +900,222 @@ def _process_experiments(
             report_naming_issues=report_naming_issues,
         )
 
-        file_counter += exp_summary["file_counter"]
-        total_naming_errors += exp_summary["exp_naming_errors"]
-        total_num_errors += exp_summary["exp_num_errors"]
-        total_spatial_errors += exp_summary["exp_spatial_errors"]
-        total_time_errors += exp_summary["exp_time_errors"]
-        total_attr_errors += exp_summary["exp_attr_errors"]
-        total_file_errors += exp_summary["exp_file_errors"]
-
         _print_experiment_summary(
-            experiment_name=exp_summary["experiment_name"],
-            exp_errors=exp_summary["exp_errors"],
+            experiment_name=experiment_name,
+            exp_errors=exp_reporter.total_errors,
+            exp_warnings=exp_reporter.total_warnings,
         )
 
-    total_errors = (
-        total_naming_errors
-        + total_num_errors
-        + total_spatial_errors
-        + total_time_errors
-        + total_attr_errors
-        + total_file_errors
+    _print_total_summary(
+        source_path=source_path,
+        total_errors=reporter.total_errors,
+        total_warnings=reporter.total_warnings,
     )
-    _print_total_summary(source_path=source_path, total_errors=total_errors)
 
     return {
+        "fatal": False,
         "exp_counter": exp_counter,
         "file_counter": file_counter,
-        "total_errors": total_errors,
-        "total_naming_errors": total_naming_errors,
-        "total_num_errors": total_num_errors,
-        "total_spatial_errors": total_spatial_errors,
-        "total_time_errors": total_time_errors,
-        "total_attr_errors": total_attr_errors,
-        "total_file_errors": total_file_errors,
+        "total_errors": reporter.total_errors,
+        "total_naming_errors": reporter.error_count("naming"),
+        "total_num_errors": reporter.error_count("num"),
+        "total_spatial_errors": reporter.error_count("spatial"),
+        "total_time_errors": reporter.error_count("time"),
+        "total_attr_errors": reporter.error_count("attr"),
+        "total_file_errors": reporter.error_count("file"),
+        "total_warnings": reporter.total_warnings,
+        "total_naming_warnings": reporter.warning_count("naming"),
+        "total_num_warnings": reporter.warning_count("num"),
+        "total_spatial_warnings": reporter.warning_count("spatial"),
+        "total_time_warnings": reporter.warning_count("time"),
+        "total_attr_warnings": reporter.warning_count("attr"),
+        "total_file_warnings": reporter.warning_count("file"),
         "report_naming_issues": report_naming_issues,
     }
 
 
+NOT_MODELLED_FILENAME = "not_modelled.txt"
+
+
+def _read_not_modelled(source_path: str) -> list[str] | None:
+    """The variable names declared in not_modelled.txt, or None if there is none.
+
+    Groups already submit a README explaining what they have submitted and why
+    some variables are absent, so the checker has no need to ask for that list
+    again -- and an explanatory list does not belong on a command line, where it
+    would be long and would have to be retyped for every run.  What is worth
+    offering is a way to make the 'not submitted' warning go quiet once.
+
+    One name per line; blank lines are ignored and '#' starts a comment, so a
+    group can say alongside each name why the variable is absent.  An absent
+    file changes nothing.
+    """
+    path = os.path.join(source_path, NOT_MODELLED_FILENAME)
+    if not os.path.isfile(path):
+        return None
+
+    declared = []
+    with open(path, "r") as f:
+        for line in f:
+            name = line.split("#", 1)[0].strip()
+            if name:
+                declared.append(name)
+    return declared
+
+
+def _report_not_modelled(
+    reporter: Reporter,
+    declared: list[str],
+    all_mandatory_variables,
+    all_request_variables,
+) -> set[str]:
+    """Echo the declaration, fault what it should not contain, return what it silences.
+
+    Two rules keep the file from becoming a way to hide problems.  A mandatory
+    variable named in it is still a missing-mandatory error, and the claim
+    itself is reported as a further error rather than honoured: the list is a
+    statement about optional variables, and a group cannot opt out of the data
+    request with it.  A name that is not in the data request at all is an error
+    too -- it is either a typo or a misunderstanding, and both are better said
+    plainly than left to be inferred from a warning that did not go away, which
+    would protect nothing while looking like protection.
+
+    What was declared is echoed either way, so the archived record of a run
+    shows what was claimed rather than merely that a warning did not appear.
+    """
+    reporter.write(
+        f"Declared not modelled ({NOT_MODELLED_FILENAME}): {declared}\n"
+    )
+
+    suppressed = set()
+    for name in declared:
+        if name in all_mandatory_variables:
+            reporter.error(
+                f"{NOT_MODELLED_FILENAME} lists '{name}', which the data request"
+                f" makes mandatory. A submission cannot opt out of a mandatory"
+                f" variable, so the declaration is not honoured and the missing"
+                f" files are still reported."
+            )
+        elif name not in all_request_variables:
+            message = (
+                f"{NOT_MODELLED_FILENAME} lists '{name}', which is not a"
+                f" variable of the data request {VARIABLE_REQUEST_CSV}."
+            )
+            # Sorted, so that two equally close names do not resolve by set
+            # iteration order and give one log on one run and another on the next.
+            near_misses = difflib.get_close_matches(
+                name, sorted(all_request_variables), n=1
+            )
+            if near_misses:
+                message += f" The closest requested name is '{near_misses[0]}'."
+            reporter.error(message)
+        else:
+            suppressed.add(name)
+
+    reporter.write(" \n")
+    return suppressed
+
+
+def _report_variables_not_submitted(
+    reporter: Reporter, experiment_name: str, not_submitted: list[str]
+) -> None:
+    """Name the non-mandatory variables an experiment carries no files for.
+
+    Nothing reported this before, so a group that meant to submit litemp and
+    lost it in a script got no signal whatsoever.  Everything about how it is
+    said is chosen so that it cannot be read as an accusation: not every model
+    supports every non-mandatory variable -- GIA is the obvious case -- and a
+    deliberate omission is the common case, not the exception.
+
+    Hence one line per experiment naming all of them, rather than one warning
+    per variable, which would make a model with a narrow scope look far worse
+    than one with a single dropped file; hence the wording, which says 'not
+    submitted' rather than 'missing'; and hence its absence from the trailing
+    naming-issues report, which is the part of the log that reads as a list of
+    faults.
+
+    There is no suppression when an experiment submitted nothing optional at
+    all.  For a full submission that is precisely the case worth naming, and
+    treating it as self-evidently deliberate would silence the warning for the
+    group most likely to have lost something.
+    """
+    if not not_submitted:
+        return
+    reporter.warning(
+        "experiment "
+        + experiment_name
+        + " carries no files for the non-mandatory variable(s): "
+        + str(not_submitted)
+        + ". This is expected if your model does not represent them; it is"
+        + " listed only so that a variable lost from a submission does not pass"
+        + " unnoticed."
+    )
+
+
 def _process_single_experiment(
-    log_file,
+    reporter: Reporter,
     source_path: str,
     experiment_name: str,
     exp_files: list,
     mandatory_variables,
+    not_modelled,
     all_request_variables,
     experiments,
     ismip_var,
     ismip_meta,
     report_naming_issues,
-):
-    exp_naming_errors = 0
-    exp_num_errors = 0
-    exp_spatial_errors = 0
-    exp_time_errors = 0
-    exp_attr_errors = 0
-    exp_file_errors = 0
+) -> int:
+    """Check one experiment's files; return how many of them there were."""
+    # Experiment-level findings are about the submission rather than about any
+    # one file, so they are written flush left rather than as list items under
+    # a file's heading.
+    presence_reporter = reporter.category("file", bullet="")
+    naming_reporter = reporter.category("naming", bullet="")
 
-    temp_mandatory_var = list(mandatory_variables)
-    for i in exp_files:
-        variable = i.split("_")[ISMIP7_FILENAME_VAR_IDX]
-        if variable in temp_mandatory_var:
-            temp_mandatory_var.remove(variable)
+    submitted = {i.split("_")[ISMIP7_FILENAME_VAR_IDX] for i in exp_files}
+    temp_mandatory_var = [v for v in mandatory_variables if v not in submitted]
+    # Scoped to the selected --variable-list, exactly as the mandatory check is:
+    # a run over ismip7_scalars says nothing about the x,y,t variables it was
+    # never asked to look at.
+    # A declaration in not_modelled.txt silences the warning below, and nothing
+    # else: it cannot reach the mandatory-variable check above it.
+    not_submitted = [
+        v
+        for v in ismip_var
+        if v not in mandatory_variables
+        and v not in submitted
+        and v not in not_modelled
+    ]
 
     file_counter = 0
     if experiment_name in [dic["experiment"] for dic in experiments]:
-        log_file.write("\n ")
-        log_file.write("**********************************************************\n")
-        log_file.write(" ** Experiment: " + experiment_name + " \n ")
-        log_file.write("**********************************************************\n")
-        log_file.write("\n ")
+        reporter.write("\n ")
+        reporter.write("**********************************************************\n")
+        reporter.write(" ** Experiment: " + experiment_name + " \n ")
+        reporter.write("**********************************************************\n")
+        reporter.write("\n ")
         if not temp_mandatory_var:
-            log_file.write(
+            reporter.write(
                 "Mandatory variables Test: "
                 + experiment_name
                 + " : all mandatory variables exist. \n"
             )
         else:
-            log_file.write(
-                "ERROR: In experiment "
+            presence_reporter.error(
+                "In experiment "
                 + experiment_name
                 + ", these mandatory variable(s) is (are) missing: "
-                + str(temp_mandatory_var)
-                + "\n"
+                + str(temp_mandatory_var),
+                count=len(temp_mandatory_var),
             )
-            exp_file_errors += len(temp_mandatory_var)
+        _report_variables_not_submitted(
+            presence_reporter, experiment_name, not_submitted
+        )
 
         for file in tqdm(exp_files):
             file_counter += 1
-            file_summary = _process_single_file(
-                log_file=log_file,
+            _process_single_file(
+                reporter=reporter,
                 source_path=source_path,
                 file=file,
                 experiment_name=experiment_name,
@@ -786,55 +1126,30 @@ def _process_single_experiment(
                 report_naming_issues=report_naming_issues,
             )
 
-            exp_naming_errors += file_summary["var_naming_errors"]
-            exp_num_errors += file_summary["var_num_errors"]
-            exp_spatial_errors += file_summary["var_spatial_errors"]
-            exp_time_errors += file_summary["var_time_errors"]
-            exp_attr_errors += file_summary["var_attr_errors"]
-
     else:
-        log_file.write("\n ")
-        log_file.write("**********************************************************\n")
-        log_file.write(" **  Experiment: " + experiment_name + " \n ")
-        log_file.write("**********************************************************\n")
-        log_file.write("\n ")
-        log_file.write(
-            "ERROR: The compliance check is ignored for experiment "
+        reporter.write("\n ")
+        reporter.write("**********************************************************\n")
+        reporter.write(" **  Experiment: " + experiment_name + " \n ")
+        reporter.write("**********************************************************\n")
+        reporter.write("\n ")
+        naming_reporter.error(
+            "The compliance check is ignored for experiment "
             + experiment_name
             + " as it is not in "
             + str([exp["experiment"] for exp in experiments])
-            + ". \n"
+            + ". "
         )
-        exp_naming_errors += 1
         report_naming_issues.append(
             "Compliance check ignored : experiment "
             + experiment_name
             + " not in the experiments list."
         )
 
-    exp_errors = (
-        exp_time_errors
-        + exp_spatial_errors
-        + exp_num_errors
-        + exp_naming_errors
-        + exp_attr_errors
-        + exp_file_errors
-    )
-    return {
-        "file_counter": file_counter,
-        "experiment_name": experiment_name,
-        "exp_errors": exp_errors,
-        "exp_naming_errors": exp_naming_errors,
-        "exp_num_errors": exp_num_errors,
-        "exp_spatial_errors": exp_spatial_errors,
-        "exp_time_errors": exp_time_errors,
-        "exp_attr_errors": exp_attr_errors,
-        "exp_file_errors": exp_file_errors,
-    }
+    return file_counter
 
 
 def _process_single_file(
-    log_file,
+    reporter: Reporter,
     source_path: str,
     file: str,
     experiment_name: str,
@@ -843,12 +1158,11 @@ def _process_single_file(
     all_request_variables,
     experiments,
     report_naming_issues,
-):
-    var_naming_errors = 0
-    var_num_errors = 0
-    var_spatial_errors = 0
-    var_time_errors = 0
-    var_attr_errors = 0
+) -> None:
+    # A sub-total of this file's findings, for the footer below; it still rolls
+    # up into the experiment and the run.
+    file_reporter = reporter.child()
+    naming_reporter = file_reporter.category("naming")
 
     file_name = os.path.basename(file)
     file_name_split = file_name.split("_")
@@ -860,49 +1174,35 @@ def _process_single_file(
         ds = xr.open_dataset(os.path.join(source_path, file),
                              decode_times=False)
     except (ValueError, TypeError) as e:
-        log_file.write(" - ERROR: Cannot open " + file_name + ": " + str(e) + "\n")
-        var_naming_errors += 1
-        return {
-            "var_naming_errors": var_naming_errors,
-            "var_num_errors": var_num_errors,
-            "var_spatial_errors": var_spatial_errors,
-            "var_time_errors": var_time_errors,
-            "var_attr_errors": var_attr_errors,
-        }
+        naming_reporter.error("Cannot open " + file_name + ": " + str(e))
+        return
     file_variables = list(ds.data_vars)
 
     if len(file_name_split) != ISMIP7_FILENAME_PARTS:
-        log_file.write(
-            " - ERROR: the file name "
+        naming_reporter.error(
+            "the file name "
             + file_name
             + " does not follow the naming convention (expected "
             + str(ISMIP7_FILENAME_PARTS)
-            + " underscore-separated fields).\n"
+            + " underscore-separated fields)."
         )
         report_naming_issues.append(
             "Compliance check ignored: file "
             + file_name
             + " does not follow the naming convention."
         )
-        var_naming_errors += 1
-        return {
-            "var_naming_errors": var_naming_errors,
-            "var_num_errors": var_num_errors,
-            "var_spatial_errors": var_spatial_errors,
-            "var_time_errors": var_time_errors,
-            "var_attr_errors": var_attr_errors,
-        }
+        return
 
     experiment_varname = file_name_split[ISMIP7_FILENAME_EXPERIMENT_IDX]
     if experiment_varname != experiment_name:
-        log_file.write(
-            " - ERROR: in the file name "
+        naming_reporter.error(
+            "in the file name "
             + file_name
             + ", the experiment name ("
             + experiment_varname
             + ") does not match the expected experiment: "
             + experiment_name
-            + ".\n"
+            + "."
         )
         report_naming_issues.append(
             "Compliance check ignored: in the file name "
@@ -913,71 +1213,63 @@ def _process_single_file(
             + experiment_name
             + ".\n"
         )
-        var_naming_errors += 1
-        return {
-            "var_naming_errors": var_naming_errors,
-            "var_num_errors": var_num_errors,
-            "var_spatial_errors": var_spatial_errors,
-            "var_time_errors": var_time_errors,
-            "var_attr_errors": var_attr_errors,
-        }
+        return
 
     if considered_variable not in all_request_variables:
-        log_file.write(" \n")
-        log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
-        log_file.write(" \n")
-        log_file.write("NAMING Tests \n")
+        file_reporter.write(" \n")
+        file_reporter.write(
+            "Experiment: " + experiment_name + " - File: " + file_name + "\n"
+        )
+        file_reporter.write(" \n")
+        file_reporter.write("NAMING Tests \n")
         message = (
             f"'{considered_variable}' (field {ISMIP7_FILENAME_VAR_IDX} of the"
             f" file name) is not a variable in the data request"
             f" {VARIABLE_REQUEST_CSV}."
         )
         near_misses = difflib.get_close_matches(
-            considered_variable, all_request_variables, n=1
+            considered_variable, sorted(all_request_variables), n=1
         )
         if near_misses:
             message += f" The closest requested name is '{near_misses[0]}'."
-        log_file.write(f" - ERROR: {message}\n")
+        naming_reporter.error(message)
         report_naming_issues.append(f"Compliance check ignored: {message}")
-        var_naming_errors += 1
     elif considered_variable in ismip_var:
-        var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors = (
-            _run_variable_checks(
-                log_file=log_file,
-                ds=ds,
-                file_name=file_name,
-                considered_variable=considered_variable,
-                experiment_name=experiment_name,
-                file_variables=file_variables,
-                region=region,
-                ismip_var=ismip_var,
-                ismip_meta=ismip_meta,
-                experiments=experiments,
-                report_naming_issues=report_naming_issues,
-            )
+        _run_variable_checks(
+            reporter=file_reporter,
+            ds=ds,
+            file_name=file_name,
+            considered_variable=considered_variable,
+            experiment_name=experiment_name,
+            file_variables=file_variables,
+            region=region,
+            ismip_var=ismip_var,
+            ismip_meta=ismip_meta,
+            experiments=experiments,
+            report_naming_issues=report_naming_issues,
         )
 
-    var_errors = var_naming_errors + var_num_errors + var_spatial_errors + var_time_errors + var_attr_errors
+    var_errors = file_reporter.total_errors
+    var_warnings = file_reporter.total_warnings
 
-    log_file.write("\n")
-    log_file.write("----------------------------------------------------------\n")
-    log_file.write(
+    file_reporter.write("\n")
+    file_reporter.write("----------------------------------------------------------\n")
+    file_reporter.write(
         experiment_name + " - " + considered_variable + " - File:" + file_name + "\n"
     )
     if var_errors > 0:
-        log_file.write(str(var_errors) + " error(s). Please review before sharing.\n")
+        file_reporter.write(
+            str(var_errors) + " error(s). Please review before sharing.\n"
+        )
     else:
-        log_file.write("No errors. Good job !\n")
-    log_file.write("No warnings.\n")
-    log_file.write("----------------------------------------------------------\n")
-
-    return {
-        "var_naming_errors": var_naming_errors,
-        "var_num_errors": var_num_errors,
-        "var_spatial_errors": var_spatial_errors,
-        "var_time_errors": var_time_errors,
-        "var_attr_errors": var_attr_errors,
-    }
+        # Warnings never change the verdict: a file with warnings and no errors
+        # is compliant, and is told so.
+        file_reporter.write("No errors. Good job !\n")
+    if var_warnings > 0:
+        file_reporter.write(str(var_warnings) + " warning(s). Please review.\n")
+    else:
+        file_reporter.write("No warnings.\n")
+    file_reporter.write("----------------------------------------------------------\n")
 
 
 class NamingResult(NamedTuple):
@@ -993,29 +1285,27 @@ class NamingResult(NamedTuple):
     the later checks with nothing to read clear it.
     """
 
-    errors: int
     filename_years: tuple[int, int] | None
     can_continue: bool = True
 
 
 def _check_naming(
-    log_file,
+    reporter: Reporter,
     file_name: str,
     region: str,
     dim: set,
     isscalar: bool,
     report_naming_issues: list,
 ) -> NamingResult:
-    errors = 0
     filename_years = None
 
-    log_file.write("NAMING Tests \n")
+    reporter.write("NAMING Tests \n")
 
     if not isscalar and not {"x", "y"}.issubset(dim):
-        log_file.write(
-            " - ERROR: Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing.\n"
+        reporter.error(
+            "Compliance check ignored: x or y in the mandatory dimensions (x,y,t) is missing."
         )
-        log_file.write(
+        reporter.write(
             "                                    Only " + str(list(dim)) + " has been detected.\n"
         )
         report_naming_issues.append(
@@ -1025,80 +1315,73 @@ def _check_naming(
         # Without x and y there is no grid to check and no spatial variable to
         # read: this is one of the few naming problems that really does stop
         # everything else.
-        return NamingResult(errors + 1, filename_years, can_continue=False)
+        return NamingResult(filename_years, can_continue=False)
 
     if region not in ["AIS", "GrIS"]:
-        log_file.write(
-            " - ERROR: Region "
+        reporter.error(
+            "Region "
             + region
             + " not recognized. It should be AIS or GrIS. The checks that depend"
             + " on the region (value range, grid extent and resolution, crs) are"
-            + " skipped for this file; the rest still run.\n"
+            + " skipped for this file; the rest still run."
         )
         report_naming_issues.append(
             "Region-dependent checks skipped: region (AIS/GrIS) not identified in the file "
             + file_name
             + " due to wrong naming."
         )
-        errors += 1
 
     parts = file_name.split("_")
     if len(parts) == ISMIP7_FILENAME_PARTS:
         ism_member = parts[ISMIP7_FILENAME_ISM_MEMBER_IDX]
         if not re.fullmatch(r"m\d{3}", ism_member):
-            log_file.write(
-                f" - ERROR: ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001).\n"
+            reporter.error(
+                f"ISM member id '{ism_member}' (field {ISMIP7_FILENAME_ISM_MEMBER_IDX}) does not match expected format mNNN (e.g. m001)."
             )
-            errors += 1
 
         esm_name = parts[ISMIP7_FILENAME_ESM_IDX]
         if esm_name not in VALID_ESM_NAMES:
-            log_file.write(
-                f" - ERROR: ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is not a recognised CMIP6/CMIP7 model name.\n"
+            reporter.error(
+                f"ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is not a recognised CMIP6/CMIP7 model name."
             )
-            errors += 1
 
         forcing_member = parts[ISMIP7_FILENAME_FORCING_MEMBER_IDX]
         if not re.fullmatch(r"f\d{3}", forcing_member):
-            log_file.write(
-                f" - ERROR: forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001).\n"
+            reporter.error(
+                f"forcing member id '{forcing_member}' (field {ISMIP7_FILENAME_FORCING_MEMBER_IDX}) does not match expected format fNNN (e.g. f001)."
             )
-            errors += 1
 
         set_counter = parts[ISMIP7_FILENAME_SET_COUNTER_IDX]
         if not re.fullmatch(r"[CEP]\d{3}", set_counter):
-            log_file.write(
-                f" - ERROR: set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132).\n"
+            reporter.error(
+                f"set counter '{set_counter}' (field {ISMIP7_FILENAME_SET_COUNTER_IDX}) does not match expected format [C|E|P]NNN (e.g. C001, E041, P132)."
             )
-            errors += 1
 
         is_static = not ({"time", "t"} & dim)
         year_range_field = parts[ISMIP7_FILENAME_YEAR_RANGE_IDX].removesuffix(".nc")
         if is_static:
-            log_file.write(f" - Filename year range: N/A (static spatial variable)\n")
+            reporter.note("Filename year range: N/A (static spatial variable)")
         elif not (year_range_match := re.fullmatch(r"(\d{4})-(\d{4})", year_range_field)):
-            log_file.write(
-                f" - ERROR: year range '{year_range_field}' (field {ISMIP7_FILENAME_YEAR_RANGE_IDX}) does not match expected format YYYY-YYYY (e.g. 2015-2300).\n"
+            reporter.error(
+                f"year range '{year_range_field}' (field {ISMIP7_FILENAME_YEAR_RANGE_IDX}) does not match expected format YYYY-YYYY (e.g. 2015-2300)."
             )
-            errors += 1
         else:
             fn_start_year = int(year_range_match.group(1))
             fn_end_year = int(year_range_match.group(2))
             if fn_start_year > fn_end_year:
-                log_file.write(
-                    f" - ERROR: year range '{year_range_field}': start year {fn_start_year} is after end year {fn_end_year}.\n"
+                reporter.error(
+                    f"year range '{year_range_field}': start year {fn_start_year} is after end year {fn_end_year}."
                 )
-                errors += 1
             else:
                 # What the range means -- whether the experiment allows it, and
                 # whether the time axis delivers it -- is for _check_time, which
                 # decodes the file anyway.
                 filename_years = (fn_start_year, fn_end_year)
-                log_file.write(
-                    f" - Filename year range {fn_start_year}-{fn_end_year} is well formed: OK\n"
+                reporter.ok(
+                    f"Filename year range {fn_start_year}-{fn_end_year} is well formed: OK"
                 )
 
-    return NamingResult(errors, filename_years)
+    return NamingResult(filename_years)
 
 
 # The data request writes a variable's dimensions innermost-first and calls the
@@ -1114,20 +1397,20 @@ REQUESTED_DIMENSIONS: dict[str, tuple[str, ...]] = {
 
 
 def _check_variable_dimensions(
-    log_file,
+    reporter: Reporter,
     ds,
     considered_variable: str,
     requested_dim: str,
-) -> int:
+) -> None:
     """Check a variable's dimensions against the 'Dim' column of the request."""
     expected = REQUESTED_DIMENSIONS.get(requested_dim)
     if expected is None:
-        log_file.write(
-            f" - Variable '{considered_variable}' dimensions: not checked (the"
+        reporter.note(
+            f"Variable '{considered_variable}' dimensions: not checked (the"
             f" data request gives Dim '{requested_dim}', which this checker does"
-            f" not know).\n"
+            f" not know)."
         )
-        return 0
+        return
 
     # 't' is an accepted spelling of the time dimension throughout the checker.
     actual = tuple(
@@ -1135,26 +1418,25 @@ def _check_variable_dimensions(
     )
 
     if set(actual) != set(expected):
-        log_file.write(
-            f" - ERROR: variable '{considered_variable}' has dimensions"
+        reporter.error(
+            f"variable '{considered_variable}' has dimensions"
             f" {actual}; the data request asks for {requested_dim}, that is"
-            f" {expected}.\n"
+            f" {expected}."
         )
-        return 1
+        return
 
     if actual != expected:
-        log_file.write(
-            f" - ERROR: variable '{considered_variable}' has dimensions"
+        reporter.error(
+            f"variable '{considered_variable}' has dimensions"
             f" {actual}; the data request asks for {requested_dim} in the"
-            f" conventional order {expected}.\n"
+            f" conventional order {expected}."
         )
-        return 1
+        return
 
-    log_file.write(
-        f" - Variable '{considered_variable}' dimensions ({', '.join(actual)})"
-        f" match the requested {requested_dim}: OK\n"
+    reporter.ok(
+        f"Variable '{considered_variable}' dimensions ({', '.join(actual)})"
+        f" match the requested {requested_dim}: OK"
     )
-    return 0
 
 
 def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
@@ -1163,8 +1445,11 @@ def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
     A file carries one variable of the data request, but CF lets that variable
     bring companions: the bounds of a coordinate (which is how 'time_bounds'
     reaches every FL file), the container variable a 'grid_mapping' points at,
-    and any auxiliary coordinates the variable names.  Those belong in the
-    file; anything else is something the data request did not ask for.
+    the auxiliary coordinates a variable names, the cell measures it is
+    normalised by, and the ancillary variables that qualify it.  Every one of
+    those is a variable the file has to carry for the requested variable to
+    mean what it says, so none of them is an extra; anything else is something
+    the data request did not ask for.
     """
     allowed = {considered_variable} | set(ds.coords)
 
@@ -1180,29 +1465,35 @@ def _allowed_file_variables(ds, considered_variable: str) -> set[str]:
     if grid_mapping:
         allowed.add(str(grid_mapping))
     allowed.update(str(attributes.get("coordinates", "")).split())
+    allowed.update(str(attributes.get("ancillary_variables", "")).split())
+    # cell_measures names each variable after the measure it supplies
+    # ('area: areacello volume: volcello'), so the keywords are dropped.
+    allowed.update(
+        token
+        for token in str(attributes.get("cell_measures", "")).split()
+        if not token.endswith(":")
+    )
 
     return allowed
 
 
 def _check_file_variables(
-    log_file,
+    reporter: Reporter,
     ds,
     file_name: str,
     considered_variable: str,
     file_variables,
     requested_dim: str,
     report_naming_issues: list,
-) -> tuple[int, bool]:
+) -> bool:
     """Check the variables a file contains against the one its name promises.
 
     The file name states which variable of the data request a file carries, and
     every other check reads that variable, so a file that does not contain it
-    has nothing to check: the second element of the return value is False, and
-    the caller skips the remaining checks for the file rather than reporting a
-    clean bill of health on a variable that was never looked at.
+    has nothing to check: the return value is False, and the caller skips the
+    remaining checks for the file rather than reporting a clean bill of health
+    on a variable that was never looked at.
     """
-    errors = 0
-
     if considered_variable not in file_variables:
         message = (
             f"the file name promises variable '{considered_variable}', but the"
@@ -1217,35 +1508,38 @@ def _check_file_variables(
                 f" '{near_misses[0]}' may be a misspelling of"
                 f" '{considered_variable}'."
             )
-        log_file.write(f" - ERROR: {message}\n")
+        reporter.error(message)
         report_naming_issues.append(
             f"Compliance check ignored: in the file {file_name}, {message}"
         )
-        return errors + 1, False
+        return False
 
-    log_file.write(
-        f" - Variable '{considered_variable}' from the file name is present in"
-        f" the file: OK\n"
+    reporter.ok(
+        f"Variable '{considered_variable}' from the file name is present in"
+        f" the file: OK"
     )
 
     allowed = _allowed_file_variables(ds, considered_variable)
     unexpected = sorted(name for name in file_variables if name not in allowed)
     for name in unexpected:
-        log_file.write(
-            f" - ERROR: unexpected variable '{name}' in the file. A file holds"
-            f" one variable of the data request -- here '{considered_variable}'"
-            f" -- along with its coordinates and any bounds or grid-mapping"
-            f" variables, and nothing else.\n"
+        # A warning: the requested variable is present and fully checkable, and
+        # a reader taking it out of the file is unaffected by what sits beside
+        # it.  What the extra says is that the file was probably not written for
+        # this submission, which is worth a look and is not a fault.
+        reporter.warning(
+            f"unexpected variable '{name}' in the file. A file is expected to"
+            f" hold one variable of the data request -- here"
+            f" '{considered_variable}' -- along with its coordinates and the"
+            f" companion variables CF lets it name (bounds, grid mapping, cell"
+            f" measures, ancillary variables). '{considered_variable}' is"
+            f" checked as normal."
         )
-        errors += 1
     if not unexpected:
-        log_file.write(" - No unexpected variables in the file: OK\n")
+        reporter.ok("No unexpected variables in the file: OK")
 
-    errors += _check_variable_dimensions(
-        log_file, ds, considered_variable, requested_dim
-    )
+    _check_variable_dimensions(reporter, ds, considered_variable, requested_dim)
 
-    return errors, True
+    return True
 
 
 # CF requires only that the units attribute be "a string that can be recognized
@@ -1340,98 +1634,92 @@ def _units_match(actual: str, expected: str) -> bool:
 
 
 def _check_numerical(
-    log_file,
+    reporter: Reporter,
     ds,
     ivar: str,
     ismip_meta: list,
     var_index: int,
     region: str,
     isscalar: bool,
-) -> int:
-    errors = 0
-
-    log_file.write("NUMERICAL Tests \n")
+) -> None:
+    reporter.write("NUMERICAL Tests \n")
 
     var_units = ds[ivar].attrs.get("units")
     expected_units = ismip_meta[var_index]["units"]
     if var_units is None:
-        log_file.write(
-            f" - ERROR: The variable '{ivar}' has no 'units' attribute. The data"
-            f" request asks for '{expected_units}'.\n"
+        reporter.error(
+            f"The variable '{ivar}' has no 'units' attribute. The data"
+            f" request asks for '{expected_units}'."
         )
-        errors += 1
     elif var_units == expected_units:
-        log_file.write(" - The unit is correct: " + var_units + "\n")
+        reporter.ok("The unit is correct: " + var_units)
     elif _units_match(var_units, expected_units):
-        log_file.write(
-            " - The unit is correct: "
+        reporter.ok(
+            "The unit is correct: "
             + var_units
             + " (equivalent to the requested "
             + expected_units
-            + ")\n"
+            + ")"
         )
     else:
-        log_file.write(
-            " - ERROR: The unit of the variable is "
+        reporter.error(
+            "The unit of the variable is "
             + var_units
             + " and should be "
             + expected_units
-            + " \n"
+            + " "
         )
-        errors += 1
 
     if not isscalar and region not in ("AIS", "GrIS"):
-        log_file.write(
-            " - Value range: not checked (the allowed range depends on the"
-            " region, which the file name does not identify).\n"
+        reporter.note(
+            "Value range: not checked (the allowed range depends on the"
+            " region, which the file name does not identify)."
         )
     elif not isscalar:
+        # The severity of an out-of-range value is per variable, from the
+        # range_severity column of the data request; see _range_severity.
+        report_range = (
+            reporter.warning
+            if ismip_meta[var_index].get("range_severity") == "warning"
+            else reporter.error
+        )
         if False in ds[ivar].isnull():
             if (
                 ds[ivar].min(skipna=True).item()
                 >= ismip_meta[var_index]["min_value_" + region.lower()]
             ):
-                log_file.write(" - The minimum value successfully verified.\n")
+                reporter.ok("The minimum value successfully verified.")
             else:
-                log_file.write(
-                    " - ERROR: The minimum value ("
+                report_range(
+                    "The minimum value ("
                     + str(ds[ivar].min(skipna=True).values.item(0))
                     + ") is out of range. Min value accepted: "
                     + str(ismip_meta[var_index]["min_value_" + region.lower()])
-                    + "\n"
                 )
-                errors += 1
 
             if (
                 ds[ivar].max(skipna=True).item()
                 <= ismip_meta[var_index]["max_value_" + region.lower()]
             ):
-                log_file.write(" - The maximum value successfully verified.\n")
+                reporter.ok("The maximum value successfully verified.")
             else:
-                log_file.write(
-                    " - ERROR: The maximum value ("
+                report_range(
+                    "The maximum value ("
                     + str(ds[ivar].max(skipna=True).values.item(0))
                     + ") is out of range. Max value accepted: "
                     + str(ismip_meta[var_index]["max_value_" + region.lower()])
-                    + "\n"
                 )
-                errors += 1
         else:
-            log_file.write(" - ERROR: The array only contains missing values.\n")
-            errors += 1
-
-    return errors
+            reporter.error("The array only contains missing values.")
 
 
 def _check_spatial(
-    log_file,
+    reporter: Reporter,
     ds,
     grid_extent: list,
     possible_resolution: list,
-) -> int:
-    errors = 0
-
-    log_file.write("SPATIAL Tests \n")
+) -> None:
+    reporter.write("SPATIAL Tests \n")
     coords = ds.coords.to_dataset()
     Xbottomleft = int(min(coords["x"]).values.item())
     Ybottomleft = int(min(coords["y"]).values.item())
@@ -1439,54 +1727,49 @@ def _check_spatial(
     Ytopright = int(max(coords["y"]).values.item())
 
     if Xbottomleft == grid_extent[0] and Ybottomleft == grid_extent[1]:
-        log_file.write(" - Grid: Lowest left corner is well defined.\n")
+        reporter.ok("Grid: Lowest left corner is well defined.")
     else:
-        log_file.write(
-            " - ERROR: Lowest left corner of the grid ["
+        reporter.error(
+            "Lowest left corner of the grid ["
             + str(Xbottomleft) + "," + str(Ybottomleft)
             + "] is not correctly defined. ["
             + str(grid_extent[0]) + "," + str(grid_extent[1])
-            + "] Expected\n"
+            + "] Expected"
         )
-        errors += 1
 
     if Xtopright == grid_extent[2] and Ytopright == grid_extent[3]:
-        log_file.write(" - Grid: Upper right corner is well defined.\n")
+        reporter.ok("Grid: Upper right corner is well defined.")
     else:
-        log_file.write(
-            " - ERROR: Upper right corner of the grid ["
+        reporter.error(
+            "Upper right corner of the grid ["
             + str(Xtopright) + "," + str(Ytopright)
             + "] is not correctly defined. ["
             + str(grid_extent[2]) + "," + str(grid_extent[3])
-            + "] Expected\n"
+            + "] Expected"
         )
-        errors += 1
 
     Xresolution = round((coords["x"][1].values - coords["x"][0].values) / 1000, 0)
     Yresolution = round((coords["y"][1].values - coords["y"][0].values) / 1000, 0)
     if Xresolution in set(possible_resolution) and Yresolution in set(possible_resolution):
-        log_file.write(
-            " - The grid resolution ("
+        reporter.ok(
+            "The grid resolution ("
             + str(int(Xresolution))
-            + " km) was successfully verified.\n"
+            + " km) was successfully verified."
         )
     else:
-        log_file.write(
-            " - ERROR: resolution x="
+        reporter.error(
+            "resolution x="
             + str(Xresolution)
             + " km, y="
             + str(Yresolution)
             + " km is not an authorized grid resolution. Allowed: "
             + str(possible_resolution)
-            + " km\n"
+            + " km"
         )
-        errors += 1
-
-    return errors
 
 
 def _check_time(
-    log_file,
+    reporter: Reporter,
     ds,
     dim: set,
     experiments: list,
@@ -1494,7 +1777,7 @@ def _check_time(
     var_type: str = "",
     requested_dim: str = "",
     filename_years=None,
-) -> int:
+) -> None:
     """Check a file's time axis against the one its experiment calls for.
 
     The axis is checked by reconstructing the axis the file should have had and
@@ -1503,51 +1786,47 @@ def _check_time(
     2015, 2016, 2299, 2300 spans the right years with a 365-day first interval
     and is 282 time steps short of what was asked for.
     """
-    errors = 0
-
-    log_file.write("TIME Tests \n")
+    reporter.write("TIME Tests \n")
     if not ({"t"}.issubset(dim) or {"time"}.issubset(dim)):
         if {"x", "y"}.issubset(dim):
             # Static spatial variable (x,y) — no time axis is expected.
-            log_file.write(" - Time axis: N/A (static spatial variable)\n")
-            return errors
-        log_file.write(
-            " - ERROR: The time dimension is missing. Time Tests have been ignored.\n"
+            reporter.note("Time axis: N/A (static spatial variable)")
+            return
+        reporter.error(
+            "The time dimension is missing. Time Tests have been ignored."
         )
-        return errors + 1
+        return
 
     time_dim = "time" if "time" in ds.dims else "t"
     unlimited_dims = ds.encoding.get("unlimited_dims", set())
     if time_dim in unlimited_dims:
-        log_file.write(" - Time is a record (unlimited) dimension: OK\n")
+        reporter.ok("Time is a record (unlimited) dimension: OK")
     else:
-        log_file.write(
-            f" - ERROR: dimension '{time_dim}' is not a record (unlimited) dimension.\n"
+        reporter.error(
+            f"dimension '{time_dim}' is not a record (unlimited) dimension."
         )
-        errors += 1
 
     try:
         ds = xr.decode_cf(ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True))
     except Exception:
-        log_file.write(
-            " - ERROR: The time coordinate could not be decoded.  Time checks cannot proceed.\n"
+        reporter.error(
+            "The time coordinate could not be decoded.  Time checks cannot proceed."
         )
         # we can't proceed because the next steps will crash
-        return errors + 1
+        return
 
     if not _strictly_increasing(ds.coords["time"]):
-        log_file.write(
-            " - ERROR: the time series is not monotonically increasing. Time segments may have been concatenated in the wrong order.\n"
+        reporter.error(
+            "the time series is not monotonically increasing. Time segments may have been concatenated in the wrong order."
         )
-        return errors + 1
+        return
 
     index_exp = [dic["experiment"] for dic in experiments].index(experiment_name)
     exp = experiments[index_exp]
     actual = list(ds["time"].values)
 
     for message in _check_filename_year_range(exp, filename_years):
-        log_file.write(f" - ERROR: {message}\n")
-        errors += 1
+        reporter.error(message)
 
     # The nominal years the run as a whole covers.  The annual variables carry
     # one time step for each of them; the snapshot variables carry a few.
@@ -1555,32 +1834,28 @@ def _check_time(
         exp, _axis_start_year(exp, filename_years, actual, var_type)
     )
     if not run_years:
-        log_file.write(
-            f" - ERROR: the time axis starts in nominal year"
+        reporter.error(
+            f"the time axis starts in nominal year"
             f" {_timestamp_to_nominal_year(actual[0], var_type)}, after experiment"
             f" '{experiment_name}' ends in {exp['end_year']}. The expected time"
-            f" axis cannot be determined.\n"
+            f" axis cannot be determined."
         )
-        return errors + 1
+        return
 
     if requested_dim == "x,y,z,t":
-        return errors + _check_snapshot_time_axis(
-            log_file, actual, exp, var_type, run_years
-        )
+        _check_snapshot_time_axis(reporter, actual, exp, var_type, run_years)
+        return
 
     messages = _compare_time_axis(actual, run_years, var_type)
     for message in messages:
-        log_file.write(f" - ERROR: {message}\n")
-    errors += len(messages)
+        reporter.error(message)
 
     if not messages:
-        log_file.write(
-            f" - Time axis: {len(actual)} annual {var_type} time step(s) covering"
+        reporter.ok(
+            f"Time axis: {len(actual)} annual {var_type} time step(s) covering"
             f" nominal years {run_years[0]}-{run_years[-1]}, as"
-            f" experiment '{experiment_name}' requires: OK\n"
+            f" experiment '{experiment_name}' requires: OK"
         )
-
-    return errors
 
 
 def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> int:
@@ -1604,8 +1879,8 @@ def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> 
 
 
 def _check_snapshot_time_axis(
-    log_file, actual: list, exp: dict, var_type: str, run_years: list[int]
-) -> int:
+    reporter: Reporter, actual: list, exp: dict, var_type: str, run_years: list[int]
+) -> None:
     """Check the sparse snapshot axis of an x,y,z,t variable (e.g. litemp).
 
     Unlike the annual variables, these carry a handful of snapshots rather than
@@ -1617,54 +1892,59 @@ def _check_snapshot_time_axis(
     single snapshot at an arbitrary year passed.
     """
     required = _required_snapshot_years(exp, run_years)
-    permitted = required | {
-        y for y in TOLERATED_SNAPSHOT_YEARS if run_years[0] <= y <= run_years[-1]
-    }
     actual_at = _nominal_year_index(actual, var_type)
 
-    errors = 0
+    errors_before = reporter.total_errors
+    warnings_before = reporter.total_warnings
 
     missing = sorted(required - set(actual_at))
     if missing:
-        log_file.write(
-            f" - ERROR: required snapshot nominal year(s) missing:"
+        reporter.error(
+            f"required snapshot nominal year(s) missing:"
             f" {_format_year_runs(missing)}. Experiment '{exp['experiment']}'"
             f" covering {run_years[0]}-{run_years[-1]} requires snapshots at"
-            f" {_format_year_runs(sorted(required))}.\n"
+            f" {_format_year_runs(sorted(required))}."
         )
-        errors += 1
 
-    unexpected = sorted(set(actual_at) - permitted)
+    # A warning, not an error: the data request specifies snapshots as a
+    # *minimum* set, so over-delivering 3D temperature is not non-compliance.
+    # This is also how a snapshot at 2000 is now reported -- the README asked
+    # for one until recently and the data request never did, so a file carrying
+    # it is named rather than either failed or silently accepted (issue #12).
+    # The asymmetry with the annual axis, where an extra year is an error, is
+    # deliberate: that axis is pinned end to end by experiments_ismip7.csv, so
+    # an extra year there means the file does not match the experiment it names.
+    unexpected = sorted(set(actual_at) - required)
     if unexpected:
-        log_file.write(
-            f" - ERROR: snapshot nominal year(s) the experiment does not call"
+        reporter.warning(
+            f"snapshot nominal year(s) the experiment does not call"
             f" for: {_format_year_runs(unexpected)}. Required:"
-            f" {_format_year_runs(sorted(required))}.\n"
+            f" {_format_year_runs(sorted(required))}."
         )
-        errors += 1
 
     mismatch = _timestamp_mismatch_message(
-        actual_at, sorted(set(actual_at) & permitted), var_type
+        actual_at, sorted(set(actual_at) & required), var_type
     )
     if mismatch:
-        log_file.write(f" - ERROR: {mismatch}\n")
-        errors += 1
+        reporter.error(mismatch)
 
-    if errors == 0:
-        log_file.write(
-            f" - Snapshot time axis: nominal year(s)"
+    if (
+        reporter.total_errors == errors_before
+        and reporter.total_warnings == warnings_before
+    ):
+        reporter.ok(
+            f"Snapshot time axis: nominal year(s)"
             f" {_format_year_runs(sorted(actual_at))} cover everything experiment"
-            f" '{exp['experiment']}' requires: OK\n"
+            f" '{exp['experiment']}' requires: OK"
         )
-    log_file.write(
-        " - Annual cadence checks: N/A (snapshot variable — the time axis holds"
-        " sparse snapshots by design).\n"
+    reporter.note(
+        "Annual cadence checks: N/A (snapshot variable — the time axis holds"
+        " sparse snapshots by design)."
     )
-    return errors
 
 
 def _check_attributes(
-    log_file,
+    reporter: Reporter,
     ds,
     ivar: str,
     ismip_meta: list,
@@ -1672,40 +1952,34 @@ def _check_attributes(
     isscalar: bool,
     var_type: str,
     region: str,
-) -> int:
-    errors = 0
-
-    log_file.write("ATTRIBUTE Tests \n")
+) -> None:
+    reporter.write("ATTRIBUTE Tests \n")
 
     # Sub-test 1: global attributes
     required_global = ["group", "model", "contact_name", "contact_email"]
-    global_errors = 0
+    errors_before = reporter.total_errors
     for attr in required_global:
         if attr not in ds.attrs:
-            log_file.write(f" - ERROR (attributes): global attribute '{attr}' is missing.\n")
-            global_errors += 1
+            reporter.error(f"global attribute '{attr}' is missing.")
     expected_crs = "epsg:3413" if region == "GrIS" else "epsg:3031"
     actual_crs = ds.attrs.get("crs")
     if region not in ("AIS", "GrIS"):
-        log_file.write(
-            " - Global attribute 'crs': not checked (the expected value depends"
-            " on the region, which the file name does not identify).\n"
+        reporter.note(
+            "Global attribute 'crs': not checked (the expected value depends"
+            " on the region, which the file name does not identify)."
         )
     elif actual_crs is None:
-        log_file.write(" - ERROR (attributes): global attribute 'crs' is missing.\n")
-        global_errors += 1
+        reporter.error("global attribute 'crs' is missing.")
     elif actual_crs.lower() != expected_crs:
-        log_file.write(
-            f" - ERROR (attributes): global attribute 'crs' is '{actual_crs}',"
-            f" expected '{expected_crs}' (case-insensitive) for region {region}.\n"
+        reporter.error(
+            f"global attribute 'crs' is '{actual_crs}',"
+            f" expected '{expected_crs}' (case-insensitive) for region {region}."
         )
-        global_errors += 1
-    if global_errors == 0:
-        log_file.write(" - Global attributes: OK\n")
-    errors += global_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Global attributes: OK")
 
     # Sub-test 2: coordinate attributes
-    coord_errors = 0
+    errors_before = reporter.total_errors
     time_coord = None
     for name in ("time", "t"):
         if name in ds.coords:
@@ -1713,10 +1987,9 @@ def _check_attributes(
             break
     is_static_spatial = time_coord is None and {"x", "y"}.issubset(set(ds.coords))
     if time_coord is None and not is_static_spatial:
-        log_file.write(" - ERROR (attributes): coordinate 'time' not found.\n")
-        coord_errors += 1
+        reporter.error("coordinate 'time' not found.")
     elif time_coord is None and is_static_spatial:
-        log_file.write(" - Time coordinate: N/A (static spatial variable)\n")
+        reporter.note("Time coordinate: N/A (static spatial variable)")
     else:
         # xarray decodes 'units' and 'calendar' into .encoding; 'bounds' stays in .attrs
         time_var = ds[time_coord]
@@ -1726,61 +1999,50 @@ def _check_attributes(
             time_attrs_required.append("bounds")
         for attr in time_attrs_required:
             if attr not in combined:
-                log_file.write(
-                    f" - ERROR (attributes): coordinate '{time_coord}' missing attribute '{attr}'.\n"
+                reporter.error(
+                    f"coordinate '{time_coord}' missing attribute '{attr}'."
                 )
-                coord_errors += 1
         if "units" in combined and combined["units"] != "days since 1850-01-01":
-            log_file.write(
-                f" - ERROR (attributes): time 'units' is '{combined['units']}', expected 'days since 1850-01-01'.\n"
+            reporter.error(
+                f"time 'units' is '{combined['units']}', expected 'days since 1850-01-01'."
             )
-            coord_errors += 1
         if "calendar" in combined and combined["calendar"] != "standard":
-            log_file.write(
-                f" - ERROR (attributes): time 'calendar' is '{combined['calendar']}', expected 'standard'.\n"
+            reporter.error(
+                f"time 'calendar' is '{combined['calendar']}', expected 'standard'."
             )
-            coord_errors += 1
     if not isscalar:
         spatial_coords = ("x", "y", "z") if "z" in ds.coords else ("x", "y")
         for coord in spatial_coords:
             if coord in ds.coords:
                 if "units" not in ds[coord].attrs:
-                    log_file.write(
-                        f" - ERROR (attributes): coordinate '{coord}' missing attribute 'units'.\n"
+                    reporter.error(
+                        f"coordinate '{coord}' missing attribute 'units'."
                     )
-                    coord_errors += 1
             else:
-                log_file.write(
-                    f" - ERROR (attributes): coordinate '{coord}' not found.\n"
-                )
-                coord_errors += 1
-    if coord_errors == 0:
-        log_file.write(" - Coordinate attributes: OK\n")
-    errors += coord_errors
+                reporter.error(f"coordinate '{coord}' not found.")
+    if reporter.total_errors == errors_before:
+        reporter.ok("Coordinate attributes: OK")
 
     # Sub-test 3: variable standard_name
-    var_errors = 0
+    errors_before = reporter.total_errors
     expected_standard_name = ismip_meta[var_index].get("standard_name")
     if expected_standard_name is not None and ivar in ds:
         if "standard_name" not in ds[ivar].attrs:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' missing 'standard_name' attribute.\n"
+            reporter.error(
+                f"variable '{ivar}' missing 'standard_name' attribute."
             )
-            var_errors += 1
         elif ds[ivar].attrs["standard_name"] != expected_standard_name:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' standard_name"
+            reporter.error(
+                f"variable '{ivar}' standard_name"
                 f" '{ds[ivar].attrs['standard_name']}'"
-                f" does not match expected '{expected_standard_name}'.\n"
+                f" does not match expected '{expected_standard_name}'."
             )
-            var_errors += 1
-    if var_errors == 0:
-        log_file.write(" - Variable attributes: OK\n")
-    errors += var_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Variable attributes: OK")
 
     # Sub-test 4: _FillValue must equal the default netCDF4 fill value;
     #             if missing_value is also present it must equal _FillValue.
-    fill_errors = 0
+    errors_before = reporter.total_errors
     if ivar in ds:
         dtype = ds[ivar].dtype
         nc4_dtype_key = dtype.kind + str(dtype.itemsize)
@@ -1789,65 +2051,63 @@ def _check_attributes(
         # xarray moves missing_value from attrs to encoding on read (CF fill-value handling)
         missing_value = ds[ivar].attrs.get("missing_value") or ds[ivar].encoding.get("missing_value")
         if fill_value is None:
-            log_file.write(f" - ERROR (attributes): variable '{ivar}' missing '_FillValue'.\n")
-            fill_errors += 1
+            reporter.error(f"variable '{ivar}' missing '_FillValue'.")
         elif default_fill is not None and fill_value != default_fill:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
-                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}.\n"
+            reporter.error(
+                f"variable '{ivar}' _FillValue {fill_value}"
+                f" does not match default netCDF4 fill value {default_fill} for dtype {dtype}."
             )
-            fill_errors += 1
         if fill_value is not None and missing_value is not None and fill_value != missing_value:
-            log_file.write(
-                f" - ERROR (attributes): variable '{ivar}' _FillValue {fill_value}"
-                f" and missing_value {missing_value} are not equal.\n"
+            reporter.error(
+                f"variable '{ivar}' _FillValue {fill_value}"
+                f" and missing_value {missing_value} are not equal."
             )
-            fill_errors += 1
-    if fill_errors == 0:
-        log_file.write(" - Fill value attributes: OK\n")
-    errors += fill_errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Fill value attributes: OK")
 
-    # Sub-test 5: main variable and time must be single-precision float (f4)
-    dtype_errors = 0
+    # Sub-test 5: main variable and time must be single-precision float (f4).
+    # The two are not the same finding.  A float64 data variable is twice the
+    # size it should be, for the archive and for everyone who has to move it,
+    # so it is an error.  A time axis is one number per record, so storing it
+    # as float64 cannot meaningfully inflate a file and the size argument does
+    # not reach it: it is a warning.
+    errors_before = reporter.total_errors
+    warnings_before = reporter.total_warnings
     if ivar in ds and ds[ivar].dtype != np.float32:
-        log_file.write(
-            f" - ERROR (attributes): variable '{ivar}' dtype is {ds[ivar].dtype},"
-            f" expected float32 (f4).\n"
+        reporter.error(
+            f"variable '{ivar}' dtype is {ds[ivar].dtype},"
+            f" expected float32 (f4)."
         )
-        dtype_errors += 1
     if time_coord is not None:
         # xarray decodes CF time to datetime objects in memory; check the on-disk dtype from encoding
         time_encoded_dtype = ds[time_coord].encoding.get("dtype", ds[time_coord].dtype)
         if time_encoded_dtype != np.float32:
-            log_file.write(
-                f" - ERROR (attributes): coordinate '{time_coord}' on-disk dtype is {time_encoded_dtype},"
-                f" expected float32 (f4).\n"
+            reporter.warning(
+                f"coordinate '{time_coord}' on-disk dtype is {time_encoded_dtype},"
+                f" expected float32 (f4)."
             )
-            dtype_errors += 1
-    if dtype_errors == 0:
-        log_file.write(" - Dtype attributes: OK\n")
-    errors += dtype_errors
+    if (
+        reporter.total_errors == errors_before
+        and reporter.total_warnings == warnings_before
+    ):
+        reporter.ok("Dtype attributes: OK")
 
     # Sub-test 6: scale_factor and add_offset must not be present
-    pack_errors = 0
+    errors_before = reporter.total_errors
     if ivar in ds:
         # xarray moves these to .encoding on decode; check both locations
         combined = {**ds[ivar].attrs, **ds[ivar].encoding}
         for forbidden in ("scale_factor", "add_offset"):
             if forbidden in combined:
-                log_file.write(
-                    f" - ERROR (attributes): variable '{ivar}' must not have '{forbidden}'.\n"
+                reporter.error(
+                    f"variable '{ivar}' must not have '{forbidden}'."
                 )
-                pack_errors += 1
-    if pack_errors == 0:
-        log_file.write(" - Packing attributes: OK\n")
-    errors += pack_errors
-
-    return errors
+    if reporter.total_errors == errors_before:
+        reporter.ok("Packing attributes: OK")
 
 
 def _run_variable_checks(
-    log_file,
+    reporter: Reporter,
     ds,
     file_name: str,
     considered_variable: str,
@@ -1858,16 +2118,16 @@ def _run_variable_checks(
     ismip_meta,
     experiments,
     report_naming_issues,
-):
-    var_naming_errors = 0
-    var_num_errors = 0
-    var_spatial_errors = 0
-    var_time_errors = 0
-    var_attr_errors = 0
+) -> None:
+    naming_reporter = reporter.category("naming")
+    num_reporter = reporter.category("num")
+    spatial_reporter = reporter.category("spatial")
+    time_reporter = reporter.category("time")
+    attr_reporter = reporter.category("attr", qualifier="attributes")
 
-    log_file.write(" \n")
-    log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
-    log_file.write(" \n")
+    reporter.write(" \n")
+    reporter.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
+    reporter.write(" \n")
 
     header_ds = ds.to_dict(data=False)
     dim = set(list(header_ds["coords"].keys()))
@@ -1876,18 +2136,18 @@ def _run_variable_checks(
     isscalar = ismip_meta[index]["dim"] == "t"
     var_type = ismip_meta[index].get("type", "")
 
-    naming = _check_naming(log_file, file_name, region, dim, isscalar, report_naming_issues)
-    var_naming_errors += naming.errors
+    naming = _check_naming(
+        naming_reporter, file_name, region, dim, isscalar, report_naming_issues
+    )
     if not naming.can_continue:
-        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+        return
 
-    file_var_errors, has_variable = _check_file_variables(
-        log_file, ds, file_name, considered_variable, file_variables,
+    has_variable = _check_file_variables(
+        naming_reporter, ds, file_name, considered_variable, file_variables,
         ismip_meta[index]["dim"], report_naming_issues,
     )
-    var_naming_errors += file_var_errors
     if not has_variable:
-        return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+        return
 
     grid_extent = AIS_GRID_EXTENT if region == "AIS" else GrIS_GRID_EXTENT
     possible_resolution = AIS_POSSIBLE_RESOLUTION if region == "AIS" else GrIS_POSSIBLE_RESOLUTION
@@ -1898,52 +2158,71 @@ def _run_variable_checks(
     # or -- when nothing in it is a requested name -- against none at all.
     ivar = considered_variable
     var_index = index
-    log_file.write("** Tested Variable: " + ivar + "\n")
-    log_file.write(" \n")
+    reporter.write("** Tested Variable: " + ivar + "\n")
+    reporter.write(" \n")
 
-    var_num_errors += _check_numerical(log_file, ds, ivar, ismip_meta, var_index, region, isscalar)
+    _check_numerical(num_reporter, ds, ivar, ismip_meta, var_index, region, isscalar)
 
     if not isscalar and region not in ("AIS", "GrIS"):
-        log_file.write("SPATIAL Tests \n")
-        log_file.write(
-            " - Not checked: the expected grid extent and resolutions depend on"
-            " the region, which the file name does not identify.\n"
+        spatial_reporter.write("SPATIAL Tests \n")
+        spatial_reporter.note(
+            "Not checked: the expected grid extent and resolutions depend on"
+            " the region, which the file name does not identify."
         )
     elif not isscalar:
-        var_spatial_errors += _check_spatial(log_file, ds, grid_extent, possible_resolution)
+        _check_spatial(spatial_reporter, ds, grid_extent, possible_resolution)
 
-    var_time_errors += _check_time(
-        log_file, ds, dim, experiments, experiment_name, var_type,
+    _check_time(
+        time_reporter, ds, dim, experiments, experiment_name, var_type,
         ismip_meta[index]["dim"], naming.filename_years,
     )
 
-    var_attr_errors += _check_attributes(log_file, ds, ivar, ismip_meta, var_index, isscalar, var_type, region)
+    _check_attributes(
+        attr_reporter, ds, ivar, ismip_meta, var_index, isscalar, var_type, region
+    )
 
-    return var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors
+
+def _warning_phrase(warnings: int) -> str:
+    """How the console mentions warnings, when there are any to mention.
+
+    Phrased so that it cannot be read as a failure: a run that reports only
+    warnings has passed.
+    """
+    if warnings == 0:
+        return ""
+    return f" ({warnings} warning(s) — see the log)"
 
 
-def _print_experiment_summary(experiment_name: str, exp_errors: int) -> None:
+def _print_experiment_summary(
+    experiment_name: str, exp_errors: int, exp_warnings: int = 0
+) -> None:
     print(experiment_name, ": compliance check processed.")
     if exp_errors > 0:
         print(
-            "Found", exp_errors, "errors. Check compliance_checker_log.txt for details."
+            "Found",
+            exp_errors,
+            f"errors{_warning_phrase(exp_warnings)}."
+            " Check compliance_checker_log.txt for details.",
         )
     else:
-        print("Successfully verified with no errors")
+        print("Successfully verified with no errors" + _warning_phrase(exp_warnings))
     print()
 
 
-def _print_total_summary(source_path: str, total_errors: int) -> None:
+def _print_total_summary(
+    source_path: str, total_errors: int, total_warnings: int = 0
+) -> None:
     print("-------------------------------------------------------------------------")
     print(source_path, ": compliance check processed.")
     if total_errors > 0:
         print(
             "Found a total of",
             total_errors,
-            "errors. Check compliance_checker_log.txt for details.",
+            f"errors{_warning_phrase(total_warnings)}."
+            " Check compliance_checker_log.txt for details.",
         )
     else:
-        print("Successfully verified with no errors")
+        print("Successfully verified with no errors" + _warning_phrase(total_warnings))
     print("-------------------------------------------------------------------------")
 
 
@@ -1992,43 +2271,54 @@ def _write_log_header(
     log_file.write(" \n")
 
 
-def _insert_synthesis(
-    source_path: str,
-    exp_counter: int,
-    file_counter: int,
-    total_errors: int,
-    total_file_errors: int,
-    total_naming_errors: int,
-    total_num_errors: int,
-    total_spatial_errors: int,
-    total_time_errors: int,
-    total_attr_errors: int,
-    report_naming_issues,
-) -> None:
+# The reporting categories, in the order the synthesis block lists them, with
+# the label each one carries there.
+SYNTHESIS_CATEGORIES = (
+    # 'Variable presence' rather than 'Mandatory variables': the category now
+    # also carries the warning about non-mandatory variables not submitted,
+    # which the old label contradicted.
+    ("file", "Variable presence  "),
+    ("naming", "Naming Tests       "),
+    ("num", "Numerical Tests    "),
+    ("spatial", "Spatial Tests      "),
+    ("time", "Time Tests         "),
+    ("attr", "Attribute Tests    "),
+)
+
+# The summary key each category's counts live under, by severity.
+_SUMMARY_KEYS = {
+    "file": "total_file_{severity}s",
+    "naming": "total_naming_{severity}s",
+    "num": "total_num_{severity}s",
+    "spatial": "total_spatial_{severity}s",
+    "time": "total_time_{severity}s",
+    "attr": "total_attr_{severity}s",
+}
+
+
+def _insert_synthesis(source_path: str, summary: dict) -> None:
+    report_naming_issues = summary["report_naming_issues"]
+
     with open(os.path.join(source_path, "compliance_checker_log.txt"), "r") as f:
         contents = f.readlines()
 
     iline = 11
-    contents.insert(iline, str(exp_counter) + " experiments checked.\n")
+    contents.insert(iline, str(summary["exp_counter"]) + " experiments checked.\n")
     iline += 1
-    contents.insert(iline, str(file_counter) + " files checked.\n")
+    contents.insert(iline, str(summary["file_counter"]) + " files checked.\n")
     iline += 2
-    contents.insert(iline, str(total_errors) + " error(s) detected.\n")
-    iline += 1
-    contents.insert(iline, "  - Mandatory variables: " + str(total_file_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Naming Tests       : " + str(total_naming_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Numerical Tests    : " + str(total_num_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Spatial Tests      : " + str(total_spatial_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Time Tests         : " + str(total_time_errors) + " error(s)\n")
-    iline += 1
-    contents.insert(iline, "  - Attribute Tests    : " + str(total_attr_errors) + " error(s)\n")
-    iline += 2
-    contents.insert(iline, "0 warning(s) detected.\n")
-    iline += 2
+    for severity in ("error", "warning"):
+        contents.insert(
+            iline, str(summary[f"total_{severity}s"]) + f" {severity}(s) detected.\n"
+        )
+        iline += 1
+        for category, label in SYNTHESIS_CATEGORIES:
+            count = summary[_SUMMARY_KEYS[category].format(severity=severity)]
+            contents.insert(iline, f"  - {label}: {count} {severity}(s)\n")
+            iline += 1
+        # Step over one of the blank lines the header left behind, so that each
+        # block is separated from the next.
+        iline += 1
     if report_naming_issues:
         contents.insert(iline, "Naming tests errors report: \n")
         iline += 1
