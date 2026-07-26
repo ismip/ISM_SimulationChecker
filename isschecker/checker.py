@@ -41,9 +41,11 @@
 #      cadence reasoning cannot see.
 #    - For x,y,z,t snapshot variables the axis is instead checked against the
 #      required set of snapshot nominal years: the run's last year, the century
-#      marks inside it, and (for historical only) the run's first year.  Both
-#      missing and unasked-for snapshots are reported.  A snapshot at 2000 is
-#      tolerated but not required -- see issue #12.
+#      marks inside it, and (for historical only) the run's first year.  A
+#      missing snapshot is an error; an unasked-for one is a warning, since the
+#      request specifies the snapshots as a minimum set.  That includes a
+#      snapshot at 2000, which the data request does not ask for -- see
+#      issue #12.
 #
 # 5. Attributes (_check_attributes)
 #    - Global attributes present: group, model, contact_name, contact_email, crs
@@ -682,12 +684,6 @@ def _describe_convention(var_type: str) -> str:
 # experiment, so it is covered by requiring the run's final year rather than by
 # naming a literal.
 CENTURY_SNAPSHOT_YEARS = frozenset({1900, 2100, 2200, 2300})
-
-# Accepted if a file carries it, never required.  The README, this checker and
-# the generator all used to require a snapshot at 2000; the data request does
-# not ask for one.  Tolerating it means a group that followed the README as
-# published is not failed for a year that is still in dispute -- see issue #12.
-TOLERATED_SNAPSHOT_YEARS = frozenset({2000})
 
 
 def _required_snapshot_years(exp: dict, run_years: list[int]) -> set[int]:
@@ -1677,12 +1673,10 @@ def _check_snapshot_time_axis(
     single snapshot at an arbitrary year passed.
     """
     required = _required_snapshot_years(exp, run_years)
-    permitted = required | {
-        y for y in TOLERATED_SNAPSHOT_YEARS if run_years[0] <= y <= run_years[-1]
-    }
     actual_at = _nominal_year_index(actual, var_type)
 
     errors_before = reporter.total_errors
+    warnings_before = reporter.total_warnings
 
     missing = sorted(required - set(actual_at))
     if missing:
@@ -1693,21 +1687,32 @@ def _check_snapshot_time_axis(
             f" {_format_year_runs(sorted(required))}."
         )
 
-    unexpected = sorted(set(actual_at) - permitted)
+    # A warning, not an error: the data request specifies snapshots as a
+    # *minimum* set, so over-delivering 3D temperature is not non-compliance.
+    # This is also how a snapshot at 2000 is now reported -- the README asked
+    # for one until recently and the data request never did, so a file carrying
+    # it is named rather than either failed or silently accepted (issue #12).
+    # The asymmetry with the annual axis, where an extra year is an error, is
+    # deliberate: that axis is pinned end to end by experiments_ismip7.csv, so
+    # an extra year there means the file does not match the experiment it names.
+    unexpected = sorted(set(actual_at) - required)
     if unexpected:
-        reporter.error(
+        reporter.warning(
             f"snapshot nominal year(s) the experiment does not call"
             f" for: {_format_year_runs(unexpected)}. Required:"
             f" {_format_year_runs(sorted(required))}."
         )
 
     mismatch = _timestamp_mismatch_message(
-        actual_at, sorted(set(actual_at) & permitted), var_type
+        actual_at, sorted(set(actual_at) & required), var_type
     )
     if mismatch:
         reporter.error(mismatch)
 
-    if reporter.total_errors == errors_before:
+    if (
+        reporter.total_errors == errors_before
+        and reporter.total_warnings == warnings_before
+    ):
         reporter.ok(
             f"Snapshot time axis: nominal year(s)"
             f" {_format_year_runs(sorted(actual_at))} cover everything experiment"

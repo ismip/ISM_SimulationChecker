@@ -752,27 +752,36 @@ def test_checker_reports_litemp_missing_required_snapshot(xyt_case_dir):
     )
 
 
-def test_checker_reports_litemp_snapshot_year_not_requested(xyt_case_dir):
+def test_checker_warns_about_litemp_snapshot_year_not_requested(xyt_case_dir):
+    """An unasked-for snapshot is a warning, not an error.
+
+    The data request specifies the snapshot years as a minimum set, so
+    over-delivering 3D temperature is not non-compliance. It is still worth
+    naming: a year nobody asked for is usually a sign of a mistake.
+    """
     set_time_values(
         dataset_for_variable(xyt_case_dir, "litemp"), state_timestamps([1975, 2014])
     )
 
     summary = run_xyt_checker(xyt_case_dir)
 
-    assert summary["total_time_errors"] >= 1
+    # 1975 replaces the required 2013 snapshot here, so the missing one is
+    # still an error; what changed is that the extra one no longer is.
+    assert summary["total_time_warnings"] == 1
     assert (
-        "snapshot nominal year(s) the experiment does not call for: 1975"
+        "WARNING: snapshot nominal year(s) the experiment does not call for: 1975"
         in summary["log_text"]
     )
 
 
-def test_checker_accepts_litemp_snapshot_at_2000(tmp_path):
-    """2000 is tolerated but not required, pending issue #12.
+def test_checker_warns_about_litemp_snapshot_at_2000(tmp_path):
+    """2000 is not required, and is now said out loud rather than tolerated.
 
     The generator no longer writes it and the data request does not ask for it,
-    but the README did until now, so a group that followed the README must not
-    be failed for a year that is still in dispute. Nothing else covers the
-    'permitted but not required' path once the generator stops emitting it.
+    but the README did until recently, so a group that followed the README must
+    not be failed for a year that is still in dispute (issue #12). Silently
+    accepting it told such a group nothing at all; a warning is the honest
+    report -- it is here, it was not asked for, it is not held against you.
     """
     root = tmp_path / "gen"
     generate_test_files.create_netcdf_file(
@@ -796,8 +805,12 @@ def test_checker_accepts_litemp_snapshot_at_2000(tmp_path):
         source_path=str(core_dir), variable_list="ismip7_xyt", version="tests"
     )
 
-    assert summary["total_time_errors"] == 0, summary["log_text"]
-    assert "does not call for" not in summary["log_text"]
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_time_warnings"] == 1
+    assert (
+        "WARNING: snapshot nominal year(s) the experiment does not call for: 2000"
+        in summary["log_text"]
+    )
 
 
 def test_checker_reports_missing_variable_dimension(xyt_case_dir):

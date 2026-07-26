@@ -58,9 +58,11 @@ The filename year range (`YYYY-YYYY`) always refers to the **nominal simulation 
 
 Together, a `historical` run and a projection provide snapshots at 1900, 2014, 2100, 2200 and 2300, plus the first year of the historical run. The first year is required only for `historical`, whose start year the modeller chooses; a projection's initial state is the historical run's final state, already reported as historical's last-year snapshot.
 
-The checker reports **missing** required snapshots as well as snapshots the experiment does not call for. The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year, and the annual cadence checks do not apply.
+A **missing** required snapshot is an error. A snapshot the experiment does not call for is a **warning**: the data request specifies these years as a minimum set, so over-delivering 3D temperature is not non-compliance, but a year nobody asked for is usually a sign that something was written by mistake. (The annual time axis is treated the other way round — an extra year there is an error — because that axis is pinned end to end by `experiments_ismip7.csv`, so an extra year means the file does not match the experiment it names.)
 
-> **A snapshot at 2000 is accepted but not required.** Earlier versions of this README, the checker and the generator all required one; `ISMIP7_variable_request.csv` does not ask for one. The data request is being followed until [issue #12](https://github.com/ismip/ISM_SimulationChecker/issues/12) settles it, and 2000 is tolerated in the meantime so that files written to the earlier guidance still pass.
+The filename year range for `litemp` reflects the full simulation year range (e.g. `2015-2300`), not the first/last snapshot year, and the annual cadence checks do not apply.
+
+> **A snapshot at 2000 is not required.** Earlier versions of this README, the checker and the generator all required one; `ISMIP7_variable_request.csv` does not ask for one. A file carrying one is reported as an unrequested snapshot — that is, warned about and not failed — until [issue #12](https://github.com/ismip/ISM_SimulationChecker/issues/12) settles it. Files written to the earlier guidance still pass.
 
 Reference lookup tables are available in the companion repository [`ismip7-time-encoding`](https://github.com/ismip/ismip7-time-encoding).
 
