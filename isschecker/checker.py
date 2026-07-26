@@ -336,15 +336,23 @@ class Reporter:
             self._parent._count(label, category, count)
 
 
-def main() -> None:
+def main() -> int:
+    """Run the checker and return the process exit status.
+
+    Non-zero when there are errors, or when the run could not check anything at
+    all; zero when there are only warnings, which is the whole point of having
+    them.
+    """
     args = _parse_args()
     source_path = args.source_path
     variable_list = args.variable_list
 
-    run_checker(
+    summary = run_checker(
         source_path=source_path,
         variable_list=variable_list,
     )
+
+    return 1 if summary["fatal"] or summary["total_errors"] > 0 else 0
 
 
 def run_checker(
@@ -803,7 +811,15 @@ def _run_compliance_checker(
 
 
 def _empty_summary() -> dict:
+    """The summary of a run that could not check anything.
+
+    Its error counts are all zero, because nothing was checked -- which on an
+    error-based exit status would otherwise mean success.  `fatal` is what tells
+    the two apart, and it is set here rather than at the call sites because
+    every path that reaches this function is a path where the checker gave up.
+    """
     return {
+        "fatal": True,
         "exp_counter": 0,
         "file_counter": 0,
         "total_errors": 0,
@@ -897,6 +913,7 @@ def _process_experiments(
     )
 
     return {
+        "fatal": False,
         "exp_counter": exp_counter,
         "file_counter": file_counter,
         "total_errors": reporter.total_errors,

@@ -1154,6 +1154,54 @@ def test_shipped_range_severities_are_all_errors():
     assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
 
 
+def run_main(monkeypatch, source_path, variable_list="ismip7_scalars") -> int:
+    monkeypatch.setattr(
+        "sys.argv",
+        [
+            "ismip7-compliance-checker",
+            "--source-path",
+            str(source_path),
+            "--variable-list",
+            variable_list,
+        ],
+    )
+    return checker.main()
+
+
+def test_exit_status_is_zero_for_a_compliant_submission(monkeypatch, case_dir):
+    assert run_main(monkeypatch, case_dir) == 0
+
+
+def test_exit_status_is_non_zero_when_there_are_errors(monkeypatch, case_dir):
+    first_dataset(case_dir).unlink()
+
+    assert run_main(monkeypatch, case_dir) != 0
+
+
+def test_exit_status_is_zero_when_there_are_only_warnings(monkeypatch, xyt_case_dir):
+    """The whole point of a warning is that it does not fail a run."""
+    dataset_for_variable(xyt_case_dir, "litemp").unlink()
+
+    summary = run_xyt_checker(xyt_case_dir)
+    assert summary["total_warnings"] > 0 and summary["total_errors"] == 0
+
+    assert run_main(monkeypatch, xyt_case_dir, "ismip7_xyt") == 0
+
+
+def test_exit_status_is_non_zero_for_a_missing_source_directory(monkeypatch, tmp_path):
+    """Nothing was checked, so the zero error count is not a pass."""
+    assert run_main(monkeypatch, tmp_path / "nowhere") != 0
+
+
+def test_exit_status_is_non_zero_for_a_source_directory_with_no_files(
+    monkeypatch, tmp_path
+):
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    assert run_main(monkeypatch, empty) != 0
+
+
 def test_checker_reports_missing_contact_email_attribute(case_dir):
     remove_global_attribute(first_dataset(case_dir), "contact_email")
 

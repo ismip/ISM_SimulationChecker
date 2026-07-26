@@ -3,4 +3,6 @@
 from isschecker import main
 
 if __name__ == "__main__":
-    main()
+    # The console script gets this for free from setuptools; without it here,
+    # `python -m isschecker` would exit 0 on a failing check.
+    raise SystemExit(main())

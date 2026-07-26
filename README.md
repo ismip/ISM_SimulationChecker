@@ -158,6 +158,10 @@ ismip7-compliance-checker --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 --
 
 `experiments_ismip7.csv` defines the allowed nominal year ranges and durations for each experiment. The checker derives the expected FL and ST timestamps from these year values at runtime (see [Time encoding](#time-encoding)).
 
+### Exit status
+
+The checker exits **non-zero** when it found errors, or when it could not check anything at all — the `--source-path` does not exist, or holds no `.nc` files. It exits **zero** when the submission is compliant, including when there are warnings to review; see [Errors and warnings](#errors-and-warnings). Both `ismip7-compliance-checker` and `python -m isschecker` behave the same way, so either can be used in a script.
+
 ---
 
 ## Generating synthetic test files
