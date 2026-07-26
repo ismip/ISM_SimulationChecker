@@ -251,9 +251,14 @@ class Reporter:
         """Write to the log without reporting a finding: headings and footers."""
         self.log_file.write(text)
 
-    def error(self, message: str) -> None:
-        """Report a file that is unusable, or that departs from the protocol."""
-        self._report("ERROR", message)
+    def error(self, message: str, count: int = 1) -> None:
+        """Report a file that is unusable, or that departs from the protocol.
+
+        `count` is for the findings that read better as one line than as
+        several -- four mandatory variables missing from an experiment, say --
+        but that are still four findings and not one.
+        """
+        self._report("ERROR", message, count)
 
     def ok(self, message: str) -> None:
         """Record a check that passed."""
@@ -263,16 +268,16 @@ class Reporter:
         """Record a check that did not run: not applicable, or nothing to read."""
         self.write(f"{self._bullet}{message}\n")
 
-    def _report(self, label: str, message: str) -> None:
+    def _report(self, label: str, message: str, count: int) -> None:
         prefix = label if self._qualifier is None else f"{label} ({self._qualifier})"
         self.write(f"{self._bullet}{prefix}: {message}\n")
-        self._count(label, self._category)
+        self._count(label, self._category, count)
 
-    def _count(self, label: str, category: str) -> None:
+    def _count(self, label: str, category: str, count: int) -> None:
         counter = self.errors
-        counter[category] = counter.get(category, 0) + 1
+        counter[category] = counter.get(category, 0) + count
         if self._parent is not None:
-            self._parent._count(label, category)
+            self._parent._count(label, category, count)
 
 
 def main() -> None:
@@ -684,7 +689,7 @@ def _run_compliance_checker(
                 return _empty_summary()
 
             summary = _process_experiments(
-                log_file=f,
+                reporter=Reporter(f),
                 source_path=source_path,
                 experiment_groups=experiment_groups,
                 mandatory_variables=mandatory_variables,
@@ -746,7 +751,7 @@ def _group_files_by_experiment(source_path: str) -> dict:
 
 
 def _process_experiments(
-    log_file,
+    reporter: Reporter,
     source_path: str,
     experiment_groups: dict,
     mandatory_variables,
@@ -755,12 +760,6 @@ def _process_experiments(
     ismip_var,
     ismip_meta,
 ):
-    total_naming_errors = 0
-    total_num_errors = 0
-    total_spatial_errors = 0
-    total_time_errors = 0
-    total_attr_errors = 0
-    total_file_errors = 0
     report_naming_issues = []
 
     file_counter = 0
@@ -768,8 +767,9 @@ def _process_experiments(
     for experiment_name, exp_files in experiment_groups.items():
         exp_counter += 1
 
-        exp_summary = _process_single_experiment(
-            log_file=log_file,
+        exp_reporter = reporter.child()
+        file_counter += _process_single_experiment(
+            reporter=exp_reporter,
             source_path=source_path,
             experiment_name=experiment_name,
             exp_files=exp_files,
@@ -781,45 +781,29 @@ def _process_experiments(
             report_naming_issues=report_naming_issues,
         )
 
-        file_counter += exp_summary["file_counter"]
-        total_naming_errors += exp_summary["exp_naming_errors"]
-        total_num_errors += exp_summary["exp_num_errors"]
-        total_spatial_errors += exp_summary["exp_spatial_errors"]
-        total_time_errors += exp_summary["exp_time_errors"]
-        total_attr_errors += exp_summary["exp_attr_errors"]
-        total_file_errors += exp_summary["exp_file_errors"]
-
         _print_experiment_summary(
-            experiment_name=exp_summary["experiment_name"],
-            exp_errors=exp_summary["exp_errors"],
+            experiment_name=experiment_name,
+            exp_errors=exp_reporter.total_errors,
         )
 
-    total_errors = (
-        total_naming_errors
-        + total_num_errors
-        + total_spatial_errors
-        + total_time_errors
-        + total_attr_errors
-        + total_file_errors
-    )
-    _print_total_summary(source_path=source_path, total_errors=total_errors)
+    _print_total_summary(source_path=source_path, total_errors=reporter.total_errors)
 
     return {
         "exp_counter": exp_counter,
         "file_counter": file_counter,
-        "total_errors": total_errors,
-        "total_naming_errors": total_naming_errors,
-        "total_num_errors": total_num_errors,
-        "total_spatial_errors": total_spatial_errors,
-        "total_time_errors": total_time_errors,
-        "total_attr_errors": total_attr_errors,
-        "total_file_errors": total_file_errors,
+        "total_errors": reporter.total_errors,
+        "total_naming_errors": reporter.error_count("naming"),
+        "total_num_errors": reporter.error_count("num"),
+        "total_spatial_errors": reporter.error_count("spatial"),
+        "total_time_errors": reporter.error_count("time"),
+        "total_attr_errors": reporter.error_count("attr"),
+        "total_file_errors": reporter.error_count("file"),
         "report_naming_issues": report_naming_issues,
     }
 
 
 def _process_single_experiment(
-    log_file,
+    reporter: Reporter,
     source_path: str,
     experiment_name: str,
     exp_files: list,
@@ -829,13 +813,13 @@ def _process_single_experiment(
     ismip_var,
     ismip_meta,
     report_naming_issues,
-):
-    exp_naming_errors = 0
-    exp_num_errors = 0
-    exp_spatial_errors = 0
-    exp_time_errors = 0
-    exp_attr_errors = 0
-    exp_file_errors = 0
+) -> int:
+    """Check one experiment's files; return how many of them there were."""
+    # Experiment-level findings are about the submission rather than about any
+    # one file, so they are written flush left rather than as list items under
+    # a file's heading.
+    presence_reporter = reporter.category("file", bullet="")
+    naming_reporter = reporter.category("naming", bullet="")
 
     temp_mandatory_var = list(mandatory_variables)
     for i in exp_files:
@@ -845,31 +829,30 @@ def _process_single_experiment(
 
     file_counter = 0
     if experiment_name in [dic["experiment"] for dic in experiments]:
-        log_file.write("\n ")
-        log_file.write("**********************************************************\n")
-        log_file.write(" ** Experiment: " + experiment_name + " \n ")
-        log_file.write("**********************************************************\n")
-        log_file.write("\n ")
+        reporter.write("\n ")
+        reporter.write("**********************************************************\n")
+        reporter.write(" ** Experiment: " + experiment_name + " \n ")
+        reporter.write("**********************************************************\n")
+        reporter.write("\n ")
         if not temp_mandatory_var:
-            log_file.write(
+            reporter.write(
                 "Mandatory variables Test: "
                 + experiment_name
                 + " : all mandatory variables exist. \n"
             )
         else:
-            log_file.write(
-                "ERROR: In experiment "
+            presence_reporter.error(
+                "In experiment "
                 + experiment_name
                 + ", these mandatory variable(s) is (are) missing: "
-                + str(temp_mandatory_var)
-                + "\n"
+                + str(temp_mandatory_var),
+                count=len(temp_mandatory_var),
             )
-            exp_file_errors += len(temp_mandatory_var)
 
         for file in tqdm(exp_files):
             file_counter += 1
-            file_summary = _process_single_file(
-                log_file=log_file,
+            _process_single_file(
+                reporter=reporter,
                 source_path=source_path,
                 file=file,
                 experiment_name=experiment_name,
@@ -880,55 +863,30 @@ def _process_single_experiment(
                 report_naming_issues=report_naming_issues,
             )
 
-            exp_naming_errors += file_summary["var_naming_errors"]
-            exp_num_errors += file_summary["var_num_errors"]
-            exp_spatial_errors += file_summary["var_spatial_errors"]
-            exp_time_errors += file_summary["var_time_errors"]
-            exp_attr_errors += file_summary["var_attr_errors"]
-
     else:
-        log_file.write("\n ")
-        log_file.write("**********************************************************\n")
-        log_file.write(" **  Experiment: " + experiment_name + " \n ")
-        log_file.write("**********************************************************\n")
-        log_file.write("\n ")
-        log_file.write(
-            "ERROR: The compliance check is ignored for experiment "
+        reporter.write("\n ")
+        reporter.write("**********************************************************\n")
+        reporter.write(" **  Experiment: " + experiment_name + " \n ")
+        reporter.write("**********************************************************\n")
+        reporter.write("\n ")
+        naming_reporter.error(
+            "The compliance check is ignored for experiment "
             + experiment_name
             + " as it is not in "
             + str([exp["experiment"] for exp in experiments])
-            + ". \n"
+            + ". "
         )
-        exp_naming_errors += 1
         report_naming_issues.append(
             "Compliance check ignored : experiment "
             + experiment_name
             + " not in the experiments list."
         )
 
-    exp_errors = (
-        exp_time_errors
-        + exp_spatial_errors
-        + exp_num_errors
-        + exp_naming_errors
-        + exp_attr_errors
-        + exp_file_errors
-    )
-    return {
-        "file_counter": file_counter,
-        "experiment_name": experiment_name,
-        "exp_errors": exp_errors,
-        "exp_naming_errors": exp_naming_errors,
-        "exp_num_errors": exp_num_errors,
-        "exp_spatial_errors": exp_spatial_errors,
-        "exp_time_errors": exp_time_errors,
-        "exp_attr_errors": exp_attr_errors,
-        "exp_file_errors": exp_file_errors,
-    }
+    return file_counter
 
 
 def _process_single_file(
-    log_file,
+    reporter: Reporter,
     source_path: str,
     file: str,
     experiment_name: str,
@@ -937,12 +895,11 @@ def _process_single_file(
     all_request_variables,
     experiments,
     report_naming_issues,
-):
-    var_naming_errors = 0
-    var_num_errors = 0
-    var_spatial_errors = 0
-    var_time_errors = 0
-    var_attr_errors = 0
+) -> None:
+    # A sub-total of this file's findings, for the footer below; it still rolls
+    # up into the experiment and the run.
+    file_reporter = reporter.child()
+    naming_reporter = file_reporter.category("naming")
 
     file_name = os.path.basename(file)
     file_name_split = file_name.split("_")
@@ -954,49 +911,35 @@ def _process_single_file(
         ds = xr.open_dataset(os.path.join(source_path, file),
                              decode_times=False)
     except (ValueError, TypeError) as e:
-        log_file.write(" - ERROR: Cannot open " + file_name + ": " + str(e) + "\n")
-        var_naming_errors += 1
-        return {
-            "var_naming_errors": var_naming_errors,
-            "var_num_errors": var_num_errors,
-            "var_spatial_errors": var_spatial_errors,
-            "var_time_errors": var_time_errors,
-            "var_attr_errors": var_attr_errors,
-        }
+        naming_reporter.error("Cannot open " + file_name + ": " + str(e))
+        return
     file_variables = list(ds.data_vars)
 
     if len(file_name_split) != ISMIP7_FILENAME_PARTS:
-        log_file.write(
-            " - ERROR: the file name "
+        naming_reporter.error(
+            "the file name "
             + file_name
             + " does not follow the naming convention (expected "
             + str(ISMIP7_FILENAME_PARTS)
-            + " underscore-separated fields).\n"
+            + " underscore-separated fields)."
         )
         report_naming_issues.append(
             "Compliance check ignored: file "
             + file_name
             + " does not follow the naming convention."
         )
-        var_naming_errors += 1
-        return {
-            "var_naming_errors": var_naming_errors,
-            "var_num_errors": var_num_errors,
-            "var_spatial_errors": var_spatial_errors,
-            "var_time_errors": var_time_errors,
-            "var_attr_errors": var_attr_errors,
-        }
+        return
 
     experiment_varname = file_name_split[ISMIP7_FILENAME_EXPERIMENT_IDX]
     if experiment_varname != experiment_name:
-        log_file.write(
-            " - ERROR: in the file name "
+        naming_reporter.error(
+            "in the file name "
             + file_name
             + ", the experiment name ("
             + experiment_varname
             + ") does not match the expected experiment: "
             + experiment_name
-            + ".\n"
+            + "."
         )
         report_naming_issues.append(
             "Compliance check ignored: in the file name "
@@ -1007,20 +950,15 @@ def _process_single_file(
             + experiment_name
             + ".\n"
         )
-        var_naming_errors += 1
-        return {
-            "var_naming_errors": var_naming_errors,
-            "var_num_errors": var_num_errors,
-            "var_spatial_errors": var_spatial_errors,
-            "var_time_errors": var_time_errors,
-            "var_attr_errors": var_attr_errors,
-        }
+        return
 
     if considered_variable not in all_request_variables:
-        log_file.write(" \n")
-        log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
-        log_file.write(" \n")
-        log_file.write("NAMING Tests \n")
+        file_reporter.write(" \n")
+        file_reporter.write(
+            "Experiment: " + experiment_name + " - File: " + file_name + "\n"
+        )
+        file_reporter.write(" \n")
+        file_reporter.write("NAMING Tests \n")
         message = (
             f"'{considered_variable}' (field {ISMIP7_FILENAME_VAR_IDX} of the"
             f" file name) is not a variable in the data request"
@@ -1031,47 +969,38 @@ def _process_single_file(
         )
         if near_misses:
             message += f" The closest requested name is '{near_misses[0]}'."
-        log_file.write(f" - ERROR: {message}\n")
+        naming_reporter.error(message)
         report_naming_issues.append(f"Compliance check ignored: {message}")
-        var_naming_errors += 1
     elif considered_variable in ismip_var:
-        var_naming_errors, var_num_errors, var_spatial_errors, var_time_errors, var_attr_errors = (
-            _run_variable_checks(
-                log_file=log_file,
-                ds=ds,
-                file_name=file_name,
-                considered_variable=considered_variable,
-                experiment_name=experiment_name,
-                file_variables=file_variables,
-                region=region,
-                ismip_var=ismip_var,
-                ismip_meta=ismip_meta,
-                experiments=experiments,
-                report_naming_issues=report_naming_issues,
-            )
+        _run_variable_checks(
+            reporter=file_reporter,
+            ds=ds,
+            file_name=file_name,
+            considered_variable=considered_variable,
+            experiment_name=experiment_name,
+            file_variables=file_variables,
+            region=region,
+            ismip_var=ismip_var,
+            ismip_meta=ismip_meta,
+            experiments=experiments,
+            report_naming_issues=report_naming_issues,
         )
 
-    var_errors = var_naming_errors + var_num_errors + var_spatial_errors + var_time_errors + var_attr_errors
+    var_errors = file_reporter.total_errors
 
-    log_file.write("\n")
-    log_file.write("----------------------------------------------------------\n")
-    log_file.write(
+    file_reporter.write("\n")
+    file_reporter.write("----------------------------------------------------------\n")
+    file_reporter.write(
         experiment_name + " - " + considered_variable + " - File:" + file_name + "\n"
     )
     if var_errors > 0:
-        log_file.write(str(var_errors) + " error(s). Please review before sharing.\n")
+        file_reporter.write(
+            str(var_errors) + " error(s). Please review before sharing.\n"
+        )
     else:
-        log_file.write("No errors. Good job !\n")
-    log_file.write("No warnings.\n")
-    log_file.write("----------------------------------------------------------\n")
-
-    return {
-        "var_naming_errors": var_naming_errors,
-        "var_num_errors": var_num_errors,
-        "var_spatial_errors": var_spatial_errors,
-        "var_time_errors": var_time_errors,
-        "var_attr_errors": var_attr_errors,
-    }
+        file_reporter.write("No errors. Good job !\n")
+    file_reporter.write("No warnings.\n")
+    file_reporter.write("----------------------------------------------------------\n")
 
 
 class NamingResult(NamedTuple):
@@ -1867,7 +1796,7 @@ def _check_attributes(
 
 
 def _run_variable_checks(
-    log_file,
+    reporter: Reporter,
     ds,
     file_name: str,
     considered_variable: str,
@@ -1878,26 +1807,16 @@ def _run_variable_checks(
     ismip_meta,
     experiments,
     report_naming_issues,
-):
-    reporter = Reporter(log_file)
+) -> None:
     naming_reporter = reporter.category("naming")
     num_reporter = reporter.category("num")
     spatial_reporter = reporter.category("spatial")
     time_reporter = reporter.category("time")
     attr_reporter = reporter.category("attr", qualifier="attributes")
 
-    def counts():
-        return (
-            reporter.error_count("naming"),
-            reporter.error_count("num"),
-            reporter.error_count("spatial"),
-            reporter.error_count("time"),
-            reporter.error_count("attr"),
-        )
-
-    log_file.write(" \n")
-    log_file.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
-    log_file.write(" \n")
+    reporter.write(" \n")
+    reporter.write("Experiment: " + experiment_name + " - File: " + file_name + "\n")
+    reporter.write(" \n")
 
     header_ds = ds.to_dict(data=False)
     dim = set(list(header_ds["coords"].keys()))
@@ -1910,14 +1829,14 @@ def _run_variable_checks(
         naming_reporter, file_name, region, dim, isscalar, report_naming_issues
     )
     if not naming.can_continue:
-        return counts()
+        return
 
     has_variable = _check_file_variables(
         naming_reporter, ds, file_name, considered_variable, file_variables,
         ismip_meta[index]["dim"], report_naming_issues,
     )
     if not has_variable:
-        return counts()
+        return
 
     grid_extent = AIS_GRID_EXTENT if region == "AIS" else GrIS_GRID_EXTENT
     possible_resolution = AIS_POSSIBLE_RESOLUTION if region == "AIS" else GrIS_POSSIBLE_RESOLUTION
@@ -1928,8 +1847,8 @@ def _run_variable_checks(
     # or -- when nothing in it is a requested name -- against none at all.
     ivar = considered_variable
     var_index = index
-    log_file.write("** Tested Variable: " + ivar + "\n")
-    log_file.write(" \n")
+    reporter.write("** Tested Variable: " + ivar + "\n")
+    reporter.write(" \n")
 
     _check_numerical(num_reporter, ds, ivar, ismip_meta, var_index, region, isscalar)
 
@@ -1950,8 +1869,6 @@ def _run_variable_checks(
     _check_attributes(
         attr_reporter, ds, ivar, ismip_meta, var_index, isscalar, var_type, region
     )
-
-    return counts()
 
 
 def _print_experiment_summary(experiment_name: str, exp_errors: int) -> None:
