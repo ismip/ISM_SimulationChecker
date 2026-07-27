@@ -1,6 +1,6 @@
 # ISMIP7 NetCDF generator
 
-`ismip7-generate-test-files` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker. It is part of the `isschecker` package (`isschecker.generate`), so it is installed along with the checker and can be run from any directory.
+`ismip7-generate-test-files` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker. It is part of the `isschecker` package (`isschecker.generate`), so it is installed along with the checker — `conda create -n isschecker -c conda-forge isschecker`, see [Installation](../README.md#installation) — and can be run from any directory.
 
 Files are written to `Models/{GrIS|AIS}/ISMIP7/SYNTH1/CORE/{set_counter}/` (default `C001`) beneath the current working directory.
 

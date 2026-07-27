@@ -1,3 +1,8 @@
+# Development environment: the checker's dependencies, but not the checker
+# itself, which is then pip-installed from a source checkout (see "Installing
+# from source" in the README).  To *use* the checker, install it from
+# conda-forge instead -- `conda create -n isschecker -c conda-forge isschecker`
+# -- which brings these packages with it.
 name: isschecker
 channels:
   - conda-forge
