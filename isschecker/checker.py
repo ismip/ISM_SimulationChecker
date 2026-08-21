@@ -2389,6 +2389,123 @@ def _check_thickness_matches_mask(reporter, ds, ivar, criteria, companion) -> No
         )
 
 
+# Metres.  float32 carries elevations up to 5500 m to well under a millimetre,
+# so this is loose enough for rounding and far tighter than any real mistake.
+ELEVATION_TOLERANCE = 1.0e-2
+
+
+def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
+    """Surface elevation is the ice base plus the ice thickness.
+
+    Checked in every cell rather than only in fully glaciated ones.  The
+    identity is linear, so it survives cell-mean averaging: it holds pointwise,
+    therefore it holds for any consistent mean of the three fields.  The one
+    thing it assumes is that they share an averaging convention in a partly
+    glaciated cell, which the data request should say and does not yet.
+
+    It also settles the ice-free case without a rule of its own: where the
+    thickness is zero it says the surface is the base, and the bed comparison
+    says the base is the bed there.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    disagreeing = 0
+    worst = 0.0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        base_values, base_unknown = _companion_slice(base, step)
+        thickness_values, thickness_unknown = _companion_slice(thickness, step)
+        if here.shape != base_values.shape or here.shape != thickness_values.shape:
+            reporter.note(
+                "Not checked against 'base' and 'lithk': their grids differ"
+                " from this file's."
+            )
+            return
+        known = ~np.logical_or(
+            np.logical_or(base_unknown, thickness_unknown),
+            _step_of(missing, step),
+        )
+        difference = np.where(
+            known, np.abs(base_values + thickness_values - here), 0.0
+        )
+        disagreeing += int((difference > ELEVATION_TOLERANCE).sum())
+        worst = max(worst, float(difference.max()))
+        total += here.size
+
+    if disagreeing:
+        reporter.error(
+            f"variable '{ivar}' does not equal 'base' + 'lithk' in"
+            f" {_count_phrase(disagreeing, total)}, by up to {worst:.3g} m."
+            f" Surface elevation is the ice base plus the ice thickness."
+        )
+
+
+def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None:
+    """Where the ice sits relative to the bed, and whether the masks agree.
+
+    No densities are needed, which is the point: every field here is submitted
+    geometry, so the check does not have to assume each model's constants.
+    Grounded and floating are only compared in cells that are wholly one or the
+    other -- in a half-and-half cell the mean ice base sits somewhere between
+    and nothing follows from it.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    below_bed = 0
+    grounded_afloat = 0
+    floating_aground = 0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        bed_values, bed_unknown = _companion_slice(bed, step)
+        grounded_values, grounded_unknown = _companion_slice(grounded, step)
+        floating_values, floating_unknown = _companion_slice(floating, step)
+        if here.shape != bed_values.shape:
+            reporter.note(
+                "Not checked against 'topg': its grid differs from this file's."
+            )
+            return
+        known = ~np.logical_or(bed_unknown, _step_of(missing, step))
+        above = here - bed_values
+
+        below_bed += int(
+            np.logical_and(known, above < -ELEVATION_TOLERANCE).sum()
+        )
+        wholly_grounded = np.logical_and(
+            np.logical_and(known, ~grounded_unknown), grounded_values == 1.0
+        )
+        grounded_afloat += int(
+            np.logical_and(wholly_grounded, np.abs(above) > ELEVATION_TOLERANCE).sum()
+        )
+        wholly_floating = np.logical_and(
+            np.logical_and(known, ~floating_unknown), floating_values == 1.0
+        )
+        floating_aground += int(
+            np.logical_and(wholly_floating, above <= ELEVATION_TOLERANCE).sum()
+        )
+        total += here.size
+
+    if below_bed:
+        reporter.error(
+            f"variable '{ivar}' lies below 'topg' in"
+            f" {_count_phrase(below_bed, total)}. The ice base cannot be under"
+            f" the bed, whatever the masks say."
+        )
+    if grounded_afloat:
+        reporter.error(
+            f"variable '{ivar}' differs from 'topg' in"
+            f" {_count_phrase(grounded_afloat, total)} that 'sftgrf' says are"
+            f" wholly grounded. Grounded ice rests on the bed."
+        )
+    if floating_aground:
+        reporter.error(
+            f"variable '{ivar}' is not above 'topg' in"
+            f" {_count_phrase(floating_aground, total)} that 'sftflf' says are"
+            f" wholly floating. Floating ice does not rest on the bed."
+        )
+
+
 def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
                        ismip_meta, years) -> None:
     """The checks that need more than the file in front of them.
@@ -2398,9 +2515,11 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
     """
     policy = criteria.get("fill_policy")
     mask_name = ICE_MASK_FOR_POLICY.get(policy)
-    # The variables that are compared against each other by name rather than by
-    # policy: the masks have to add up, and thickness has to agree with them.
-    by_name = ivar in ("sftgif", "lithk")
+    # Some variables are compared by policy -- where the request says they are
+    # defined -- and some by name, because a particular pair or triple of them
+    # has to agree about the ice sheet.  A variable can be both: orog is
+    # defined throughout the domain and is also base plus thickness.
+    by_name = ivar in ("sftgif", "lithk", "orog", "base")
     if ivar not in ds or (
         mask_name is None and policy != "outside_domain" and not by_name
     ):
@@ -2409,55 +2528,60 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
     reporter.write("CONSISTENCY Tests\n")
     findings_before = reporter.total_errors + reporter.total_warnings
 
-    def against(variable, check):
-        companion = _open_companion(
-            reporter, source_path, file_name, variable, years, ismip_meta
-        )
-        if companion is None:
-            return
+    def against(names, check):
+        """Run `check` with the named companions, or say why it did not run."""
+        companions = [
+            _open_companion(reporter, source_path, file_name, name, years, ismip_meta)
+            for name in names
+        ]
         try:
-            check(companion)
+            if all(companion is not None for companion in companions):
+                check(*companions)
         finally:
-            companion.dataset.close()
-
-    if ivar == "sftgif":
-        grounded = _open_companion(
-            reporter, source_path, file_name, "sftgrf", years, ismip_meta
-        )
-        floating = _open_companion(
-            reporter, source_path, file_name, "sftflf", years, ismip_meta
-        )
-        try:
-            if grounded is not None and floating is not None:
-                _check_mask_sum(reporter, ds, ivar, grounded, floating)
-        finally:
-            for companion in (grounded, floating):
+            for companion in companions:
                 if companion is not None:
                     companion.dataset.close()
-        summary = "Grounded and floating fractions sum to the ice fraction: OK"
-    elif ivar == "lithk":
+
+    if mask_name is not None:
         against(
-            "sftgif",
-            lambda c: _check_thickness_matches_mask(reporter, ds, ivar, criteria, c),
-        )
-        summary = "Thickness and ice mask agree: OK"
-    elif mask_name is not None:
-        against(
-            mask_name,
+            [mask_name],
             lambda c: _check_ice_extent(reporter, ds, ivar, criteria, c),
         )
-        summary = f"Defined exactly where '{mask_name}' says there is ice: OK"
-    else:
-        against("sftgif", lambda c: _check_domain_covers_ice(reporter, ds, ivar, c))
+    elif policy == "outside_domain":
+        against(
+            ["sftgif"], lambda c: _check_domain_covers_ice(reporter, ds, ivar, c)
+        )
         # Anchored on one other variable of the domain rather than compared
         # with all of them: agreement is transitive, and every file then
         # reports the same disagreement from its own side.
-        reference = "orog" if ivar == "topg" else "topg"
-        against(reference, lambda c: _check_footprint_matches(reporter, ds, ivar, c))
-        summary = "Defined throughout the computational domain: OK"
+        against(
+            ["orog" if ivar == "topg" else "topg"],
+            lambda c: _check_footprint_matches(reporter, ds, ivar, c),
+        )
+
+    if ivar == "sftgif":
+        against(
+            ["sftgrf", "sftflf"],
+            lambda g, f: _check_mask_sum(reporter, ds, ivar, g, f),
+        )
+    elif ivar == "lithk":
+        against(
+            ["sftgif"],
+            lambda c: _check_thickness_matches_mask(reporter, ds, ivar, criteria, c),
+        )
+    elif ivar == "orog":
+        against(
+            ["base", "lithk"],
+            lambda b, h: _check_surface_geometry(reporter, ds, ivar, b, h),
+        )
+    elif ivar == "base":
+        against(
+            ["topg", "sftgrf", "sftflf"],
+            lambda b, g, f: _check_base_against_bed(reporter, ds, ivar, b, g, f),
+        )
 
     if reporter.total_errors + reporter.total_warnings == findings_before:
-        reporter.ok(summary)
+        reporter.ok("Consistent with the files beside it: OK")
 
 
 def _check_spatial(

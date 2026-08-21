@@ -62,7 +62,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -99,7 +99,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -136,7 +136,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -208,7 +208,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -303,7 +303,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftflf' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -340,7 +340,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgrf' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -540,7 +540,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Snapshot time axis: nominal year(s) 2013-2014 cover everything experiment 'historical' requires: OK
@@ -578,7 +578,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -615,7 +615,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftflf' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -652,7 +652,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgrf' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -689,7 +689,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -726,7 +726,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Thickness and ice mask agree: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -763,7 +763,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -800,7 +800,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time axis: N/A (static spatial variable)
 ATTRIBUTE Tests
@@ -872,7 +872,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Grounded and floating fractions sum to the ice fraction: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -944,7 +944,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1155,7 +1155,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1192,7 +1192,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined throughout the computational domain: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1229,7 +1229,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1266,7 +1266,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1303,7 +1303,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1340,7 +1340,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1377,7 +1377,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1414,7 +1414,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1451,7 +1451,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -1488,7 +1488,7 @@ SPATIAL Tests
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
 CONSISTENCY Tests
- - Defined exactly where 'sftgif' says there is ice: OK
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK

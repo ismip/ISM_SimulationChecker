@@ -1396,10 +1396,15 @@ def test_checker_reports_an_ice_only_variable_defined_everywhere(
 def test_an_outside_domain_variable_may_be_defined_everywhere(xyt_case_dir):
     """A model may legitimately compute over the whole grid.
 
-    So full coverage says nothing about `orog` the way it does about a
-    velocity, and the rule must not reach it.
+    So full coverage says nothing about a geothermal heat flux the way it does
+    about a velocity, and the rule must not reach it. Geothermal flux rather
+    than surface elevation because elevation has to satisfy the geometry
+    identities as well, which overwriting it would break for an unrelated
+    reason.
     """
-    write_values(dataset_for_variable(xyt_case_dir, "orog"), 1000.0, count=None)
+    write_values(
+        dataset_for_variable(xyt_case_dir, "hfgeoubed"), 0.05, count=None
+    )
 
     summary = run_xyt_checker(xyt_case_dir)
 

@@ -344,6 +344,75 @@ def test_a_hole_in_a_mask_is_not_read_as_a_thick_piece_of_ice(case_dir):
     assert "lithk' holds a fill value in" in log
 
 
+def test_a_surface_that_is_not_base_plus_thickness_is_an_error(case_dir):
+    """A pure identity, so a failure is a real contradiction and not a matter
+    of degree. Checked in every cell, which is sound because the identity is
+    linear and so survives cell-mean averaging."""
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "orog"),
+              geometry["sftgif"] >= 1.0, 0.0)
+
+    summary = run(case_dir)
+
+    assert "does not equal 'base' + 'lithk'" in summary["log_text"]
+    assert summary["total_consistency_errors"] >= 1
+
+
+def test_an_ice_base_below_the_bed_is_an_error(case_dir):
+    """Impossible whatever the masks say, so it is checked everywhere."""
+    geometry = geometry_of(case_dir)
+    grounded = geometry["sftgrf"] == 1.0
+    set_where(dataset_for_variable(case_dir, "base"), grounded,
+              geometry["topg"][grounded] - 100.0)
+
+    log = run(case_dir)["log_text"]
+
+    assert "lies below 'topg'" in log
+    assert "The ice base cannot be under the bed" in log
+
+
+def test_grounded_ice_that_does_not_rest_on_the_bed_is_an_error(case_dir):
+    """No densities needed: this is submitted geometry disagreeing with itself."""
+    geometry = geometry_of(case_dir)
+    grounded = geometry["sftgrf"] == 1.0
+    set_where(dataset_for_variable(case_dir, "base"), grounded,
+              geometry["topg"][grounded] + 50.0)
+
+    log = run(case_dir)["log_text"]
+
+    assert "that 'sftgrf' says are wholly grounded" in log
+
+
+def test_floating_ice_that_rests_on_the_bed_is_an_error(case_dir):
+    """The other half of the same comparison."""
+    geometry = geometry_of(case_dir)
+    floating = geometry["sftflf"] == 1.0
+    set_where(dataset_for_variable(case_dir, "base"), floating,
+              geometry["topg"][floating])
+
+    log = run(case_dir)["log_text"]
+
+    assert "that 'sftflf' says are wholly floating" in log
+
+
+def test_a_partly_grounded_cell_is_left_alone(case_dir):
+    """In a half-and-half cell the mean ice base sits somewhere between the bed
+    and the flotation level, and nothing follows from where exactly. Only
+    wholly grounded and wholly floating cells are compared."""
+    geometry = geometry_of(case_dir)
+    partial = np.logical_and(
+        geometry["sftflf"] > 0.0, geometry["sftflf"] < 1.0
+    )
+    assert partial.any(), "the synthetic ice sheet should have partial cells"
+    set_where(dataset_for_variable(case_dir, "base"), partial,
+              geometry["topg"][partial] + 1.0)
+
+    log = run(case_dir)["log_text"]
+
+    assert "wholly grounded" not in log
+    assert "wholly floating" not in log
+
+
 @pytest.mark.parametrize(
     "value, expected",
     [("warning", "warning"), ("error", "error"), (None, "error"),
