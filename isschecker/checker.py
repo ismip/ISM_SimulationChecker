@@ -520,6 +520,26 @@ ICE_ONLY_POLICIES = {
 }
 
 
+def _margin_severity(value) -> str:
+    """How to report a finding that turns on where a model puts the ice margin.
+
+    Two of the cross-file rules compare a field against an ice mask cell by
+    cell, and a conservatively interpolated mask puts fractions like 1e-6 in a
+    ring all along the edge.  A model that decides where to write fill from its
+    own native-grid mask will disagree in every one of those cells.  Which of
+    them is right is a question one round of real submissions answers better
+    than any amount of reasoning, so the severity of those findings -- and only
+    those -- lives in the data request, where promoting them after the trial is
+    a one-cell diff rather than a patch to this file.
+
+    Anything the column does not say means error, as with range_severity, so
+    the column is safe to add before it is filled in.
+    """
+    if value is not None and pd.notna(value) and str(value).strip().lower() == "warning":
+        return "warning"
+    return "error"
+
+
 def _fill_policy(value) -> str | None:
     """Where a variable is defined, from the fill_policy column of the request.
 
@@ -585,6 +605,7 @@ def _load_criteria(variable_list: str):
             "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
             "range_severity": _range_severity(row.get("range_severity")),
             "fill_policy": _fill_policy(row.get("fill_policy")),
+            "margin_severity": _margin_severity(row.get("margin_severity")),
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -1341,6 +1362,7 @@ def _process_single_file(
         _run_variable_checks(
             reporter=file_reporter,
             ds=ds,
+            source_path=source_path,
             file_name=file_name,
             considered_variable=considered_variable,
             experiment_name=experiment_name,
@@ -2068,6 +2090,119 @@ def _open_companion(reporter, source_path, file_name, variable, years,
     return Companion(ds, variable, [index[year] for year in years])
 
 
+# The mask a variable of each ice-only policy is compared against.
+ICE_MASK_FOR_POLICY = {
+    "no_ice": "sftgif",
+    "no_grounded_ice": "sftgrf",
+    "no_floating_ice": "sftflf",
+}
+
+# Below this fraction a cell is the partly glaciated margin rather than the
+# interior.  Used only to describe a finding, never to decide one: the rule is
+# exact, and this says how much of what it found is margin.
+MARGIN_FRACTION = 0.01
+
+
+def _check_ice_extent(reporter, ds, ivar, criteria, companion) -> None:
+    """A variable defined only where there is ice is missing everywhere else.
+
+    Both directions are compared, and reported as two findings, because they
+    are different mistakes: a value over bare ground is data an analyst will
+    take at face value, and a hole under ice is data they needed and did not
+    get.  Told apart by count, "40000 cells defined where there is no ice"
+    reads as a model that has not applied the rule at all, while "312 cells
+    missing under ice" reads as a disagreement about the margin -- so the
+    second finding says how much of itself is margin.
+    """
+    mask_name = companion.variable
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    # x,y,z,t variables carry a vertical axis the mask does not; the mask
+    # applies to every level of a column alike.
+    steps = missing.shape[0] if missing.ndim > 2 else 1
+
+    defined_without_ice = 0
+    missing_with_ice = 0
+    missing_at_margin = 0
+    total = 0
+
+    for step in range(steps):
+        here = missing[step] if missing.ndim > 2 else missing
+        fraction = companion.slice_at(step)
+        if here.shape[-2:] != fraction.shape[-2:]:
+            reporter.note(
+                f"Not checked against '{mask_name}': its grid is"
+                f" {fraction.shape[-2:]} and this file's is {here.shape[-2:]}."
+            )
+            return
+        fraction = np.broadcast_to(fraction, here.shape)
+        has_ice = fraction > 0.0
+
+        defined_without_ice += int(np.logical_and(~here, ~has_ice).sum())
+        wrong_holes = np.logical_and(here, has_ice)
+        missing_with_ice += int(wrong_holes.sum())
+        missing_at_margin += int(
+            np.logical_and(wrong_holes, fraction < MARGIN_FRACTION).sum()
+        )
+        total += here.size
+
+    if defined_without_ice:
+        reporter.error(
+            f"variable '{ivar}' holds a value in"
+            f" {_count_phrase(defined_without_ice, total)} where '{mask_name}'"
+            f" is 0. The data request defines it only where there is ice, so"
+            f" those cells must hold the _FillValue."
+        )
+
+    if missing_with_ice:
+        report = (
+            reporter.warning
+            if criteria.get("margin_severity") == "warning"
+            else reporter.error
+        )
+        margin = ""
+        if missing_at_margin:
+            margin = (
+                f" {missing_at_margin} of them have '{mask_name}' below"
+                f" {MARGIN_FRACTION}, which is the partly glaciated margin"
+                f" rather than the interior."
+            )
+        report(
+            f"variable '{ivar}' is missing in"
+            f" {_count_phrase(missing_with_ice, total)} where '{mask_name}' is"
+            f" greater than 0, so there is ice the file says nothing about."
+            + margin
+        )
+
+
+def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
+                       ismip_meta, years) -> None:
+    """The checks that need more than the file in front of them.
+
+    Everything a companion cannot supply has already been reported by now; what
+    is left is the questions only two files together can answer.
+    """
+    mask_name = ICE_MASK_FOR_POLICY.get(criteria.get("fill_policy"))
+    if mask_name is None or ivar not in ds:
+        return
+
+    reporter.write("CONSISTENCY Tests\n")
+    findings_before = reporter.total_errors + reporter.total_warnings
+
+    companion = _open_companion(
+        reporter, source_path, file_name, mask_name, years, ismip_meta
+    )
+    if companion is None:
+        return
+    try:
+        _check_ice_extent(reporter, ds, ivar, criteria, companion)
+    finally:
+        companion.dataset.close()
+
+    if reporter.total_errors + reporter.total_warnings == findings_before:
+        reporter.ok(f"Defined exactly where '{mask_name}' says there is ice: OK")
+
+
 def _check_spatial(
     reporter: Reporter,
     ds,
@@ -2471,6 +2606,7 @@ def _check_attributes(
 def _run_variable_checks(
     reporter: Reporter,
     ds,
+    source_path: str,
     file_name: str,
     considered_variable: str,
     experiment_name: str,
@@ -2485,6 +2621,7 @@ def _run_variable_checks(
     num_reporter = reporter.category("num")
     spatial_reporter = reporter.category("spatial")
     time_reporter = reporter.category("time")
+    consistency_reporter = reporter.category("consistency")
     attr_reporter = reporter.category("attr", qualifier="attributes")
 
     reporter.write("\n")
@@ -2533,6 +2670,12 @@ def _run_variable_checks(
         )
     elif not isscalar:
         _check_spatial(spatial_reporter, ds, grid_extent, possible_resolution)
+
+    if not isscalar:
+        _check_consistency(
+            consistency_reporter, ds, ivar, ismip_meta[index], source_path,
+            file_name, ismip_meta, _nominal_years_of(ds, var_type),
+        )
 
     _check_time(
         time_reporter, ds, dim, experiments, experiment_name, var_type,
