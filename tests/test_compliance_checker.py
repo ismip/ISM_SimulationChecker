@@ -263,6 +263,23 @@ def set_variable_units(file_path: Path, units: str) -> None:
         dataset.variables[variable_name].units = units
 
 
+def write_values(file_path: Path, value, count: int = 5) -> None:
+    """Write `value` into the first `count` cells of a file's main variable.
+
+    Auto-masking is turned off so that the fill value can be written as a
+    value, which is the whole point when what is under test is how the checker
+    tells a fill value apart from a NaN.
+    """
+    variable_name = file_path.name.split("_")[0]
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        variable = dataset.variables[variable_name]
+        variable.set_auto_mask(False)
+        data = variable[:]
+        flat = data.reshape(-1)
+        flat[:count] = value
+        variable[:] = flat.reshape(data.shape)
+
+
 def dataset_for_variable(case_dir: Path, variable_name: str) -> Path:
     return sorted(case_dir.glob(f"{variable_name}_*.nc"))[0]
 
@@ -1183,6 +1200,41 @@ def test_shipped_range_severities_are_all_errors():
     ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
 
     assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
+
+
+def test_a_variable_with_fill_values_still_passes_its_range_check(xyt_case_dir):
+    """The trap in reading files undecoded.
+
+    A fill cell is then the literal 9.96921e+36 rather than a NaN, so a range
+    check that did not exclude it would report that maximum against a bound of
+    5500 m and fail every variable the data request lets have missing values.
+    """
+    write_values(
+        dataset_for_variable(xyt_case_dir, "orog"), netCDF4.default_fillvals["f4"]
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert "is out of range" not in summary["log_text"]
+
+
+def test_packing_is_reported_without_scaling_what_is_checked(xyt_case_dir):
+    """A packed variable is rejected, and the checks see what the file stores.
+
+    Decoded, xarray applies the scale_factor, so the range check would report
+    numbers that are not in the file -- here, mask fractions doubled past 1.
+    An f8 scale_factor on f4 data would also promote the variable to float64
+    and draw a dtype error about a file that is f4 on disk.
+    """
+    with netCDF4.Dataset(dataset_for_variable(xyt_case_dir, "sftgif"), "a") as dataset:
+        dataset.variables["sftgif"].scale_factor = 2.0
+
+    log = run_xyt_checker(xyt_case_dir)["log_text"]
+
+    assert "must not have 'scale_factor'" in log
+    assert "expected float32" not in log
+    assert "is out of range" not in log
 
 
 def run_main(

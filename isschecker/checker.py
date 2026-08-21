@@ -1211,8 +1211,13 @@ def _process_single_file(
     region = file_name_split[ISMIP7_FILENAME_REGION_IDX]
 
     try:
+        # Read undecoded.  mask_and_scale would turn every fill value into a
+        # NaN, losing the difference between "wrote the netCDF fill value, as
+        # the data request asks" and "wrote a bare NaN"; it would also apply
+        # the scale_factor and add_offset this request forbids, so the
+        # numerical checks would report numbers the file does not contain.
         ds = xr.open_dataset(os.path.join(source_path, file),
-                             decode_times=False)
+                             decode_times=False, mask_and_scale=False)
     except (ValueError, TypeError) as e:
         naming_reporter.error("Cannot open " + file_name + ": " + str(e))
         return
@@ -1673,6 +1678,47 @@ def _units_match(actual: str, expected: str) -> bool:
     return parsed_actual is not None and parsed_actual == _parse_units(expected)
 
 
+def _fill_value(ds, ivar):
+    """The fill value a variable declares, or the netCDF4 default for its dtype.
+
+    Read undecoded, `_FillValue` stays in `.attrs`; a decoded dataset keeps it
+    in `.encoding` instead, and both are looked at because the tests build
+    datasets each way.  A file that declares none is separately an error (see
+    _check_attributes); for the purpose of recognising fill cells the default
+    is what the data request asks for anyway.
+    """
+    variable = ds[ivar]
+    fill = variable.attrs.get("_FillValue")
+    if fill is None:
+        fill = variable.encoding.get("_FillValue")
+    if fill is None:
+        dtype = variable.dtype
+        fill = netCDF4.default_fillvals.get(dtype.kind + str(dtype.itemsize))
+    return fill
+
+
+def _missing_masks(ds, ivar):
+    """Which cells hold a fill value, and which hold no number at all.
+
+    The two are different findings, which is why files are read undecoded: a
+    fill value is how the data request says to write "missing", while a NaN or
+    an infinity is a private convention for the same thing that a reader
+    filtering on `_FillValue` -- as the request tells them to -- will silently
+    treat as data.  Decoded, both arrive as NaN and cannot be told apart.
+    """
+    values = np.asarray(ds[ivar].values)
+    if values.dtype.kind == "f":
+        is_nonfinite = ~np.isfinite(values)
+    else:
+        is_nonfinite = np.zeros(values.shape, dtype=bool)
+    fill = _fill_value(ds, ivar)
+    if fill is None:
+        is_fill = np.zeros(values.shape, dtype=bool)
+    else:
+        is_fill = values == fill
+    return is_fill, is_nonfinite
+
+
 def _check_numerical(
     reporter: Reporter,
     ds,
@@ -1709,6 +1755,13 @@ def _check_numerical(
             + expected_units
         )
 
+    # Which cells hold no usable number.  Read undecoded, a fill cell is the
+    # literal 9.96921e+36 rather than a NaN, so a range check that did not
+    # exclude it would fail every variable the request lets have missing
+    # values -- on a maximum that is the fill value itself.
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+
     if not isscalar and region not in ("AIS", "GrIS"):
         reporter.note(
             "Value range: not checked (the allowed range depends on the"
@@ -1722,29 +1775,27 @@ def _check_numerical(
             if ismip_meta[var_index].get("range_severity") == "warning"
             else reporter.error
         )
-        if False in ds[ivar].isnull():
-            if (
-                ds[ivar].min(skipna=True).item()
-                >= ismip_meta[var_index]["min_value_" + region.lower()]
-            ):
+        if not missing.all():
+            values = np.asarray(ds[ivar].values)[~missing]
+            minimum = values.min().item()
+            maximum = values.max().item()
+
+            if minimum >= ismip_meta[var_index]["min_value_" + region.lower()]:
                 reporter.ok("The minimum value successfully verified.")
             else:
                 report_range(
                     "The minimum value ("
-                    + str(ds[ivar].min(skipna=True).values.item(0))
+                    + str(minimum)
                     + ") is out of range. Min value accepted: "
                     + str(ismip_meta[var_index]["min_value_" + region.lower()])
                 )
 
-            if (
-                ds[ivar].max(skipna=True).item()
-                <= ismip_meta[var_index]["max_value_" + region.lower()]
-            ):
+            if maximum <= ismip_meta[var_index]["max_value_" + region.lower()]:
                 reporter.ok("The maximum value successfully verified.")
             else:
                 report_range(
                     "The maximum value ("
-                    + str(ds[ivar].max(skipna=True).values.item(0))
+                    + str(maximum)
                     + ") is out of range. Max value accepted: "
                     + str(ismip_meta[var_index]["max_value_" + region.lower()])
                 )
@@ -2086,9 +2137,16 @@ def _check_attributes(
         dtype = ds[ivar].dtype
         nc4_dtype_key = dtype.kind + str(dtype.itemsize)
         default_fill = netCDF4.default_fillvals.get(nc4_dtype_key)
-        fill_value = ds[ivar].encoding.get("_FillValue")
-        # xarray moves missing_value from attrs to encoding on read (CF fill-value handling)
-        missing_value = ds[ivar].attrs.get("missing_value") or ds[ivar].encoding.get("missing_value")
+        # Undecoded, both stay in .attrs; a decoded dataset moves them to
+        # .encoding instead, and the tests build datasets each way.  Checked
+        # for None rather than truthiness so that a missing_value of 0 is not
+        # mistaken for one that is absent.
+        fill_value = ds[ivar].attrs.get("_FillValue")
+        if fill_value is None:
+            fill_value = ds[ivar].encoding.get("_FillValue")
+        missing_value = ds[ivar].attrs.get("missing_value")
+        if missing_value is None:
+            missing_value = ds[ivar].encoding.get("missing_value")
         if fill_value is None:
             reporter.error(f"variable '{ivar}' missing '_FillValue'.")
         elif default_fill is not None and fill_value != default_fill:
