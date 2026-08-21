@@ -2274,6 +2274,121 @@ def _check_footprint_matches(reporter, ds, ivar, companion) -> None:
         )
 
 
+# Comfortably above float32 rounding on fractions in [0, 1], and far below any
+# difference that would mean the masks were built inconsistently.
+MASK_SUM_TOLERANCE = 1.0e-5
+
+
+def _field_and_steps(ds, ivar):
+    """A variable's values, where it says nothing, and how many time steps.
+
+    The missing mask matters as much here as on the companion side: read
+    undecoded a fill cell holds 9.96921e+36, which is both finite and greater
+    than zero, so a rule that only skipped NaNs would read a hole as a very
+    thick piece of ice.
+    """
+    values = np.asarray(ds[ivar].values)
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    return values, np.logical_or(is_fill, is_nonfinite), (
+        values.shape[0] if values.ndim > 2 else 1
+    )
+
+
+def _step_of(values, step):
+    return values[step] if values.ndim > 2 else values
+
+
+def _check_mask_sum(reporter, ds, ivar, grounded, floating) -> None:
+    """Grounded fraction plus floating fraction is the ice fraction.
+
+    True by definition -- every ice-covered part of a cell is either grounded
+    or afloat -- which is what makes it worth checking: it needs no geometry,
+    no densities and no judgement, and it catches a whole class of mistakes in
+    how the masks were built.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    disagreeing = 0
+    worst = 0.0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        grounded_values, grounded_unknown = _companion_slice(grounded, step)
+        floating_values, floating_unknown = _companion_slice(floating, step)
+        if here.shape != grounded_values.shape != floating_values.shape:
+            reporter.note(
+                "Not checked against 'sftgrf' and 'sftflf': their grids differ"
+                " from this file's."
+            )
+            return
+        known = ~np.logical_or(
+            np.logical_or(grounded_unknown, floating_unknown),
+            _step_of(missing, step),
+        )
+        difference = np.where(
+            known, np.abs(grounded_values + floating_values - here), 0.0
+        )
+        disagreeing += int((difference > MASK_SUM_TOLERANCE).sum())
+        worst = max(worst, float(difference.max()))
+        total += here.size
+
+    if disagreeing:
+        reporter.error(
+            f"'sftgrf' + 'sftflf' does not equal '{ivar}' in"
+            f" {_count_phrase(disagreeing, total)}, by up to {worst:.3g}. Every"
+            f" ice-covered part of a cell is either grounded or afloat, so the"
+            f" two fractions must sum to the total."
+        )
+
+
+def _check_thickness_matches_mask(reporter, ds, ivar, criteria, companion) -> None:
+    """Ice with no thickness, or thickness with no ice, contradicts itself.
+
+    Both variables are defined everywhere and hold no missing values, so this
+    is an exact two-way comparison with nothing to exclude but a broken mask.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    thickness_without_ice = 0
+    ice_without_thickness = 0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        fraction, unknown = _companion_slice(companion, step)
+        if here.shape != fraction.shape:
+            reporter.note(
+                f"Not checked against '{companion.variable}': its grid differs"
+                f" from this file's."
+            )
+            return
+        known = np.logical_and(~unknown, ~_step_of(missing, step))
+        has_ice = np.logical_and(known, fraction > 0.0)
+        is_thick = np.logical_and(known, here > 0.0)
+        thickness_without_ice += int(np.logical_and(is_thick, ~has_ice).sum())
+        ice_without_thickness += int(np.logical_and(has_ice, ~is_thick).sum())
+        total += here.size
+
+    report = (
+        reporter.warning
+        if criteria.get("margin_severity") == "warning"
+        else reporter.error
+    )
+    if thickness_without_ice:
+        report(
+            f"variable '{ivar}' is greater than 0 in"
+            f" {_count_phrase(thickness_without_ice, total)} where"
+            f" '{companion.variable}' is 0, so the file carries ice thickness"
+            f" in cells its own mask says hold no ice."
+        )
+    if ice_without_thickness:
+        report(
+            f"variable '{ivar}' is 0 in"
+            f" {_count_phrase(ice_without_thickness, total)} where"
+            f" '{companion.variable}' is greater than 0, so the file's mask"
+            f" claims ice the thickness does not account for."
+        )
+
+
 def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
                        ismip_meta, years) -> None:
     """The checks that need more than the file in front of them.
@@ -2283,7 +2398,12 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
     """
     policy = criteria.get("fill_policy")
     mask_name = ICE_MASK_FOR_POLICY.get(policy)
-    if ivar not in ds or (mask_name is None and policy != "outside_domain"):
+    # The variables that are compared against each other by name rather than by
+    # policy: the masks have to add up, and thickness has to agree with them.
+    by_name = ivar in ("sftgif", "lithk")
+    if ivar not in ds or (
+        mask_name is None and policy != "outside_domain" and not by_name
+    ):
         return
 
     reporter.write("CONSISTENCY Tests\n")
@@ -2300,7 +2420,28 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
         finally:
             companion.dataset.close()
 
-    if mask_name is not None:
+    if ivar == "sftgif":
+        grounded = _open_companion(
+            reporter, source_path, file_name, "sftgrf", years, ismip_meta
+        )
+        floating = _open_companion(
+            reporter, source_path, file_name, "sftflf", years, ismip_meta
+        )
+        try:
+            if grounded is not None and floating is not None:
+                _check_mask_sum(reporter, ds, ivar, grounded, floating)
+        finally:
+            for companion in (grounded, floating):
+                if companion is not None:
+                    companion.dataset.close()
+        summary = "Grounded and floating fractions sum to the ice fraction: OK"
+    elif ivar == "lithk":
+        against(
+            "sftgif",
+            lambda c: _check_thickness_matches_mask(reporter, ds, ivar, criteria, c),
+        )
+        summary = "Thickness and ice mask agree: OK"
+    elif mask_name is not None:
         against(
             mask_name,
             lambda c: _check_ice_extent(reporter, ds, ivar, criteria, c),

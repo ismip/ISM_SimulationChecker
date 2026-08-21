@@ -466,6 +466,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Thickness and ice mask agree: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -573,6 +575,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Grounded and floating fractions sum to the ice fraction: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK

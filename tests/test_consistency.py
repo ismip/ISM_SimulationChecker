@@ -277,6 +277,73 @@ def test_a_hole_in_the_mask_is_not_mistaken_for_ice(case_dir):
     assert "sftgif' holds a fill value in" in summary["log_text"]
 
 
+def test_masks_that_do_not_add_up_are_an_error(case_dir):
+    """Every ice-covered part of a cell is either grounded or afloat.
+
+    True by definition, which is what makes it worth checking: no geometry, no
+    densities, no judgement, and it catches how the masks were built.
+    """
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "sftgrf"),
+              geometry["sftgrf"] == 1.0, 0.5)
+
+    summary = run(case_dir)
+
+    assert "does not equal 'sftgif'" in summary["log_text"]
+    assert summary["total_consistency_errors"] >= 1
+
+
+def test_masks_within_rounding_of_each_other_are_accepted(case_dir):
+    """float32 arithmetic must not be reported as a mask-building mistake."""
+    geometry = geometry_of(case_dir)
+    nudge = geometry["sftgrf"].copy()
+    interior = geometry["sftgrf"] == 1.0
+    nudge[interior] = 1.0 - 1.0e-7
+    set_where(dataset_for_variable(case_dir, "sftgrf"), interior, 1.0 - 1.0e-7)
+
+    summary = run(case_dir)
+
+    assert "does not equal 'sftgif'" not in summary["log_text"]
+
+
+def test_thickness_without_ice_is_reported(case_dir):
+    """The check hgoelzer asked for, in the direction that says too much ice."""
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "lithk"),
+              geometry["sftgif"] == 0.0, 100.0)
+
+    log = run(case_dir)["log_text"]
+
+    assert "carries ice thickness in cells its own mask says hold no ice" in log
+
+
+def test_ice_without_thickness_is_reported(case_dir):
+    """And in the direction that says too little."""
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "lithk"),
+              geometry["sftgif"] > 0.0, 0.0)
+
+    log = run(case_dir)["log_text"]
+
+    assert "claims ice the thickness does not account for" in log
+
+
+def test_a_hole_in_a_mask_is_not_read_as_a_thick_piece_of_ice(case_dir):
+    """A fill value is finite and greater than zero when read undecoded.
+
+    So a rule skipping only NaNs would take a hole in lithk for 9.96921e+36
+    metres of ice, and report the mask for failing to account for it.
+    """
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "lithk"),
+              geometry["sftgif"] == 0.0, FILL)
+
+    log = run(case_dir)["log_text"]
+
+    assert "carries ice thickness in cells its own mask says hold no ice" not in log
+    assert "lithk' holds a fill value in" in log
+
+
 @pytest.mark.parametrize(
     "value, expected",
     [("warning", "warning"), ("error", "error"), (None, "error"),
