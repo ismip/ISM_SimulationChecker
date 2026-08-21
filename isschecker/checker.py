@@ -39,6 +39,23 @@
 #      undecoded, so a fill cell is the literal 9.96921e+36.
 #    - Array is not entirely fill/missing values.
 #
+# 2b. Consistency (_check_consistency)  [spatial variables only]
+#    - A no_ice / no_grounded_ice / no_floating_ice variable is missing exactly
+#      where its mask (sftgif / sftgrf / sftflf) is 0.  Holding a value where
+#      there is no ice is an error; being missing where there is ice is at the
+#      severity 'margin_severity' names, a warning for the first round of
+#      submissions -- see _margin_severity.
+#    - An outside_domain variable is defined wherever there is ice (error), and
+#      the outside_domain variables agree about where the domain is (warning:
+#      a forcing or reference dataset may legitimately cover more).
+#    - sftgrf + sftflf equals sftgif; lithk is greater than 0 exactly where
+#      sftgif is; orog equals base + lithk; and the ice base rests on the bed
+#      where sftgrf is 1 and lies above it where sftflf is 1.  No densities:
+#      all of this is submitted geometry compared against itself.
+#    - The companion file is found by name, every field matching but the
+#      variable.  When it is absent the check says so and is skipped, so a
+#      submission can still be checked a part at a time.
+#
 # 3. Spatial (_check_spatial)  [xyt variables only]
 #    - Lower-left and upper-right grid corners lie within the expected AIS or GrIS extents.
 #    - Grid resolution is one of the allowed values (1, 2, 4, 8, 16, 32 km).

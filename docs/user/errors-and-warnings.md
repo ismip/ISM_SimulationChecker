@@ -80,9 +80,9 @@ are not restricted to 0 and 1**: any fraction in `[0, 1]` is accepted, because
 conservative interpolation from your native grid to the output grid
 legitimately produces intermediate values.
 
-A `forbidden` variable holding any fill value is an error, and that is the rule
-this issue turned on. The other policies say where a field sits relative to the
-ice masks, which takes more than one file to check.
+A `forbidden` variable holding any fill value is an error. The other policies
+say where a field sits relative to the ice masks, which takes more than one
+file to check — see [Checks that compare files](#checks-that-compare-files).
 
 **However a variable spells "missing", it must spell it the netCDF way.**
 Every value has to be either a finite number or exactly the `_FillValue` the
@@ -99,6 +99,60 @@ default exists so that the column can be extended without breaking older and
 newer checkers against each other.
 
 [issue #23]: https://github.com/ismip/ISM_SimulationChecker/issues/23
+
+## Checks that compare files
+
+Where a field is defined is a statement about it and the ice, so most of the
+policies above cannot be checked from one file alone. The checker looks for the
+companion it needs in the same directory, matching every field of the name but
+the variable, and compares the two.
+
+- A `no_ice`, `no_grounded_ice` or `no_floating_ice` variable is missing
+  **exactly** where its mask is zero. Ice is `sftgif > 0`, so a cell holding any
+  fraction of ice at all is one the variable must be defined in. The two
+  directions are reported separately: holding a value where there is no ice is
+  an error, and being missing where there is ice is, for now, a warning (see
+  below).
+- An `outside_domain` variable is defined wherever there is ice — otherwise the
+  submission has ice outside its own computational domain, which is an error.
+  These variables should also agree with each other about where the domain is,
+  which is a warning rather than an error, because a field taken from a forcing
+  or reference dataset may legitimately cover more of the grid than the ice
+  model does.
+- `sftgrf + sftflf` equals `sftgif`, `lithk` is greater than zero exactly where
+  `sftgif` is, `orog` equals `base + lithk`, and the ice base rests on the bed
+  where `sftgrf` is 1 and lies above it where `sftflf` is 1. None of these needs
+  an assumed density: they compare submitted geometry against itself.
+
+**If a file a check needs is not there, the check says so and is skipped.**
+Checking part of a submission — a run scoped to the scalars, or a model that
+does not produce a mask yet — works exactly as before, and needs no flag.
+
+**The value identities are checked in every cell**, including partly glaciated
+ones. They are linear, so they survive cell-mean averaging: `orog = base +
+lithk` holds pointwise and therefore for any consistent mean of the three. This
+assumes those fields use the **same averaging convention** in a partly
+glaciated cell. The grounded and floating comparisons against the bed are the
+exception, and are made only in cells that are wholly one or the other, since in
+a half-and-half cell the mean ice base sits somewhere between and nothing
+follows from where.
+
+### One severity that will change
+
+Two of these findings turn on where a model puts the ice margin: a variable
+being *missing where there is ice*, and thickness disagreeing with the ice mask.
+A conservatively interpolated mask puts fractions like `1e-6` in a ring all
+along the edge, and a model that decides where to write fill from its own
+native-grid mask will disagree in every one of those cells.
+
+Which is right is a question one round of real submissions answers better than
+any amount of argument, so **those two findings are warnings for the first
+round and will become errors afterwards**. Nothing else about the rules
+changes: the definitions above are fixed, and a model can be written to them
+today. The severity lives in the `margin_severity` column of the data request,
+so the promotion is a one-cell change rather than a new release of the checker,
+and the finding reports how much of itself is margin — "300 of them have
+`sftgif` below 0.01" — so the decision can be made on evidence.
 
 ## Value ranges
 
