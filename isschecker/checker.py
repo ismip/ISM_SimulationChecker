@@ -1761,6 +1761,15 @@ def _check_numerical(
     # values -- on a maximum that is the fill value itself.
     is_fill, is_nonfinite = _missing_masks(ds, ivar)
     missing = np.logical_or(is_fill, is_nonfinite)
+    all_missing = bool(missing.all())
+
+    # An array holding nothing at all is worth saying so about whatever its
+    # shape and whichever region it belongs to.  This used to sit inside the
+    # range checks below, which run only for spatial variables in a recognised
+    # region, so an all-missing scalar series -- or any file whose region the
+    # name does not identify -- went unreported.
+    if all_missing:
+        reporter.error("The array only contains missing values.")
 
     if not isscalar and region not in ("AIS", "GrIS"):
         reporter.note(
@@ -1775,7 +1784,7 @@ def _check_numerical(
             if ismip_meta[var_index].get("range_severity") == "warning"
             else reporter.error
         )
-        if not missing.all():
+        if not all_missing:
             values = np.asarray(ds[ivar].values)[~missing]
             minimum = values.min().item()
             maximum = values.max().item()
@@ -1799,8 +1808,6 @@ def _check_numerical(
                     + ") is out of range. Max value accepted: "
                     + str(ismip_meta[var_index]["max_value_" + region.lower()])
                 )
-        else:
-            reporter.error("The array only contains missing values.")
 
 
 def _check_spatial(

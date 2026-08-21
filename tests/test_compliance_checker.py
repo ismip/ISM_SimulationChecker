@@ -263,12 +263,12 @@ def set_variable_units(file_path: Path, units: str) -> None:
         dataset.variables[variable_name].units = units
 
 
-def write_values(file_path: Path, value, count: int = 5) -> None:
+def write_values(file_path: Path, value, count: int | None = 5) -> None:
     """Write `value` into the first `count` cells of a file's main variable.
 
-    Auto-masking is turned off so that the fill value can be written as a
-    value, which is the whole point when what is under test is how the checker
-    tells a fill value apart from a NaN.
+    `count=None` writes every cell.  Auto-masking is turned off so that the
+    fill value can be written as a value, which is the whole point when what is
+    under test is how the checker tells a fill value apart from a NaN.
     """
     variable_name = file_path.name.split("_")[0]
     with netCDF4.Dataset(file_path, "a") as dataset:
@@ -1217,6 +1217,35 @@ def test_a_variable_with_fill_values_still_passes_its_range_check(xyt_case_dir):
 
     assert summary["total_errors"] == 0, summary["log_text"]
     assert "is out of range" not in summary["log_text"]
+
+
+def test_checker_reports_a_scalar_series_of_nothing_but_fill(case_dir):
+    """A time series with no numbers in it, reported for a scalar variable.
+
+    The check used to sit inside the range checks, which run only for spatial
+    variables in a recognised region, so this went unreported.
+    """
+    write_values(
+        dataset_for_variable(case_dir, "lim"),
+        netCDF4.default_fillvals["f4"],
+        count=None,
+    )
+
+    summary = run_checker(case_dir)
+
+    assert "The array only contains missing values." in summary["log_text"]
+    assert summary["total_errors"] >= 1
+
+
+def test_checker_reports_an_all_missing_array_of_an_unknown_region(xyt_case_dir):
+    """The other half of the same gap: no region, so no range checks to hide in."""
+    target_file = dataset_for_variable(xyt_case_dir, "lithk")
+    write_values(target_file, netCDF4.default_fillvals["f4"], count=None)
+    rename_file_part(target_file, checker.ISMIP7_FILENAME_REGION_IDX, "XXX")
+
+    log = run_xyt_checker(xyt_case_dir)["log_text"]
+
+    assert "The array only contains missing values." in log
 
 
 def test_packing_is_reported_without_scaling_what_is_checked(xyt_case_dir):
