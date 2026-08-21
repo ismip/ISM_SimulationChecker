@@ -53,6 +53,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -87,6 +88,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -121,6 +123,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -155,6 +158,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m^2
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -183,6 +187,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m^2
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -211,6 +216,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -245,6 +251,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -279,6 +286,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -313,6 +321,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -347,6 +356,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg m-2 s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -381,6 +391,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -409,6 +420,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -437,6 +449,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -471,6 +484,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -505,6 +519,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: 1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -539,6 +554,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: 1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -573,6 +589,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: 1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -607,6 +624,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: Pa
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -641,6 +659,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg s-1
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -669,6 +688,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg s-1
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -697,6 +717,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg s-1
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -725,6 +746,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg s-1
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -753,6 +775,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg s-1
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -781,6 +804,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: kg s-1
+ - Missing values: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -809,6 +833,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -843,6 +868,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests
@@ -877,6 +903,7 @@ NAMING Tests
 
 NUMERICAL Tests
  - The unit is correct: m s-1
+ - Missing values: OK
  - The minimum value successfully verified.
  - The maximum value successfully verified.
 SPATIAL Tests

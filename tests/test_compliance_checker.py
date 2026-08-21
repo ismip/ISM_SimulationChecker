@@ -1303,6 +1303,39 @@ def test_checker_reports_an_all_missing_array_of_an_unknown_region(xyt_case_dir)
     assert "The array only contains missing values." in log
 
 
+def test_checker_reports_a_nan_used_as_a_missing_value(xyt_case_dir):
+    """A bare NaN is not an accepted way to say "missing".
+
+    The data request asks for the netCDF4 fill value, and a reader filtering on
+    _FillValue -- as it tells them to -- takes a NaN for data. Decoded, the two
+    were indistinguishable, which is why files are read as they are stored.
+    """
+    write_values(dataset_for_variable(xyt_case_dir, "orog"), float("nan"))
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert "holds a NaN or an infinity in 5 of" in summary["log_text"]
+
+
+def test_checker_reports_an_infinity_as_a_missing_value_not_a_range_error(
+    xyt_case_dir,
+):
+    """An infinity is the same finding as a NaN, and only that finding.
+
+    Stating the rule as "finite or fill" rather than "not NaN" is what catches
+    it; isnull() never would. It must not also be reported as an out-of-range
+    maximum, which would tell the modeller to look at their elevations.
+    """
+    write_values(dataset_for_variable(xyt_case_dir, "orog"), float("inf"))
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert "holds a NaN or an infinity" in summary["log_text"]
+    assert "is out of range" not in summary["log_text"]
+
+
 def test_packing_is_reported_without_scaling_what_is_checked(xyt_case_dir):
     """A packed variable is rejected, and the checks see what the file stores.
 

@@ -1752,6 +1752,40 @@ def _missing_masks(ds, ivar):
     return is_fill, is_nonfinite
 
 
+def _count_phrase(count: int, total: int) -> str:
+    """How many cells, out of how many.
+
+    Both numbers matter: "3 fill values" and "40% fill values" are different
+    mistakes and want different responses from the modeller.
+    """
+    return f"{count} of {total} value(s) ({100.0 * count / total:.3g}%)"
+
+
+def _check_missing_values(reporter, ivar, criteria, is_fill, is_nonfinite, fill):
+    """How a variable spells "missing", and whether it is allowed any.
+
+    Two separate findings, because they are different mistakes with different
+    fixes.  A NaN or an infinity is a private convention for "missing" that the
+    archive has not agreed to: the data request says to write the netCDF4 fill
+    value, and a reader filtering on _FillValue -- as the request tells them to
+    -- will silently take a NaN for data.
+    """
+    total = is_fill.size
+    findings_before = reporter.total_errors + reporter.total_warnings
+
+    n_nonfinite = int(is_nonfinite.sum())
+    if n_nonfinite:
+        reporter.error(
+            f"variable '{ivar}' holds a NaN or an infinity in"
+            f" {_count_phrase(n_nonfinite, total)}. Missing data must be"
+            f" written as the variable's _FillValue ({fill}); a reader"
+            f" filtering on that will treat these cells as data."
+        )
+
+    if reporter.total_errors + reporter.total_warnings == findings_before:
+        reporter.ok("Missing values: OK")
+
+
 def _check_numerical(
     reporter: Reporter,
     ds,
@@ -1795,6 +1829,11 @@ def _check_numerical(
     is_fill, is_nonfinite = _missing_masks(ds, ivar)
     missing = np.logical_or(is_fill, is_nonfinite)
     all_missing = bool(missing.all())
+
+    _check_missing_values(
+        reporter, ivar, ismip_meta[var_index], is_fill, is_nonfinite,
+        _fill_value(ds, ivar),
+    )
 
     # An array holding nothing at all is worth saying so about whatever its
     # shape and whichever region it belongs to.  This used to sit inside the

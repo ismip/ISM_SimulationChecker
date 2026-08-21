@@ -80,6 +80,14 @@ are not restricted to 0 and 1**: any fraction in `[0, 1]` is accepted, because
 conservative interpolation from your native grid to the output grid
 legitimately produces intermediate values.
 
+**However a variable spells "missing", it must spell it the netCDF way.**
+Every value has to be either a finite number or exactly the `_FillValue` the
+file declares, whatever the variable's policy. A bare NaN, or an infinity, is
+an error: it is a private convention the archive has not agreed to, and a
+reader filtering on `_FillValue` — as the request tells them to — will silently
+treat those cells as data. If your model writes NaN where it means missing,
+this is the one change it needs.
+
 Anything the column does not say — a blank cell, an unrecognized value, or the
 column being absent altogether — means the variable is unconstrained and
 nothing about its missing values is checked. No shipped row is blank today; the
