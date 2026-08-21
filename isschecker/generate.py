@@ -24,6 +24,140 @@ DATA_PACKAGE = f'{__package__}.data'
 DEFAULT_SEED = 0
 
 
+# The synthetic ice sheet, in metres.  These are not meant to be realistic --
+# they are meant to be checkable: every value stays inside the min/max bounds
+# the data request sets for both AIS and GrIS, and the geometry produces a
+# grounded interior and a floating ring both large enough to hold data.
+ICE_DENSITY = 917.0
+SEAWATER_DENSITY = 1027.0
+DOME_HEIGHT = 3000.0
+BED_CREST = 500.0
+BED_DROP = 3000.0
+BED_FLOOR = -3500.0
+# Width of the partially glaciated margin, as a fraction of the ice radius.
+MARGIN_WIDTH = 0.08
+# Radii, as fractions of half the shorter side of the grid.
+ICE_RADIUS = 0.55
+DOMAIN_RADIUS = 0.85
+
+
+def ice_sheet_geometry(x, y):
+    """An analytic ice sheet the cross-file checks can be run against.
+
+    Drawing every variable from its own uniform distribution is fine as long as
+    each file is checked alone, but it cannot survive a check that compares two
+    files: a random thickness and a random mask do not agree about where the
+    ice is, and a random velocity is defined everywhere, which is exactly what
+    the data request forbids.  So the seven geometry variables come from here
+    instead, and the masks say where every other variable is defined.
+
+    A radially symmetric dome on a bowl-shaped bed, deliberately analytic:
+    depending on BedMachine or Bedmap would buy realism the checker has no use
+    for, and would invite depending on a dataset for every other variable too.
+    A synthetic file's job is to be predictable.
+
+    The construction is arranged so that the identities hold exactly rather
+    than approximately.  Thickness and ice fraction are both keyed on the same
+    ice mask, so `lithk > 0` exactly where `sftgif > 0`.  The grounded and
+    floating fractions partition the ice fraction, so they sum to it.  The ice
+    base is the higher of the bed and the flotation level, so it never lies
+    below the bed, sits on it where the ice is grounded and above it where the
+    ice floats.  Surface elevation is defined as base plus thickness, so that
+    identity holds by construction -- and outside the ice the base is sea level
+    or the ground, whichever is higher, which keeps surface elevation at or
+    above zero as the data request requires.
+
+    Returns
+    -------
+    dict
+        `domain`, a boolean mask of the computational domain, and one 2-D field
+        per geometry variable, keyed by its ISMIP7 name.
+    """
+    grid_x, grid_y = np.meshgrid(x, y)
+    centre_x = 0.5 * (float(x[0]) + float(x[-1]))
+    centre_y = 0.5 * (float(y[0]) + float(y[-1]))
+    half_span = 0.5 * min(
+        abs(float(x[-1]) - float(x[0])), abs(float(y[-1]) - float(y[0]))
+    )
+    radius = np.hypot(grid_x - centre_x, grid_y - centre_y)
+
+    ice_radius = ICE_RADIUS * half_span
+    domain = radius <= DOMAIN_RADIUS * half_span
+
+    scaled = radius / ice_radius
+    ice = scaled < 1.0
+
+    # A ramp at the margin, so that the masks carry the intermediate fractions
+    # conservative interpolation really produces and the data request allows.
+    # The floor keeps them strictly positive wherever there is any ice at all,
+    # which is what "ice is sftgif > 0" needs in order to mean anything.
+    ramp = np.clip((1.0 - scaled) / MARGIN_WIDTH, 0.0, 1.0)
+    sftgif = np.where(ice, np.maximum(ramp, 1.0e-3), 0.0)
+
+    dome = DOME_HEIGHT * np.sqrt(np.maximum(1.0 - scaled**2, 0.0))
+    lithk = np.where(ice, np.maximum(dome, 1.0), 0.0)
+
+    topg = np.maximum(BED_CREST - BED_DROP * scaled**2, BED_FLOOR)
+
+    flotation_base = -(ICE_DENSITY / SEAWATER_DENSITY) * lithk
+    afloat = np.logical_and(ice, flotation_base > topg)
+
+    base = np.where(
+        ice, np.maximum(topg, flotation_base), np.maximum(topg, 0.0)
+    )
+    orog = base + lithk
+
+    return {
+        "domain": domain,
+        "sftgif": sftgif,
+        "sftgrf": np.where(afloat, 0.0, sftgif),
+        "sftflf": np.where(afloat, sftgif, 0.0),
+        "lithk": lithk,
+        "topg": topg,
+        "base": base,
+        "orog": orog,
+    }
+
+
+def missing_where(fill_policy, geometry):
+    """Which cells a variable of this policy leaves missing, or None for any.
+
+    The policies come from the fill_policy column of the data request; see
+    _fill_policy in the checker.  `forbidden` is the None case: those variables
+    are defined everywhere, so there is nothing to hole out.
+    """
+    if fill_policy == "outside_domain":
+        return np.logical_not(geometry["domain"])
+    if fill_policy == "no_ice":
+        return geometry["sftgif"] == 0.0
+    if fill_policy == "no_grounded_ice":
+        return geometry["sftgrf"] == 0.0
+    if fill_policy == "no_floating_ice":
+        return geometry["sftflf"] == 0.0
+    return None
+
+
+def spatial_field(var_name, var_info, shape, min_val, max_val, geometry,
+                  fillval, rng):
+    """One spatial variable's synthetic data, with its missing values in place.
+
+    Geometry variables come from the ice sheet; everything else is still drawn
+    at random within its allowed range, and then holed out where the variable's
+    policy says it is not defined.
+    """
+    field = geometry.get(var_name)
+    if field is None:
+        field = generate_synthetic_data(shape, min_val, max_val, rng=rng)
+    else:
+        field = np.broadcast_to(field, shape).astype(np.float32)
+
+    missing = missing_where(var_info.get('fill_policy'), geometry)
+    if missing is not None:
+        field = np.where(np.broadcast_to(missing, shape), fillval, field)
+
+    return np.ascontiguousarray(field, dtype=np.float32)
+
+
 def data_dir() -> Path:
     """Return the bundled directory of criteria CSVs and `gdfs` grid definitions.
 
@@ -158,6 +292,11 @@ def read_variable_criteria(csv_file, include_non_mandatory=False):
             'standard_name': row['standard_name'] if pd.notna(row['standard_name']) else '',
             'units': str(row['units']) if pd.notna(row['units']) else '',
             'mandatory': row['Mandatory (yes/no)'].lower() == 'yes',
+            'fill_policy': (
+                str(row['fill_policy']).strip().lower()
+                if 'fill_policy' in df.columns and pd.notna(row['fill_policy'])
+                else None
+            ),
         }
 
         # Collect any min_/max_ columns (case-insensitive) from the CSV
@@ -308,6 +447,11 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     x = np.arange(nx, dtype=np.float32) * xinc + xfirst
     y = np.arange(ny, dtype=np.float32) * yinc + yfirst
 
+    # One ice sheet, shared by every file this call writes, so that the files
+    # agree with each other -- which is the whole point of the cross-file
+    # checks they are used to exercise.
+    geometry = ice_sheet_geometry(x, y)
+
     # Create time coordinates - will be set per variable type later
     # ST (State) variables: end of year (e.g., 0.999, 1.999, ...)
     # FL (Flux) variables: middle of year (e.g., 0.5, 1.5, ...) with bounds
@@ -407,7 +551,10 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((nyears, ny, nx), min_val, max_val, rng=rng)
+            data = spatial_field(
+                var_name, var_info, (nyears, ny, nx), min_val, max_val,
+                geometry, fillval, rng,
+            )
 
             # Create data array with metadata
             data_vars = {
@@ -525,7 +672,10 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((n_snapshots, nz, ny, nx), min_val, max_val, rng=rng)
+            data = spatial_field(
+                var_name, var_info, (n_snapshots, nz, ny, nx), min_val, max_val,
+                geometry, fillval, rng,
+            )
 
             data_vars = {
                 var_name: (
@@ -594,7 +744,10 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             if min_val >= max_val:
                 max_val = min_val + 1.0
 
-            data = generate_synthetic_data((ny, nx), min_val, max_val, rng=rng)
+            data = spatial_field(
+                var_name, var_info, (ny, nx), min_val, max_val,
+                geometry, fillval, rng,
+            )
 
             data_vars = {
                 var_name: (
