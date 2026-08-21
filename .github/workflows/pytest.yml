@@ -41,7 +41,7 @@ jobs:
 
       - name: Install isschecker
         shell: micromamba-shell {0}
-        # The same flags the README gives modelers, so CI exercises the
+        # The same flags the docs give developers, so CI exercises the
         # documented install rather than a different one.
         run: python -m pip install --no-deps --no-build-isolation .
 

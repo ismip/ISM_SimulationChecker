@@ -60,3 +60,16 @@ simply does not appear.
 
 If you add a column that deserves documenting, add a section to that extension
 rather than a table to the page.
+
+## How it is published
+
+`.github/workflows/docs.yml` builds the docs on every push and pull request,
+and deploys them to GitHub Pages on pushes to `main`. A pull request therefore
+fails if it breaks the docs, but only `main` is ever published.
+
+```{note}
+Publishing requires that **Settings → Pages → Build and deployment → Source**
+be set to **GitHub Actions** in the repository settings, which needs admin
+rights on the repository. Until it is, the build job still runs and still
+catches broken docs; the deploy job is what fails.
+```
