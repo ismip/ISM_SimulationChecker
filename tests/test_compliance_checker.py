@@ -263,12 +263,14 @@ def set_variable_units(file_path: Path, units: str) -> None:
         dataset.variables[variable_name].units = units
 
 
-def write_values(file_path: Path, value, count: int | None = 5) -> None:
-    """Write `value` into the first `count` cells of a file's main variable.
+def write_values(
+    file_path: Path, value, count: int | None = 5, start: int = 0
+) -> None:
+    """Write `value` into `count` cells of a file's main variable, from `start`.
 
-    `count=None` writes every cell.  Auto-masking is turned off so that the
-    fill value can be written as a value, which is the whole point when what is
-    under test is how the checker tells a fill value apart from a NaN.
+    `count=None` writes every cell to the end.  Auto-masking is turned off so
+    that the fill value can be written as a value, which is the whole point
+    when what is under test is how the checker tells a fill value from a NaN.
     """
     variable_name = file_path.name.split("_")[0]
     with netCDF4.Dataset(file_path, "a") as dataset:
@@ -276,7 +278,7 @@ def write_values(file_path: Path, value, count: int | None = 5) -> None:
         variable.set_auto_mask(False)
         data = variable[:]
         flat = data.reshape(-1)
-        flat[:count] = value
+        flat[start : None if count is None else start + count] = value
         variable[:] = flat.reshape(data.shape)
 
 
@@ -1301,6 +1303,67 @@ def test_checker_reports_an_all_missing_array_of_an_unknown_region(xyt_case_dir)
     log = run_xyt_checker(xyt_case_dir)["log_text"]
 
     assert "The array only contains missing values." in log
+
+
+@pytest.mark.parametrize(
+    "variable_name", ["lithk", "dlithkdt", "sftgif", "sftgrf", "licalvf"]
+)
+def test_checker_reports_a_fill_value_the_request_forbids(
+    xyt_case_dir, variable_name
+):
+    """The rule issue #23 is about: these fields cover the whole grid.
+
+    Ice thickness is 0 where there is no ice rather than missing, and so are
+    the masks and the front fluxes, so that downstream analysis does not have
+    to guess whether a hole means no ice or an inactive model.
+    """
+    write_values(
+        dataset_for_variable(xyt_case_dir, variable_name),
+        netCDF4.default_fillvals["f4"],
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert (
+        f"variable '{variable_name}' holds a fill value in 5 of"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_a_gappy_scalar_series(case_dir):
+    """A scalar carries the same policy: a missing total ice mass is a hole.
+
+    An analyst plots straight through it. A model that cannot compute one of
+    these should decline it in not_modelled.txt rather than submit gaps.
+    """
+    write_values(
+        dataset_for_variable(case_dir, "lim"),
+        netCDF4.default_fillvals["f4"],
+        count=1,
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert "variable 'lim' holds a fill value in 1 of 2" in summary["log_text"]
+
+
+def test_a_nan_and_a_fill_value_are_two_separate_findings(xyt_case_dir):
+    """The distinction the old decoded reading could not make.
+
+    Both are wrong in `lithk` and they are wrong for different reasons, so a
+    modeller who has done both is told about both.
+    """
+    path = dataset_for_variable(xyt_case_dir, "lithk")
+    write_values(path, netCDF4.default_fillvals["f4"], count=3)
+    write_values(path, float("nan"), count=2, start=3)
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 2, summary["log_text"]
+    assert "holds a fill value in 3 of" in summary["log_text"]
+    assert "holds a NaN or an infinity in 2 of" in summary["log_text"]
 
 
 def test_checker_reports_a_nan_used_as_a_missing_value(xyt_case_dir):

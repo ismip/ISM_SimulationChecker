@@ -1782,6 +1782,18 @@ def _check_missing_values(reporter, ivar, criteria, is_fill, is_nonfinite, fill)
             f" filtering on that will treat these cells as data."
         )
 
+    # Where the variable is defined at all is a per-variable question the data
+    # request answers; see _fill_policy.  `forbidden` says the field covers the
+    # whole grid, so a hole in it is a hole in the archive.
+    n_fill = int(is_fill.sum())
+    if n_fill and criteria.get("fill_policy") == "forbidden":
+        reporter.error(
+            f"variable '{ivar}' holds a fill value in"
+            f" {_count_phrase(n_fill, total)}. The data request does not permit"
+            f" missing values in this variable: where there is no ice the value"
+            f" is 0, not missing."
+        )
+
     if reporter.total_errors + reporter.total_warnings == findings_before:
         reporter.ok("Missing values: OK")
 

@@ -80,6 +80,10 @@ are not restricted to 0 and 1**: any fraction in `[0, 1]` is accepted, because
 conservative interpolation from your native grid to the output grid
 legitimately produces intermediate values.
 
+A `forbidden` variable holding any fill value is an error, and that is the rule
+this issue turned on. The other policies say where a field sits relative to the
+ice masks, which takes more than one file to check.
+
 **However a variable spells "missing", it must spell it the netCDF way.**
 Every value has to be either a finite number or exactly the `_FillValue` the
 file declares, whatever the variable's policy. A bare NaN, or an infinity, is
