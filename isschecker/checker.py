@@ -114,6 +114,7 @@
 
 import datetime
 import difflib
+import glob
 import os
 import re
 import subprocess
@@ -916,6 +917,7 @@ def _empty_summary() -> dict:
         "total_naming_errors": 0,
         "total_num_errors": 0,
         "total_spatial_errors": 0,
+        "total_consistency_errors": 0,
         "total_time_errors": 0,
         "total_attr_errors": 0,
         "total_file_errors": 0,
@@ -923,6 +925,7 @@ def _empty_summary() -> dict:
         "total_naming_warnings": 0,
         "total_num_warnings": 0,
         "total_spatial_warnings": 0,
+        "total_consistency_warnings": 0,
         "total_time_warnings": 0,
         "total_attr_warnings": 0,
         "total_file_warnings": 0,
@@ -1013,6 +1016,7 @@ def _process_experiments(
         "total_naming_errors": reporter.error_count("naming"),
         "total_num_errors": reporter.error_count("num"),
         "total_spatial_errors": reporter.error_count("spatial"),
+        "total_consistency_errors": reporter.error_count("consistency"),
         "total_time_errors": reporter.error_count("time"),
         "total_attr_errors": reporter.error_count("attr"),
         "total_file_errors": reporter.error_count("file"),
@@ -1020,6 +1024,7 @@ def _process_experiments(
         "total_naming_warnings": reporter.warning_count("naming"),
         "total_num_warnings": reporter.warning_count("num"),
         "total_spatial_warnings": reporter.warning_count("spatial"),
+        "total_consistency_warnings": reporter.warning_count("consistency"),
         "total_time_warnings": reporter.warning_count("time"),
         "total_attr_warnings": reporter.warning_count("attr"),
         "total_file_warnings": reporter.warning_count("file"),
@@ -1929,6 +1934,140 @@ def _check_numerical(
                 )
 
 
+def _companion_path(source_path: str, file_name: str, variable: str) -> str | None:
+    """The file beside this one holding `variable`, or None if there is none.
+
+    The naming convention makes this deterministic: field 0 is the variable and
+    every other field describes the run, so `sftgif_<rest>.nc` sits beside
+    `xvelmean_<rest>.nc` in the same directory.  A static x,y variable carries
+    0000-0000 as its year range while its companion carries the real one, so
+    when the exact name is absent the year range is matched loosely -- and only
+    accepted when it picks out exactly one file, since guessing between several
+    would be worse than not checking.
+    """
+    parts = file_name.split("_")
+    if len(parts) != ISMIP7_FILENAME_PARTS:
+        return None
+
+    exact = list(parts)
+    exact[ISMIP7_FILENAME_VAR_IDX] = variable
+    candidate = os.path.join(source_path, "_".join(exact))
+    if os.path.exists(candidate):
+        return candidate
+
+    stem = "_".join([variable] + parts[1:ISMIP7_FILENAME_YEAR_RANGE_IDX])
+    matches = sorted(glob.glob(os.path.join(source_path, stem + "_*.nc")))
+    return matches[0] if len(matches) == 1 else None
+
+
+def _nominal_years_of(ds, var_type: str):
+    """The nominal years a dataset's time axis encodes, or None if it has none.
+
+    Compared by nominal year rather than by timestamp because the convention
+    differs between variables: a mask is an ST variable stamped Jan 1 of the
+    following year, a mass flux is FL and stamped mid-year, and the same
+    simulation year therefore carries two different numbers.  Comparing raw
+    time values would align nothing.
+    """
+    if "time" not in ds.dims:
+        return None
+    try:
+        decoded = xr.decode_cf(
+            ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True)
+        )
+        return [
+            _timestamp_to_nominal_year(value, var_type)
+            for value in decoded["time"].values
+        ]
+    except Exception:
+        return None
+
+
+def _variable_type(ismip_meta: list, variable: str) -> str:
+    for entry in ismip_meta:
+        if entry["variable"] == variable:
+            return entry.get("type", "")
+    return ""
+
+
+class Companion(NamedTuple):
+    """An open companion dataset and how its time axis maps onto this file's.
+
+    `at` holds, for each time step of the file being checked, the index of the
+    companion time step for the same nominal year, so a rule can ask for one
+    slice at a time rather than holding a second full field in memory.  It is
+    None for a static x,y variable, which has no time axis of its own and is
+    compared against the greatest extent the run reaches.
+    """
+    dataset: object
+    variable: str
+    at: list | None
+
+    def slice_at(self, step: int):
+        """The companion's 2-D field for one time step of the file checked."""
+        values = self.dataset[self.variable]
+        if self.at is None:
+            if "time" in values.dims:
+                return np.asarray(values.max(dim="time").values)
+            return np.asarray(values.values)
+        return np.asarray(values.isel(time=self.at[step]).values)
+
+
+def _open_companion(reporter, source_path, file_name, variable, years,
+                    ismip_meta):
+    """Open the companion holding `variable`, aligned to this file's time axis.
+
+    Returns None, having said why in the log, when the comparison cannot be
+    made.  An absent companion is a note rather than an error: checking a
+    submission a part at a time -- a run scoped to the scalars, a model that
+    does not produce the mask yet -- has to keep working.
+    """
+    path = _companion_path(source_path, file_name, variable)
+    if path is None:
+        reporter.note(
+            f"Not checked against '{variable}': no matching {variable} file in"
+            f" this directory."
+        )
+        return None
+
+    try:
+        ds = xr.open_dataset(path, decode_times=False, mask_and_scale=False)
+    except (ValueError, TypeError, OSError) as error:
+        reporter.note(f"Not checked against '{variable}': {error}")
+        return None
+
+    if variable not in ds:
+        ds.close()
+        reporter.note(
+            f"Not checked against '{variable}': {os.path.basename(path)} does"
+            f" not contain it."
+        )
+        return None
+
+    if years is None:
+        return Companion(ds, variable, None)
+
+    companion_years = _nominal_years_of(ds, _variable_type(ismip_meta, variable))
+    if companion_years is None:
+        ds.close()
+        reporter.note(
+            f"Not checked against '{variable}': its time axis could not be read."
+        )
+        return None
+
+    index = {year: step for step, year in enumerate(companion_years)}
+    missing = [year for year in years if year not in index]
+    if missing:
+        ds.close()
+        reporter.note(
+            f"Not checked against '{variable}': its time axis does not cover"
+            f" nominal year(s) {_format_year_runs(sorted(set(missing)))}."
+        )
+        return None
+
+    return Companion(ds, variable, [index[year] for year in years])
+
+
 def _check_spatial(
     reporter: Reporter,
     ds,
@@ -2504,6 +2643,7 @@ SYNTHESIS_CATEGORIES = (
     ("naming", "Naming Tests       "),
     ("num", "Numerical Tests    "),
     ("spatial", "Spatial Tests      "),
+    ("consistency", "Consistency Tests  "),
     ("time", "Time Tests         "),
     ("attr", "Attribute Tests    "),
 )
@@ -2514,6 +2654,7 @@ _SUMMARY_KEYS = {
     "naming": "total_naming_{severity}s",
     "num": "total_num_{severity}s",
     "spatial": "total_spatial_{severity}s",
+    "consistency": "total_consistency_{severity}s",
     "time": "total_time_{severity}s",
     "attr": "total_attr_{severity}s",
 }

@@ -17,6 +17,7 @@ Verified directory: <source-path>
   - Naming Tests       : 0 error(s)
   - Numerical Tests    : 0 error(s)
   - Spatial Tests      : 0 error(s)
+  - Consistency Tests  : 0 error(s)
   - Time Tests         : 0 error(s)
   - Attribute Tests    : 0 error(s)
 
@@ -25,6 +26,7 @@ Verified directory: <source-path>
   - Naming Tests       : 0 warning(s)
   - Numerical Tests    : 0 warning(s)
   - Spatial Tests      : 0 warning(s)
+  - Consistency Tests  : 0 warning(s)
   - Time Tests         : 0 warning(s)
   - Attribute Tests    : 0 warning(s)
 
