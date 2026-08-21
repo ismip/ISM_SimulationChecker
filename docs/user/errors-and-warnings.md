@@ -64,6 +64,30 @@ Whatever the file declares is echoed into the log, so the archived record of a
 run shows what was claimed rather than merely that a warning did not appear. If
 the file is absent, nothing changes.
 
+## Missing values and masks
+
+Submissions have disagreed about where a field should hold a value and where it
+should hold a fill value ([issue #23]): zero ice thickness or missing ice
+thickness outside the ice, a mask of zeros or a mask with holes in it. That is
+a per-variable question, so the data request answers it for every variable, in
+the `fill_policy` column — the table is in
+[The data request](data-request.md#missing-values).
+
+Two points modelers ask about. **Ice thickness is zero where there is no ice**,
+not missing — including outside your computational domain — and so are the
+three masks and the calving, grounding-line and ice-front fluxes. **The masks
+are not restricted to 0 and 1**: any fraction in `[0, 1]` is accepted, because
+conservative interpolation from your native grid to the output grid
+legitimately produces intermediate values.
+
+Anything the column does not say — a blank cell, an unrecognized value, or the
+column being absent altogether — means the variable is unconstrained and
+nothing about its missing values is checked. No shipped row is blank today; the
+default exists so that the column can be extended without breaking older and
+newer checkers against each other.
+
+[issue #23]: https://github.com/ismip/ISM_SimulationChecker/issues/23
+
 ## Value ranges
 
 Some of the `min_value_*` / `max_value_*` bounds in the data request "are

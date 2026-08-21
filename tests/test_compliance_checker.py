@@ -1202,6 +1202,61 @@ def test_shipped_range_severities_are_all_errors():
     assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
 
 
+SHIPPED_FILL_POLICIES = {
+    "forbidden": {
+        "lithk", "dlithkdt", "sftgif", "sftgrf", "sftflf", "licalvf",
+        "ligroundf", "lifmassbf", "lim", "limnsw", "iareagr", "iareafl",
+        "tendacabf", "tendlibmassbfgr", "tendlibmassbffl", "tendlicalvf",
+        "tendlifmassbf", "tendligroundf",
+    },
+    "outside_domain": {
+        "orog", "topg", "base", "acabf", "hfgeoubed", "thdrflf", "deltag",
+        "refgeoid",
+    },
+    "no_ice": {
+        "xvelsurf", "yvelsurf", "zvelsurf", "xvelbase", "yvelbase", "zvelbase",
+        "xvelmean", "yvelmean", "strbasemag", "litemptop", "litempavg",
+        "litemp",
+    },
+    "no_grounded_ice": {"litempbotgr", "libmassbfgr"},
+    "no_floating_ice": {"litempbotfl", "libmassbffl"},
+}
+
+
+def test_every_shipped_variable_has_a_fill_policy():
+    """The data request answers the question for every variable, not some.
+
+    Issue #23 is that submissions disagree about where a field should hold a
+    value and where a fill value; a blank row would leave one of those
+    disagreements unsettled. Which variable gets which policy is data, agreed
+    on the issue, so changing it has to update this test deliberately.
+    """
+    ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
+
+    shipped = {}
+    for entry in ismip_meta:
+        shipped.setdefault(entry["fill_policy"], set()).add(entry["variable"])
+
+    assert None not in shipped, "every variable needs a policy"
+    assert shipped == SHIPPED_FILL_POLICIES
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("forbidden", "forbidden"),
+        # Spelling in the request is for people, not for the parser.
+        ("  No_Ice ", "no_ice"),
+        # A blank cell, an unrecognised value and a missing column all have to
+        # mean the variable is unconstrained.
+        (None, None),
+        ("nonsense", None),
+    ],
+)
+def test_fill_policy_defaults_to_unconstrained(value, expected):
+    assert checker._fill_policy(value) == expected
+
+
 def test_a_variable_with_fill_values_still_passes_its_range_check(xyt_case_dir):
     """The trap in reading files undecoded.
 

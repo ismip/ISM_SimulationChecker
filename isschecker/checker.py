@@ -488,6 +488,38 @@ def _range_severity(value) -> str:
     return "error"
 
 
+# Where a variable is defined, and so where a missing value is permitted.  See
+# _fill_policy and the "Missing values and masks" section of the README.
+FILL_POLICIES = (
+    "forbidden",
+    "outside_domain",
+    "no_ice",
+    "no_grounded_ice",
+    "no_floating_ice",
+)
+
+
+def _fill_policy(value) -> str | None:
+    """Where a variable is defined, from the fill_policy column of the request.
+
+    Issue #23 is that submissions disagree about where a field should hold a
+    value and where it should hold a fill value -- zero ice thickness or missing
+    ice thickness outside the ice, a mask of zeros or a mask with holes in it.
+    The answer is per variable and belongs to the data request rather than to
+    the checker, so it lives in one cell per variable row and changing it is a
+    data-only diff.
+
+    Anything the column does not say -- a blank cell, an unrecognised value and
+    a missing column alike -- means the variable is unconstrained, which is what
+    the checker did before the column existed and what makes the column safe to
+    add before it is filled in.
+    """
+    if value is None or pd.isna(value):
+        return None
+    policy = str(value).strip().lower()
+    return policy if policy in FILL_POLICIES else None
+
+
 def _load_criteria(variable_list: str):
     try:
         df = _read_data_csv(VARIABLE_REQUEST_CSV)
@@ -531,6 +563,7 @@ def _load_criteria(variable_list: str):
             "standard_name": str(row["standard_name"]) if pd.notna(row["standard_name"]) else None,
             "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
             "range_severity": _range_severity(row.get("range_severity")),
+            "fill_policy": _fill_policy(row.get("fill_policy")),
         }
         for col in df.columns:
             lc = str(col).lower()
