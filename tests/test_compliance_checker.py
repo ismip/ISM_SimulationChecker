@@ -1366,6 +1366,47 @@ def test_a_nan_and_a_fill_value_are_two_separate_findings(xyt_case_dir):
     assert "holds a NaN or an infinity in 2 of" in summary["log_text"]
 
 
+@pytest.mark.parametrize(
+    "variable_name, value",
+    [("xvelmean", 0.0), ("libmassbfgr", 0.0), ("libmassbffl", 0.0)],
+)
+def test_checker_reports_an_ice_only_variable_defined_everywhere(
+    xyt_case_dir, variable_name, value
+):
+    """A field with no missing values covers open ocean and bare ground.
+
+    hgoelzer's objection to this rule was that an Antarctic model might have
+    shelves reaching the grid margin, but the ISMIP7 grids are fixed and much
+    larger than that: ice reaches at most about 38% of the AIS grid and 35% of
+    the GrIS grid, so full coverage is a violation rather than an unusual
+    model. It fires only at exactly 100%, so there is no threshold to choose.
+
+    It is the only check these variables get when the ice mask is not submitted
+    with them, which is why it is worth having on top of the exact comparison.
+    """
+    write_values(
+        dataset_for_variable(xyt_case_dir, variable_name), value, count=None
+    )
+
+    log = run_xyt_checker(xyt_case_dir)["log_text"]
+
+    assert f"variable '{variable_name}' is defined in every cell" in log
+
+
+def test_an_outside_domain_variable_may_be_defined_everywhere(xyt_case_dir):
+    """A model may legitimately compute over the whole grid.
+
+    So full coverage says nothing about `orog` the way it does about a
+    velocity, and the rule must not reach it.
+    """
+    write_values(dataset_for_variable(xyt_case_dir, "orog"), 1000.0, count=None)
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert "is defined in every cell" not in summary["log_text"]
+    assert summary["total_errors"] == 0, summary["log_text"]
+
+
 def test_checker_reports_a_nan_used_as_a_missing_value(xyt_case_dir):
     """A bare NaN is not an accepted way to say "missing".
 

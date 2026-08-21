@@ -510,6 +510,15 @@ FILL_POLICIES = (
 )
 
 
+# The policies that say a variable is defined only where there is ice of some
+# kind, and how to say that in a finding.
+ICE_ONLY_POLICIES = {
+    "no_ice": "where there is ice",
+    "no_grounded_ice": "where there is grounded ice",
+    "no_floating_ice": "where there is floating ice",
+}
+
+
 def _fill_policy(value) -> str | None:
     """Where a variable is defined, from the fill_policy column of the request.
 
@@ -1803,6 +1812,21 @@ def _check_missing_values(reporter, ivar, criteria, is_fill, is_nonfinite, fill)
             f" {_count_phrase(n_fill, total)}. The data request does not permit"
             f" missing values in this variable: where there is no ice the value"
             f" is 0, not missing."
+        )
+
+    # A field that is missing nowhere has been written over open ocean and bare
+    # ground.  This needs no companion file, which is what makes it worth
+    # having: it is the only thing that can be said about these variables when
+    # the ice mask has not been submitted alongside them.  It costs no
+    # threshold either, because it fires only at exactly full coverage, and no
+    # ISMIP7 grid can be fully glaciated -- ice reaches at most about 38% of
+    # the AIS grid and 35% of the GrIS grid.
+    if not n_fill and not n_nonfinite and criteria.get("fill_policy") in ICE_ONLY_POLICIES:
+        reporter.error(
+            f"variable '{ivar}' is defined in every cell, but the data request"
+            f" defines it only {ICE_ONLY_POLICIES[criteria['fill_policy']]}."
+            f" Ice covers at most 38% of the AIS grid and 35% of the GrIS grid,"
+            f" so the cells without it must hold the _FillValue ({fill})."
         )
 
     if reporter.total_errors + reporter.total_warnings == findings_before:
