@@ -114,6 +114,15 @@ class StubCompanion:
 
     def __init__(self, fraction):
         self.fraction = np.asarray(fraction, dtype=np.float32)
+        self.dataset = xr.Dataset(
+            {
+                self.variable: xr.DataArray(
+                    self.fraction,
+                    dims=("y", "x"),
+                    attrs={"_FillValue": np.float32(FILL)},
+                )
+            }
+        )
 
     def slice_at(self, step):
         return self.fraction
@@ -213,6 +222,59 @@ def test_an_absent_mask_leaves_a_note_and_no_finding(case_dir):
     assert summary["total_consistency_errors"] == 0, summary["log_text"]
     assert summary["total_consistency_warnings"] == 0
     assert "no matching sftgif file" in summary["log_text"]
+
+
+def test_ice_outside_the_computational_domain_is_an_error(case_dir):
+    """The one thing the domain has to satisfy, since nothing records it.
+
+    With the masks carrying no missing values, `sftgif == 0` covers both
+    "inside the domain, ice-free" and "outside it entirely", so there is
+    nothing to validate the domain against -- and nothing needs to be. What
+    must hold is that the domain contains the ice.
+    """
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "orog"),
+              geometry["sftgif"] > 0.0, FILL)
+
+    summary = run(case_dir)
+
+    assert "has ice outside its own domain" in summary["log_text"]
+    assert summary["total_consistency_errors"] >= 1
+
+
+def test_a_wider_footprint_than_its_neighbours_is_only_a_warning(case_dir):
+    """acabf may legitimately come from a forcing dataset covering the grid.
+
+    So a footprint wider than the ice model's is worth telling the modeler
+    about without failing the run over it.
+    """
+    set_where(dataset_for_variable(case_dir, "acabf"),
+              np.ones_like(geometry_of(case_dir)["domain"]), 0.0)
+
+    summary = run(case_dir)
+
+    assert summary["total_consistency_errors"] == 0, summary["log_text"]
+    assert summary["total_consistency_warnings"] >= 1
+    assert "disagree about which cells are missing" in summary["log_text"]
+
+
+def test_a_hole_in_the_mask_is_not_mistaken_for_ice(case_dir):
+    """Read undecoded, a fill value is 9.96921e+36 -- greater than zero.
+
+    Taken at face value it would read as ice everywhere the mask is broken, and
+    every variable of the domain would be accused of leaving ice outside it.
+    The hole is reported against the mask's own file, where it belongs.
+    """
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, "sftgif"),
+              geometry["sftgif"] == 0.0, FILL)
+
+    summary = run(case_dir)
+
+    assert "has ice outside its own domain" not in summary["log_text"]
+    assert "holds a value in" not in summary["log_text"]
+    # The mask's own file still reports the hole, once.
+    assert "sftgif' holds a fill value in" in summary["log_text"]
 
 
 @pytest.mark.parametrize(

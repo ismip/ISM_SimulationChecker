@@ -2135,10 +2135,13 @@ def _check_ice_extent(reporter, ds, ivar, criteria, companion) -> None:
                 f" {fraction.shape[-2:]} and this file's is {here.shape[-2:]}."
             )
             return
+        _, unknown = _companion_slice(companion, step)
         fraction = np.broadcast_to(fraction, here.shape)
-        has_ice = fraction > 0.0
+        known = ~np.broadcast_to(unknown, here.shape)
+        has_ice = np.logical_and(known, fraction > 0.0)
+        no_ice = np.logical_and(known, fraction == 0.0)
 
-        defined_without_ice += int(np.logical_and(~here, ~has_ice).sum())
+        defined_without_ice += int(np.logical_and(~here, no_ice).sum())
         wrong_holes = np.logical_and(here, has_ice)
         missing_with_ice += int(wrong_holes.sum())
         missing_at_margin += int(
@@ -2175,6 +2178,102 @@ def _check_ice_extent(reporter, ds, ivar, criteria, companion) -> None:
         )
 
 
+def _companion_slice(companion, step):
+    """The companion's values for one time step, and where it says nothing.
+
+    A mask with holes in it cannot answer "is there ice here", so those cells
+    are excluded from every comparison rather than guessed at.  It matters more
+    than it sounds: read undecoded a fill value is 9.96921e+36, so a hole taken
+    at face value would read as ice everywhere the mask is broken.  The hole
+    itself is reported against the mask's own file, where it belongs.
+    """
+    values = companion.slice_at(step)
+    fill = _fill_value(companion.dataset, companion.variable)
+    if values.dtype.kind == "f":
+        unknown = ~np.isfinite(values)
+    else:
+        unknown = np.zeros(values.shape, dtype=bool)
+    if fill is not None:
+        unknown = np.logical_or(unknown, values == fill)
+    return values, unknown
+
+
+def _check_domain_covers_ice(reporter, ds, ivar, companion) -> None:
+    """Wherever there is ice, a variable of the domain is defined.
+
+    The computational domain is not recorded anywhere in a submission -- with
+    the masks carrying no missing values, `sftgif == 0` covers both "inside the
+    domain, ice-free" and "outside it entirely".  So there is nothing to
+    validate the domain against, and nothing needs to be: the one thing that
+    must hold is that the domain contains the ice.  A submission failing this
+    has ice sitting outside its own computational domain.
+    """
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    steps = missing.shape[0] if missing.ndim > 2 else 1
+
+    ice_outside = 0
+    total = 0
+    for step in range(steps):
+        here = missing[step] if missing.ndim > 2 else missing
+        fraction = companion.slice_at(step)
+        if here.shape[-2:] != fraction.shape[-2:]:
+            reporter.note(
+                f"Not checked against '{companion.variable}': its grid is"
+                f" {fraction.shape[-2:]} and this file's is {here.shape[-2:]}."
+            )
+            return
+        _, unknown = _companion_slice(companion, step)
+        has_ice = np.logical_and(
+            ~np.broadcast_to(unknown, here.shape),
+            np.broadcast_to(fraction, here.shape) > 0.0,
+        )
+        ice_outside += int(np.logical_and(here, has_ice).sum())
+        total += here.size
+
+    if ice_outside:
+        reporter.error(
+            f"variable '{ivar}' is missing in {_count_phrase(ice_outside, total)}"
+            f" where '{companion.variable}' is greater than 0. The data request"
+            f" defines it throughout the computational domain, so this"
+            f" submission has ice outside its own domain."
+        )
+
+
+def _check_footprint_matches(reporter, ds, ivar, companion) -> None:
+    """The variables of the domain should agree about where the domain is.
+
+    They are missing in exactly one place -- outside it -- so their missing
+    masks ought to be identical.  A warning rather than an error because some
+    of them come from forcing or reference datasets whose footprint is
+    legitimately wider than the ice model's: acabf over ice-free ground,
+    hfgeoubed and refgeoid over the whole grid.
+    """
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    steps = missing.shape[0] if missing.ndim > 2 else 1
+
+    disagreeing = 0
+    total = 0
+    for step in range(steps):
+        here = missing[step] if missing.ndim > 2 else missing
+        _, there = _companion_slice(companion, step)
+        if here.shape[-2:] != there.shape[-2:]:
+            return
+        disagreeing += int((here != np.broadcast_to(there, here.shape)).sum())
+        total += here.size
+
+    if disagreeing:
+        reporter.warning(
+            f"variable '{ivar}' and '{companion.variable}' disagree about which"
+            f" cells are missing in {_count_phrase(disagreeing, total)}. Both"
+            f" are defined throughout the computational domain and missing"
+            f" outside it, so they should agree about where that is; a wider"
+            f" footprint is expected only where the field comes from a forcing"
+            f" or reference dataset."
+        )
+
+
 def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
                        ismip_meta, years) -> None:
     """The checks that need more than the file in front of them.
@@ -2182,25 +2281,42 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
     Everything a companion cannot supply has already been reported by now; what
     is left is the questions only two files together can answer.
     """
-    mask_name = ICE_MASK_FOR_POLICY.get(criteria.get("fill_policy"))
-    if mask_name is None or ivar not in ds:
+    policy = criteria.get("fill_policy")
+    mask_name = ICE_MASK_FOR_POLICY.get(policy)
+    if ivar not in ds or (mask_name is None and policy != "outside_domain"):
         return
 
     reporter.write("CONSISTENCY Tests\n")
     findings_before = reporter.total_errors + reporter.total_warnings
 
-    companion = _open_companion(
-        reporter, source_path, file_name, mask_name, years, ismip_meta
-    )
-    if companion is None:
-        return
-    try:
-        _check_ice_extent(reporter, ds, ivar, criteria, companion)
-    finally:
-        companion.dataset.close()
+    def against(variable, check):
+        companion = _open_companion(
+            reporter, source_path, file_name, variable, years, ismip_meta
+        )
+        if companion is None:
+            return
+        try:
+            check(companion)
+        finally:
+            companion.dataset.close()
+
+    if mask_name is not None:
+        against(
+            mask_name,
+            lambda c: _check_ice_extent(reporter, ds, ivar, criteria, c),
+        )
+        summary = f"Defined exactly where '{mask_name}' says there is ice: OK"
+    else:
+        against("sftgif", lambda c: _check_domain_covers_ice(reporter, ds, ivar, c))
+        # Anchored on one other variable of the domain rather than compared
+        # with all of them: agreement is transitive, and every file then
+        # reports the same disagreement from its own side.
+        reference = "orog" if ivar == "topg" else "topg"
+        against(reference, lambda c: _check_footprint_matches(reporter, ds, ivar, c))
+        summary = "Defined throughout the computational domain: OK"
 
     if reporter.total_errors + reporter.total_warnings == findings_before:
-        reporter.ok(f"Defined exactly where '{mask_name}' says there is ice: OK")
+        reporter.ok(summary)
 
 
 def _check_spatial(
