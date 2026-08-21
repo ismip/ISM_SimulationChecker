@@ -23,9 +23,20 @@
 # 2. Numerical (_check_numerical)
 #    - Variable units match the data request (any UDUNITS spelling of the
 #      requested unit is accepted: 'm2', 'm^2' and 'm**2' are all the same).
+#    - Every value is either a finite number or exactly the variable's declared
+#      _FillValue.  A bare NaN or an infinity is a private spelling of
+#      "missing" that a reader filtering on _FillValue takes for data, so it is
+#      an error whatever the variable is.
+#    - A variable whose 'fill_policy' is 'forbidden' holds no fill values at
+#      all: it is defined over the whole grid, and where there is no ice the
+#      value is 0 rather than missing.  The other policies -- outside_domain,
+#      no_ice, no_grounded_ice, no_floating_ice -- say where a field sits
+#      relative to the ice masks, which takes more than one file to check.
 #    - All values lie within the allowed min/max range for the relevant region,
 #      at the severity that variable's 'range_severity' names (error unless the
-#      data request says otherwise).
+#      data request says otherwise).  Cells that hold a fill value, or no
+#      number at all, are excluded from that comparison: files are read
+#      undecoded, so a fill cell is the literal 9.96921e+36.
 #    - Array is not entirely fill/missing values.
 #
 # 3. Spatial (_check_spatial)  [xyt variables only]
