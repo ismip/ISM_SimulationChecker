@@ -1,0 +1,21 @@
+# Environment for building the documentation.  It holds Sphinx and its
+# extensions and nothing else: the docs read the data request CSVs straight
+# from the repository and take the version from pyproject.toml, so neither the
+# checker nor any of its dependencies has to be installed to build them.  See
+# "Building the documentation" in the developer guide.
+name: isschecker-docs
+channels:
+  - conda-forge
+  # Never let a user's `defaults` channel leak into the solve: it would give
+  # different builds on different machines.
+  - nodefaults
+
+dependencies:
+  # tomllib, which conf.py uses to read the version, is in the standard
+  # library from 3.11
+  - python >=3.11,<3.15
+  - sphinx >=8
+  - myst-parser >=4
+  - furo
+  - sphinx-copybutton
+  - sphinx-design
