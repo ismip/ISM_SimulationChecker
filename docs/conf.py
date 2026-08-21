@@ -45,7 +45,7 @@ myst_enable_extensions = [
 # section of another page and not merely to its top.
 myst_heading_anchors = 3
 
-master_doc = 'index'
+root_doc = 'index'
 templates_path = ['_templates']
 
 # `_generated` holds the tables written by the `data_request_tables` extension.
