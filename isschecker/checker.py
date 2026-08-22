@@ -23,9 +23,20 @@
 # 2. Numerical (_check_numerical)
 #    - Variable units match the data request (any UDUNITS spelling of the
 #      requested unit is accepted: 'm2', 'm^2' and 'm**2' are all the same).
+#    - Every value is either a finite number or exactly the variable's declared
+#      _FillValue.  A bare NaN or an infinity is a private spelling of
+#      "missing" that a reader filtering on _FillValue takes for data, so it is
+#      an error whatever the variable is.
+#    - A variable whose 'fill_policy' is 'forbidden' holds no fill values at
+#      all: it is defined over the whole grid, and where there is no ice the
+#      value is 0 rather than missing.  The other policies -- outside_domain,
+#      no_ice, no_grounded_ice, no_floating_ice -- say where a field sits
+#      relative to the ice masks, which takes more than one file to check.
 #    - All values lie within the allowed min/max range for the relevant region,
 #      at the severity that variable's 'range_severity' names (error unless the
-#      data request says otherwise).
+#      data request says otherwise).  Cells that hold a fill value, or no
+#      number at all, are excluded from that comparison: files are read
+#      undecoded, so a fill cell is the literal 9.96921e+36.
 #    - Array is not entirely fill/missing values.
 #
 # 3. Spatial (_check_spatial)  [xyt variables only]
@@ -488,6 +499,38 @@ def _range_severity(value) -> str:
     return "error"
 
 
+# Where a variable is defined, and so where a missing value is permitted.  See
+# _fill_policy and the "Missing values and masks" section of the README.
+FILL_POLICIES = (
+    "forbidden",
+    "outside_domain",
+    "no_ice",
+    "no_grounded_ice",
+    "no_floating_ice",
+)
+
+
+def _fill_policy(value) -> str | None:
+    """Where a variable is defined, from the fill_policy column of the request.
+
+    Issue #23 is that submissions disagree about where a field should hold a
+    value and where it should hold a fill value -- zero ice thickness or missing
+    ice thickness outside the ice, a mask of zeros or a mask with holes in it.
+    The answer is per variable and belongs to the data request rather than to
+    the checker, so it lives in one cell per variable row and changing it is a
+    data-only diff.
+
+    Anything the column does not say -- a blank cell, an unrecognised value and
+    a missing column alike -- means the variable is unconstrained, which is what
+    the checker did before the column existed and what makes the column safe to
+    add before it is filled in.
+    """
+    if value is None or pd.isna(value):
+        return None
+    policy = str(value).strip().lower()
+    return policy if policy in FILL_POLICIES else None
+
+
 def _load_criteria(variable_list: str):
     try:
         df = _read_data_csv(VARIABLE_REQUEST_CSV)
@@ -531,6 +574,7 @@ def _load_criteria(variable_list: str):
             "standard_name": str(row["standard_name"]) if pd.notna(row["standard_name"]) else None,
             "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
             "range_severity": _range_severity(row.get("range_severity")),
+            "fill_policy": _fill_policy(row.get("fill_policy")),
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -1211,8 +1255,13 @@ def _process_single_file(
     region = file_name_split[ISMIP7_FILENAME_REGION_IDX]
 
     try:
+        # Read undecoded.  mask_and_scale would turn every fill value into a
+        # NaN, losing the difference between "wrote the netCDF fill value, as
+        # the data request asks" and "wrote a bare NaN"; it would also apply
+        # the scale_factor and add_offset this request forbids, so the
+        # numerical checks would report numbers the file does not contain.
         ds = xr.open_dataset(os.path.join(source_path, file),
-                             decode_times=False)
+                             decode_times=False, mask_and_scale=False)
     except (ValueError, TypeError) as e:
         naming_reporter.error("Cannot open " + file_name + ": " + str(e))
         return
@@ -1673,6 +1722,93 @@ def _units_match(actual: str, expected: str) -> bool:
     return parsed_actual is not None and parsed_actual == _parse_units(expected)
 
 
+def _fill_value(ds, ivar):
+    """The fill value a variable declares, or the netCDF4 default for its dtype.
+
+    Read undecoded, `_FillValue` stays in `.attrs`; a decoded dataset keeps it
+    in `.encoding` instead, and both are looked at because the tests build
+    datasets each way.  A file that declares none is separately an error (see
+    _check_attributes); for the purpose of recognising fill cells the default
+    is what the data request asks for anyway.
+    """
+    variable = ds[ivar]
+    fill = variable.attrs.get("_FillValue")
+    if fill is None:
+        fill = variable.encoding.get("_FillValue")
+    if fill is None:
+        dtype = variable.dtype
+        fill = netCDF4.default_fillvals.get(dtype.kind + str(dtype.itemsize))
+    return fill
+
+
+def _missing_masks(ds, ivar):
+    """Which cells hold a fill value, and which hold no number at all.
+
+    The two are different findings, which is why files are read undecoded: a
+    fill value is how the data request says to write "missing", while a NaN or
+    an infinity is a private convention for the same thing that a reader
+    filtering on `_FillValue` -- as the request tells them to -- will silently
+    treat as data.  Decoded, both arrive as NaN and cannot be told apart.
+    """
+    values = np.asarray(ds[ivar].values)
+    if values.dtype.kind == "f":
+        is_nonfinite = ~np.isfinite(values)
+    else:
+        is_nonfinite = np.zeros(values.shape, dtype=bool)
+    fill = _fill_value(ds, ivar)
+    if fill is None:
+        is_fill = np.zeros(values.shape, dtype=bool)
+    else:
+        is_fill = values == fill
+    return is_fill, is_nonfinite
+
+
+def _count_phrase(count: int, total: int) -> str:
+    """How many cells, out of how many.
+
+    Both numbers matter: "3 fill values" and "40% fill values" are different
+    mistakes and want different responses from the modeller.
+    """
+    return f"{count} of {total} value(s) ({100.0 * count / total:.3g}%)"
+
+
+def _check_missing_values(reporter, ivar, criteria, is_fill, is_nonfinite, fill):
+    """How a variable spells "missing", and whether it is allowed any.
+
+    Two separate findings, because they are different mistakes with different
+    fixes.  A NaN or an infinity is a private convention for "missing" that the
+    archive has not agreed to: the data request says to write the netCDF4 fill
+    value, and a reader filtering on _FillValue -- as the request tells them to
+    -- will silently take a NaN for data.
+    """
+    total = is_fill.size
+    findings_before = reporter.total_errors + reporter.total_warnings
+
+    n_nonfinite = int(is_nonfinite.sum())
+    if n_nonfinite:
+        reporter.error(
+            f"variable '{ivar}' holds a NaN or an infinity in"
+            f" {_count_phrase(n_nonfinite, total)}. Missing data must be"
+            f" written as the variable's _FillValue ({fill}); a reader"
+            f" filtering on that will treat these cells as data."
+        )
+
+    # Where the variable is defined at all is a per-variable question the data
+    # request answers; see _fill_policy.  `forbidden` says the field covers the
+    # whole grid, so a hole in it is a hole in the archive.
+    n_fill = int(is_fill.sum())
+    if n_fill and criteria.get("fill_policy") == "forbidden":
+        reporter.error(
+            f"variable '{ivar}' holds a fill value in"
+            f" {_count_phrase(n_fill, total)}. The data request does not permit"
+            f" missing values in this variable: where there is no ice the value"
+            f" is 0, not missing."
+        )
+
+    if reporter.total_errors + reporter.total_warnings == findings_before:
+        reporter.ok("Missing values: OK")
+
+
 def _check_numerical(
     reporter: Reporter,
     ds,
@@ -1709,6 +1845,27 @@ def _check_numerical(
             + expected_units
         )
 
+    # Which cells hold no usable number.  Read undecoded, a fill cell is the
+    # literal 9.96921e+36 rather than a NaN, so a range check that did not
+    # exclude it would fail every variable the request lets have missing
+    # values -- on a maximum that is the fill value itself.
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    all_missing = bool(missing.all())
+
+    _check_missing_values(
+        reporter, ivar, ismip_meta[var_index], is_fill, is_nonfinite,
+        _fill_value(ds, ivar),
+    )
+
+    # An array holding nothing at all is worth saying so about whatever its
+    # shape and whichever region it belongs to.  This used to sit inside the
+    # range checks below, which run only for spatial variables in a recognised
+    # region, so an all-missing scalar series -- or any file whose region the
+    # name does not identify -- went unreported.
+    if all_missing:
+        reporter.error("The array only contains missing values.")
+
     if not isscalar and region not in ("AIS", "GrIS"):
         reporter.note(
             "Value range: not checked (the allowed range depends on the"
@@ -1722,34 +1879,30 @@ def _check_numerical(
             if ismip_meta[var_index].get("range_severity") == "warning"
             else reporter.error
         )
-        if False in ds[ivar].isnull():
-            if (
-                ds[ivar].min(skipna=True).item()
-                >= ismip_meta[var_index]["min_value_" + region.lower()]
-            ):
+        if not all_missing:
+            values = np.asarray(ds[ivar].values)[~missing]
+            minimum = values.min().item()
+            maximum = values.max().item()
+
+            if minimum >= ismip_meta[var_index]["min_value_" + region.lower()]:
                 reporter.ok("The minimum value successfully verified.")
             else:
                 report_range(
                     "The minimum value ("
-                    + str(ds[ivar].min(skipna=True).values.item(0))
+                    + str(minimum)
                     + ") is out of range. Min value accepted: "
                     + str(ismip_meta[var_index]["min_value_" + region.lower()])
                 )
 
-            if (
-                ds[ivar].max(skipna=True).item()
-                <= ismip_meta[var_index]["max_value_" + region.lower()]
-            ):
+            if maximum <= ismip_meta[var_index]["max_value_" + region.lower()]:
                 reporter.ok("The maximum value successfully verified.")
             else:
                 report_range(
                     "The maximum value ("
-                    + str(ds[ivar].max(skipna=True).values.item(0))
+                    + str(maximum)
                     + ") is out of range. Max value accepted: "
                     + str(ismip_meta[var_index]["max_value_" + region.lower()])
                 )
-        else:
-            reporter.error("The array only contains missing values.")
 
 
 def _check_spatial(
@@ -2086,9 +2239,16 @@ def _check_attributes(
         dtype = ds[ivar].dtype
         nc4_dtype_key = dtype.kind + str(dtype.itemsize)
         default_fill = netCDF4.default_fillvals.get(nc4_dtype_key)
-        fill_value = ds[ivar].encoding.get("_FillValue")
-        # xarray moves missing_value from attrs to encoding on read (CF fill-value handling)
-        missing_value = ds[ivar].attrs.get("missing_value") or ds[ivar].encoding.get("missing_value")
+        # Undecoded, both stay in .attrs; a decoded dataset moves them to
+        # .encoding instead, and the tests build datasets each way.  Checked
+        # for None rather than truthiness so that a missing_value of 0 is not
+        # mistaken for one that is absent.
+        fill_value = ds[ivar].attrs.get("_FillValue")
+        if fill_value is None:
+            fill_value = ds[ivar].encoding.get("_FillValue")
+        missing_value = ds[ivar].attrs.get("missing_value")
+        if missing_value is None:
+            missing_value = ds[ivar].encoding.get("missing_value")
         if fill_value is None:
             reporter.error(f"variable '{ivar}' missing '_FillValue'.")
         elif default_fill is not None and fill_value != default_fill:

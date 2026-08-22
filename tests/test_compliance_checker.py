@@ -263,6 +263,25 @@ def set_variable_units(file_path: Path, units: str) -> None:
         dataset.variables[variable_name].units = units
 
 
+def write_values(
+    file_path: Path, value, count: int | None = 5, start: int = 0
+) -> None:
+    """Write `value` into `count` cells of a file's main variable, from `start`.
+
+    `count=None` writes every cell to the end.  Auto-masking is turned off so
+    that the fill value can be written as a value, which is the whole point
+    when what is under test is how the checker tells a fill value from a NaN.
+    """
+    variable_name = file_path.name.split("_")[0]
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        variable = dataset.variables[variable_name]
+        variable.set_auto_mask(False)
+        data = variable[:]
+        flat = data.reshape(-1)
+        flat[start : None if count is None else start + count] = value
+        variable[:] = flat.reshape(data.shape)
+
+
 def dataset_for_variable(case_dir: Path, variable_name: str) -> Path:
     return sorted(case_dir.glob(f"{variable_name}_*.nc"))[0]
 
@@ -1183,6 +1202,219 @@ def test_shipped_range_severities_are_all_errors():
     ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
 
     assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
+
+
+SHIPPED_FILL_POLICIES = {
+    "forbidden": {
+        "lithk", "dlithkdt", "sftgif", "sftgrf", "sftflf", "licalvf",
+        "ligroundf", "lifmassbf", "lim", "limnsw", "iareagr", "iareafl",
+        "tendacabf", "tendlibmassbfgr", "tendlibmassbffl", "tendlicalvf",
+        "tendlifmassbf", "tendligroundf",
+    },
+    "outside_domain": {
+        "orog", "topg", "base", "acabf", "hfgeoubed", "thdrflf", "deltag",
+        "refgeoid",
+    },
+    "no_ice": {
+        "xvelsurf", "yvelsurf", "zvelsurf", "xvelbase", "yvelbase", "zvelbase",
+        "xvelmean", "yvelmean", "strbasemag", "litemptop", "litempavg",
+        "litemp",
+    },
+    "no_grounded_ice": {"litempbotgr", "libmassbfgr"},
+    "no_floating_ice": {"litempbotfl", "libmassbffl"},
+}
+
+
+def test_every_shipped_variable_has_a_fill_policy():
+    """The data request answers the question for every variable, not some.
+
+    Issue #23 is that submissions disagree about where a field should hold a
+    value and where a fill value; a blank row would leave one of those
+    disagreements unsettled. Which variable gets which policy is data, agreed
+    on the issue, so changing it has to update this test deliberately.
+    """
+    ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
+
+    shipped = {}
+    for entry in ismip_meta:
+        shipped.setdefault(entry["fill_policy"], set()).add(entry["variable"])
+
+    assert None not in shipped, "every variable needs a policy"
+    assert shipped == SHIPPED_FILL_POLICIES
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [
+        ("forbidden", "forbidden"),
+        # Spelling in the request is for people, not for the parser.
+        ("  No_Ice ", "no_ice"),
+        # A blank cell, an unrecognised value and a missing column all have to
+        # mean the variable is unconstrained.
+        (None, None),
+        ("nonsense", None),
+    ],
+)
+def test_fill_policy_defaults_to_unconstrained(value, expected):
+    assert checker._fill_policy(value) == expected
+
+
+def test_a_variable_with_fill_values_still_passes_its_range_check(xyt_case_dir):
+    """The trap in reading files undecoded.
+
+    A fill cell is then the literal 9.96921e+36 rather than a NaN, so a range
+    check that did not exclude it would report that maximum against a bound of
+    5500 m and fail every variable the data request lets have missing values.
+    """
+    write_values(
+        dataset_for_variable(xyt_case_dir, "orog"), netCDF4.default_fillvals["f4"]
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert "is out of range" not in summary["log_text"]
+
+
+def test_checker_reports_a_scalar_series_of_nothing_but_fill(case_dir):
+    """A time series with no numbers in it, reported for a scalar variable.
+
+    The check used to sit inside the range checks, which run only for spatial
+    variables in a recognised region, so this went unreported.
+    """
+    write_values(
+        dataset_for_variable(case_dir, "lim"),
+        netCDF4.default_fillvals["f4"],
+        count=None,
+    )
+
+    summary = run_checker(case_dir)
+
+    assert "The array only contains missing values." in summary["log_text"]
+    assert summary["total_errors"] >= 1
+
+
+def test_checker_reports_an_all_missing_array_of_an_unknown_region(xyt_case_dir):
+    """The other half of the same gap: no region, so no range checks to hide in."""
+    target_file = dataset_for_variable(xyt_case_dir, "lithk")
+    write_values(target_file, netCDF4.default_fillvals["f4"], count=None)
+    rename_file_part(target_file, checker.ISMIP7_FILENAME_REGION_IDX, "XXX")
+
+    log = run_xyt_checker(xyt_case_dir)["log_text"]
+
+    assert "The array only contains missing values." in log
+
+
+@pytest.mark.parametrize(
+    "variable_name", ["lithk", "dlithkdt", "sftgif", "sftgrf", "licalvf"]
+)
+def test_checker_reports_a_fill_value_the_request_forbids(
+    xyt_case_dir, variable_name
+):
+    """The rule issue #23 is about: these fields cover the whole grid.
+
+    Ice thickness is 0 where there is no ice rather than missing, and so are
+    the masks and the front fluxes, so that downstream analysis does not have
+    to guess whether a hole means no ice or an inactive model.
+    """
+    write_values(
+        dataset_for_variable(xyt_case_dir, variable_name),
+        netCDF4.default_fillvals["f4"],
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert (
+        f"variable '{variable_name}' holds a fill value in 5 of"
+        in summary["log_text"]
+    )
+
+
+def test_checker_reports_a_gappy_scalar_series(case_dir):
+    """A scalar carries the same policy: a missing total ice mass is a hole.
+
+    An analyst plots straight through it. A model that cannot compute one of
+    these should decline it in not_modelled.txt rather than submit gaps.
+    """
+    write_values(
+        dataset_for_variable(case_dir, "lim"),
+        netCDF4.default_fillvals["f4"],
+        count=1,
+    )
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert "variable 'lim' holds a fill value in 1 of 2" in summary["log_text"]
+
+
+def test_a_nan_and_a_fill_value_are_two_separate_findings(xyt_case_dir):
+    """The distinction the old decoded reading could not make.
+
+    Both are wrong in `lithk` and they are wrong for different reasons, so a
+    modeller who has done both is told about both.
+    """
+    path = dataset_for_variable(xyt_case_dir, "lithk")
+    write_values(path, netCDF4.default_fillvals["f4"], count=3)
+    write_values(path, float("nan"), count=2, start=3)
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 2, summary["log_text"]
+    assert "holds a fill value in 3 of" in summary["log_text"]
+    assert "holds a NaN or an infinity in 2 of" in summary["log_text"]
+
+
+def test_checker_reports_a_nan_used_as_a_missing_value(xyt_case_dir):
+    """A bare NaN is not an accepted way to say "missing".
+
+    The data request asks for the netCDF4 fill value, and a reader filtering on
+    _FillValue -- as it tells them to -- takes a NaN for data. Decoded, the two
+    were indistinguishable, which is why files are read as they are stored.
+    """
+    write_values(dataset_for_variable(xyt_case_dir, "orog"), float("nan"))
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert "holds a NaN or an infinity in 5 of" in summary["log_text"]
+
+
+def test_checker_reports_an_infinity_as_a_missing_value_not_a_range_error(
+    xyt_case_dir,
+):
+    """An infinity is the same finding as a NaN, and only that finding.
+
+    Stating the rule as "finite or fill" rather than "not NaN" is what catches
+    it; isnull() never would. It must not also be reported as an out-of-range
+    maximum, which would tell the modeller to look at their elevations.
+    """
+    write_values(dataset_for_variable(xyt_case_dir, "orog"), float("inf"))
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 1, summary["log_text"]
+    assert "holds a NaN or an infinity" in summary["log_text"]
+    assert "is out of range" not in summary["log_text"]
+
+
+def test_packing_is_reported_without_scaling_what_is_checked(xyt_case_dir):
+    """A packed variable is rejected, and the checks see what the file stores.
+
+    Decoded, xarray applies the scale_factor, so the range check would report
+    numbers that are not in the file -- here, mask fractions doubled past 1.
+    An f8 scale_factor on f4 data would also promote the variable to float64
+    and draw a dtype error about a file that is f4 on disk.
+    """
+    with netCDF4.Dataset(dataset_for_variable(xyt_case_dir, "sftgif"), "a") as dataset:
+        dataset.variables["sftgif"].scale_factor = 2.0
+
+    log = run_xyt_checker(xyt_case_dir)["log_text"]
+
+    assert "must not have 'scale_factor'" in log
+    assert "expected float32" not in log
+    assert "is out of range" not in log
 
 
 def run_main(

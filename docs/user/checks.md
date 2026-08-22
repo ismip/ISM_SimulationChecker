@@ -20,9 +20,10 @@ warning.
 ## 2. Numerical
 
 Units match the data request, in any UDUNITS spelling: `m2`, `m^2` and `m**2`
-are all accepted, as are `kg m-2 s-1`, `kg.m-2.s-1` and `kg/m2/s`. All values
-lie within the allowed min/max range for the relevant region, and the array is
-not entirely fill values.
+are all accepted, as are `kg m-2 s-1`, `kg.m-2.s-1` and `kg/m2/s`. Every value
+is either a finite number or the declared `_FillValue`, so a bare NaN is never
+how a file says "missing". All values lie within the allowed min/max range for
+the relevant region, and the array is not entirely fill values.
 
 The ranges themselves, per variable and per region, are listed in
 {doc}`data-request`.
