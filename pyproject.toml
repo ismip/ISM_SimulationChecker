@@ -31,9 +31,21 @@ dependencies = [
 
 [project.optional-dependencies]
 test = ["pytest>=8"]
+# The docs build needs none of the dependencies above -- it reads the data
+# request CSVs from the repository rather than through the package -- so this
+# extra stands alone.  It must stay in sync with ci/docs_env.yml, which is what
+# CI and a local `sphinx-build` actually use.
+docs = [
+    "sphinx>=8",
+    "myst-parser>=4",
+    "furo",
+    "sphinx-copybutton",
+    "sphinx-design",
+]
 
 [project.urls]
 Homepage = "https://github.com/ismip/ISM_SimulationChecker"
+Documentation = "https://ismip.github.io/ISM_SimulationChecker/"
 Issues = "https://github.com/ismip/ISM_SimulationChecker/issues"
 
 [project.scripts]

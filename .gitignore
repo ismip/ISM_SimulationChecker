@@ -5,3 +5,5 @@ dist/
 *.egg-info/
 *.whl
 .venv/
+docs/_build/
+docs/_generated/

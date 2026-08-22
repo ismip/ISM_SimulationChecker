@@ -1,6 +1,6 @@
-# ISMIP7 NetCDF generator
+# Generating test files
 
-`ismip7-generate-test-files` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker. It is part of the `isschecker` package (`isschecker.generate`), so it is installed along with the checker — `conda create -n isschecker -c conda-forge isschecker`, see [Installation](../README.md#installation) — and can be run from any directory.
+`ismip7-generate-test-files` creates ISMIP7-style NetCDF test files with synthetic data, one file per variable, following the naming convention and grid definitions used by the compliance checker. It is part of the `isschecker` package (`isschecker.generate`), so it is installed along with the checker — `conda create -n isschecker -c conda-forge isschecker`, see {doc}`../user/installation` — and can be run from any directory.
 
 Files are written to `Models/{GrIS|AIS}/ISMIP7/SYNTH1/CORE/{set_counter}/` (default `C001`) beneath the current working directory.
 
@@ -68,16 +68,16 @@ ismip7-generate-test-files --grid GrIS_16000m --scenario ctrl \
 - Time encoding: `days since 1850-01-01`, `calendar='standard'`.
   - State (ST) variables: timestamp is Jan 1 of year N+1 (end-of-year snapshot). No `time_bounds`.
   - Flux (FL) variables: timestamp is Jul 1 of year N (mid-year), with `time_bounds` = [Jan 1 of N, Jan 1 of N+1].
-  - `x,y,z,t` variables (e.g. `litemp`): ST snapshots at a sparse set of nominal years. For `historical`: first year of run, 1900 (if in range), last year of run. For projection scenarios: 2100, 2200, 2300 (each if within the simulation year range). The filename year range reflects the full simulation period, not the first/last snapshot year. The set is `CENTURY_SNAPSHOT_YEARS` in `isschecker.checker`, imported here so the generator and the checker cannot disagree; note that no snapshot is written at 2000, which the checker accepts but does not require (see the README).
+  - `x,y,z,t` variables (e.g. `litemp`): ST snapshots at a sparse set of nominal years. For `historical`: first year of run, 1900 (if in range), last year of run. For projection scenarios: 2100, 2200, 2300 (each if within the simulation year range). The filename year range reflects the full simulation period, not the first/last snapshot year. The set is `CENTURY_SNAPSHOT_YEARS` in `isschecker.checker`, imported here so the generator and the checker cannot disagree; note that no snapshot is written at 2000, which the checker accepts but does not require (see {doc}`../user/time-encoding`).
 - Single precision (`float32`) for all variables and time.
 - `_FillValue` and `missing_value` set to NetCDF4 default `f4` fill value.
 - `time` is an unlimited (record) dimension.
-- `x` and `y` are 1-D coordinate variables in metres.
+- `x` and `y` are 1-D coordinate variables in meters.
 - CRS set per domain: GrIS → `EPSG:3413`, AIS → `EPSG:3031`.
 
 ## Notes
 
 - Variable metadata is read from `ISMIP7_variable_request.csv` and grid definitions from `gdfs/`, both bundled as package data in `isschecker/data/`. Use `--conventions-dir` to point at a different directory (it must contain the CSV and a `gdfs/` subdirectory).
-- `group`, `model`, `contact_name`, and `contact_email` are hardcoded in `create_netcdf_file()` to synthetic defaults — edit there to customise.
+- `group`, `model`, `contact_name`, and `contact_email` are hardcoded in `create_netcdf_file()` to synthetic defaults — edit there to customize.
 - Generated files are synthetic and intended for testing the compliance checker, not for scientific use.
 - Data values are drawn from a seeded generator, so a given `--seed` reproduces the same files. With `--multiple`, each file uses `seed + i` so the files differ from one another while the run as a whole stays reproducible.

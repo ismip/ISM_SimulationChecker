@@ -1,0 +1,74 @@
+name: Docs
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+# Only the deploy job needs these, but the token is scoped for the whole
+# workflow.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deployment at a time, and never cancel one halfway: a cancelled deploy
+# can leave the published site in a state that matches no commit.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build the docs
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up micromamba environment
+        uses: mamba-org/setup-micromamba@v2
+        with:
+          environment-file: ci/docs_env.yml
+          environment-name: isschecker-docs
+          cache-environment: true
+          cache-downloads: true
+          init-shell: >-
+            bash
+
+      - name: Report the installed versions
+        shell: micromamba-shell {0}
+        run: micromamba list
+
+      - name: Build the docs
+        shell: micromamba-shell {0}
+        # -W makes every Sphinx warning a failure -- a broken cross-reference,
+        # a page missing from every toctree -- and --keep-going reports all of
+        # them rather than stopping at the first.
+        run: sphinx-build -W --keep-going -b html docs docs/_build/html
+
+      - name: Upload the built site
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: docs/_build/html
+
+  deploy:
+    name: Publish to GitHub Pages
+    # Every push and pull request is built, so that a change that breaks the
+    # docs fails its pull request; only main is published.
+    if: >-
+      github.event_name != 'pull_request' &&
+      github.ref == 'refs/heads/main' &&
+      github.repository == 'ismip/ISM_SimulationChecker'
+    needs: build
+    runs-on: ubuntu-latest
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v5

@@ -1,0 +1,28 @@
+/* Tweaks for the reference tables, which carry more columns than the prose
+   pages the theme is tuned for. */
+
+/* Keep a multi-word literal -- a unit like `m s-1`, or a standard name -- on
+   one line: a unit wrapped after the space reads as two units. */
+.table-wrapper td code.literal,
+.table-wrapper th code.literal {
+  white-space: nowrap;
+}
+
+/* A standard name is the exception: it is one long word, so refusing to
+   break it is what pushes a table off the side of the page, and breaking it
+   costs nothing -- there is no space in it to be mistaken for a break. */
+.table-wrapper td:last-child code.literal {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+/* A little smaller, so that a table of forty rows can be scanned rather than
+   scrolled, and so that fewer of them need to scroll sideways at all. */
+.table-wrapper table.docutils {
+  font-size: 0.9em;
+}
+
+/* Numbers line up under one another when they are the same width. */
+.table-wrapper table.docutils td {
+  font-variant-numeric: tabular-nums;
+}
