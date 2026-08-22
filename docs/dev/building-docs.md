@@ -7,8 +7,23 @@ Markdown, and are published to
 
 ## Build them locally
 
-The docs build needs Sphinx and its extensions, but not the checker itself or
-any of its dependencies, so it gets its own small environment:
+The developer environment from {doc}`source-install` already has Sphinx and its
+extensions, so there is nothing else to install:
+
+```bash
+conda activate isschecker
+sphinx-build -W --keep-going -b html docs docs/_build/html
+```
+
+Then open `docs/_build/html/index.html`. `-W` turns warnings into errors, which
+is what CI does, so a build that is clean here will not fail there; drop it
+while you are iterating if you prefer.
+
+The build needs neither the checker nor any of its dependencies — it reads the
+data request CSVs straight from the repository and takes the version from
+`pyproject.toml` — so `ci/docs_env.yml` holds Sphinx and its extensions and
+nothing else. That is the environment CI builds in, and it is worth having
+locally if you are only editing prose:
 
 ```bash
 conda env create -f ci/docs_env.yml
@@ -16,9 +31,9 @@ conda activate isschecker-docs
 sphinx-build -W --keep-going -b html docs docs/_build/html
 ```
 
-Then open `docs/_build/html/index.html`. `-W` turns warnings into errors, which
-is what CI does, so a build that is clean here will not fail there; drop it
-while you are iterating if you prefer.
+The documentation packages appear in three places — the `docs` section of
+`isschecker_env.yml`, `ci/docs_env.yml`, and the `docs` extra in
+`pyproject.toml` — and adding one means adding it to all three.
 
 ## Layout
 
