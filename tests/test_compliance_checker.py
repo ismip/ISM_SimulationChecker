@@ -1,4 +1,5 @@
 import io
+import os
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -131,6 +132,36 @@ def xyt_case_dir(tmp_path, baseline_xyt_core_dir):
     case_root = tmp_path / "CORE" / "C001"
     shutil.copytree(baseline_xyt_core_dir, case_root)
     return case_root
+
+
+@pytest.fixture
+def read_only_case_dir(case_dir):
+    """A submission the checker is not allowed to write into.
+
+    An archive on read-only storage is the case issue #27 is about: the log has
+    to go somewhere else, because there is nowhere for it to go here.
+    """
+    _remove_inherited_log(case_dir)
+    original_mode = case_dir.stat().st_mode
+    case_dir.chmod(0o500)
+    if os.access(case_dir, os.W_OK):
+        # Running as root, or on a filesystem that does not enforce the mode.
+        case_dir.chmod(original_mode)
+        pytest.skip("cannot make a directory read-only in this environment")
+    try:
+        yield case_dir
+    finally:
+        # Restore write access so pytest can clean the temporary directory up.
+        case_dir.chmod(original_mode)
+
+
+def _remove_inherited_log(case_dir: Path) -> None:
+    """Drop the log the baseline fixture left in the directory it checked.
+
+    It comes along with the copy, so without this a test asking whether a run
+    wrote a log into the submission would be answered by the baseline's.
+    """
+    (case_dir / "compliance_checker_log.txt").unlink(missing_ok=True)
 
 
 def run_checker(case_dir: Path):
@@ -1154,17 +1185,19 @@ def test_shipped_range_severities_are_all_errors():
     assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
 
 
-def run_main(monkeypatch, source_path, variable_list="ismip7_scalars") -> int:
-    monkeypatch.setattr(
-        "sys.argv",
-        [
-            "ismip7-compliance-checker",
-            "--source-path",
-            str(source_path),
-            "--variable-list",
-            variable_list,
-        ],
-    )
+def run_main(
+    monkeypatch, source_path, variable_list="ismip7_scalars", output_path=None
+) -> int:
+    argv = [
+        "ismip7-compliance-checker",
+        "--source-path",
+        str(source_path),
+        "--variable-list",
+        variable_list,
+    ]
+    if output_path is not None:
+        argv += ["--output-path", str(output_path)]
+    monkeypatch.setattr("sys.argv", argv)
     return checker.main()
 
 
@@ -1200,6 +1233,100 @@ def test_exit_status_is_non_zero_for_a_source_directory_with_no_files(
     empty.mkdir()
 
     assert run_main(monkeypatch, empty) != 0
+
+
+def test_output_path_writes_the_log_outside_the_submission(case_dir, tmp_path):
+    _remove_inherited_log(case_dir)
+    output_path = tmp_path / "logs"
+    output_path.mkdir()
+
+    summary = checker.run_checker(
+        source_path=str(case_dir),
+        variable_list="ismip7_scalars",
+        output_path=str(output_path),
+        version="tests",
+    )
+
+    log_path = output_path / "compliance_checker_log.txt"
+    assert summary["log_path"] == str(log_path)
+    assert log_path.exists()
+    assert not (case_dir / "compliance_checker_log.txt").exists()
+    # The synthesis block is inserted by a second pass over the log, so a log
+    # that carries it is one both passes found.
+    assert "experiments checked." in log_path.read_text()
+    assert summary["total_errors"] == 0
+
+
+def test_output_path_directory_is_created_if_missing(case_dir, tmp_path):
+    output_path = tmp_path / "logs" / "C001"
+
+    summary = checker.run_checker(
+        source_path=str(case_dir),
+        variable_list="ismip7_scalars",
+        output_path=str(output_path),
+        version="tests",
+    )
+
+    assert (output_path / "compliance_checker_log.txt").exists()
+    assert summary["total_errors"] == 0
+
+
+def test_checker_runs_on_a_read_only_submission(
+    monkeypatch, read_only_case_dir, tmp_path
+):
+    """The point of --output-path: an archive nobody can write to still checks."""
+    output_path = tmp_path / "logs"
+
+    summary = checker.run_checker(
+        source_path=str(read_only_case_dir),
+        variable_list="ismip7_scalars",
+        output_path=str(output_path),
+        version="tests",
+    )
+
+    assert not summary["fatal"]
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert (output_path / "compliance_checker_log.txt").exists()
+    assert not (read_only_case_dir / "compliance_checker_log.txt").exists()
+    assert run_main(monkeypatch, read_only_case_dir, output_path=output_path) == 0
+
+
+def test_exit_status_is_non_zero_when_the_log_cannot_be_written(
+    monkeypatch, capsys, read_only_case_dir
+):
+    """Nothing was checked, so this is a failure and not a silent pass."""
+    assert run_main(monkeypatch, read_only_case_dir) != 0
+    assert "--output-path" in capsys.readouterr().out
+
+
+def test_a_failed_log_write_does_not_report_an_earlier_log(case_dir, tmp_path):
+    """A log left over from another run is not this run's output."""
+    output_path = tmp_path / "logs"
+    output_path.mkdir()
+    stale_log = output_path / "compliance_checker_log.txt"
+    stale_log.write_text("a log from some other run\n")
+    # Truncating an existing file needs write access to the file, not to the
+    # directory holding it, so both have to be closed off.
+    stale_log.chmod(0o400)
+    original_mode = output_path.stat().st_mode
+    output_path.chmod(0o500)
+    if os.access(output_path, os.W_OK) or os.access(stale_log, os.W_OK):
+        output_path.chmod(original_mode)
+        pytest.skip("cannot make a directory read-only in this environment")
+
+    try:
+        summary = checker.run_checker(
+            source_path=str(case_dir),
+            variable_list="ismip7_scalars",
+            output_path=str(output_path),
+            version="tests",
+        )
+    finally:
+        output_path.chmod(original_mode)
+
+    assert summary["fatal"]
+    assert summary["log_text"] == ""
+    assert stale_log.read_text() == "a log from some other run\n"
 
 
 def test_checker_reports_missing_contact_email_attribute(case_dir):

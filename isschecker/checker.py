@@ -127,6 +127,8 @@ DEFAULT_SOURCE_PATH = "./Models/GrIS/ISMIP7/SYNTH1/CORE/C001"
 DEFAULT_VARIABLE_LIST = "ismip7_scalars"
 VARIABLE_LIST_CHOICES = ("ismip7_scalars", "ismip7_xyt", "ismip7")
 
+LOG_FILENAME = "compliance_checker_log.txt"
+
 VARIABLE_REQUEST_CSV = "ISMIP7_variable_request.csv"
 
 EXPERIMENTS_ISMIP7_CSV_FILENAME = "experiments_ismip7.csv"
@@ -344,12 +346,11 @@ def main() -> int:
     them.
     """
     args = _parse_args()
-    source_path = args.source_path
-    variable_list = args.variable_list
 
     summary = run_checker(
-        source_path=source_path,
-        variable_list=variable_list,
+        source_path=args.source_path,
+        variable_list=args.variable_list,
+        output_path=args.output_path,
     )
 
     return 1 if summary["fatal"] or summary["total_errors"] > 0 else 0
@@ -358,9 +359,19 @@ def main() -> int:
 def run_checker(
     source_path: str,
     variable_list: str = DEFAULT_VARIABLE_LIST,
+    output_path: str | None = None,
     version: str | None = None,
 ):
+    """Check the submission in `source_path` and return a summary of the run.
+
+    The log is written into `output_path`, or alongside the data in
+    `source_path` when no output path is given.  Keeping them apart is what
+    lets the checker run against an archive it may not write to.
+    """
     version = _describe_version() if version is None else version
+    log_path = os.path.join(
+        source_path if output_path is None else output_path, LOG_FILENAME
+    )
     experiments_ismip7 = _load_experiments_csv()
     (
         ismip_meta,
@@ -380,11 +391,11 @@ def run_checker(
         all_mandatory_variables=all_mandatory_variables,
         experiments=experiments_ismip7,
         criteria_file=VARIABLE_REQUEST_CSV,
+        log_path=log_path,
     )
 
-    log_path = os.path.join(source_path, "compliance_checker_log.txt")
     log_text = ""
-    if os.path.exists(log_path):
+    if summary.get("log_written", True) and os.path.exists(log_path):
         with open(log_path, "r") as log_file:
             log_text = log_file.read()
 
@@ -441,6 +452,13 @@ def _parse_args() -> argparse.Namespace:
         "--source-path",
         default=DEFAULT_SOURCE_PATH,
         help="Path to the directory containing the CORE NetCDF files.",
+    )
+    parser.add_argument(
+        "--output-path",
+        default=None,
+        help="Directory to write the checker log into; created if it does not "
+             "exist. Defaults to --source-path, which cannot be used for an "
+             "archive the checker is not allowed to write to.",
     )
     parser.add_argument(
         "--variable-list",
@@ -768,13 +786,31 @@ def _run_compliance_checker(
     all_mandatory_variables,
     experiments,
     criteria_file,
+    log_path: str,
 ):
     if not os.path.isdir(source_path):
         print(f"ERROR: Directory not found: '{source_path}'. Please check your --source-path argument.")
         return _empty_summary()
 
+    log_dir = os.path.dirname(log_path)
     try:
-        with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
+        if log_dir:
+            os.makedirs(log_dir, exist_ok=True)
+        log_file = open(log_path, "w")
+    except OSError as err:
+        # Overwhelmingly this is a read-only archive being checked without an
+        # --output-path.  Say so, rather than letting the traceback stand as
+        # the explanation.
+        print(f"ERROR: Cannot write the log to '{log_path}': {err.strerror}.")
+        print("Use --output-path to write it somewhere the checker can write.")
+        summary = _empty_summary()
+        # Nothing was written, so whatever sits at log_path is some other run's
+        # and must not be reported back as this one's.
+        summary["log_written"] = False
+        return summary
+
+    try:
+        with log_file as f:
             print("-> Checking " + source_path)
             print()
             today = datetime.date.today()
@@ -790,6 +826,7 @@ def _run_compliance_checker(
             summary = _process_experiments(
                 reporter=Reporter(f),
                 source_path=source_path,
+                log_path=log_path,
                 experiment_groups=experiment_groups,
                 mandatory_variables=mandatory_variables,
                 all_request_variables=all_request_variables,
@@ -799,7 +836,7 @@ def _run_compliance_checker(
                 ismip_meta=ismip_meta,
             )
 
-        _insert_synthesis(source_path=source_path, summary=summary)
+        _insert_synthesis(log_path=log_path, summary=summary)
         return summary
 
     except TypeError as err:
@@ -856,6 +893,7 @@ def _group_files_by_experiment(source_path: str) -> dict:
 def _process_experiments(
     reporter: Reporter,
     source_path: str,
+    log_path: str,
     experiment_groups: dict,
     mandatory_variables,
     all_request_variables,
@@ -902,12 +940,14 @@ def _process_experiments(
 
         _print_experiment_summary(
             experiment_name=experiment_name,
+            log_path=log_path,
             exp_errors=exp_reporter.total_errors,
             exp_warnings=exp_reporter.total_warnings,
         )
 
     _print_total_summary(
         source_path=source_path,
+        log_path=log_path,
         total_errors=reporter.total_errors,
         total_warnings=reporter.total_warnings,
     )
@@ -2193,7 +2233,7 @@ def _warning_phrase(warnings: int) -> str:
 
 
 def _print_experiment_summary(
-    experiment_name: str, exp_errors: int, exp_warnings: int = 0
+    experiment_name: str, log_path: str, exp_errors: int, exp_warnings: int = 0
 ) -> None:
     print(experiment_name, ": compliance check processed.")
     if exp_errors > 0:
@@ -2201,7 +2241,7 @@ def _print_experiment_summary(
             "Found",
             exp_errors,
             f"errors{_warning_phrase(exp_warnings)}."
-            " Check compliance_checker_log.txt for details.",
+            f" Check {log_path} for details.",
         )
     else:
         print("Successfully verified with no errors" + _warning_phrase(exp_warnings))
@@ -2209,7 +2249,7 @@ def _print_experiment_summary(
 
 
 def _print_total_summary(
-    source_path: str, total_errors: int, total_warnings: int = 0
+    source_path: str, log_path: str, total_errors: int, total_warnings: int = 0
 ) -> None:
     print("-------------------------------------------------------------------------")
     print(source_path, ": compliance check processed.")
@@ -2218,7 +2258,7 @@ def _print_total_summary(
             "Found a total of",
             total_errors,
             f"errors{_warning_phrase(total_warnings)}."
-            " Check compliance_checker_log.txt for details.",
+            f" Check {log_path} for details.",
         )
     else:
         print("Successfully verified with no errors" + _warning_phrase(total_warnings))
@@ -2295,10 +2335,10 @@ _SUMMARY_KEYS = {
 }
 
 
-def _insert_synthesis(source_path: str, summary: dict) -> None:
+def _insert_synthesis(log_path: str, summary: dict) -> None:
     report_naming_issues = summary["report_naming_issues"]
 
-    with open(os.path.join(source_path, "compliance_checker_log.txt"), "r") as f:
+    with open(log_path, "r") as f:
         contents = f.readlines()
 
     iline = 11
@@ -2326,5 +2366,5 @@ def _insert_synthesis(source_path: str, summary: dict) -> None:
             iline += 1
         contents.insert(iline, "\n")
 
-    with open(os.path.join(source_path, "compliance_checker_log.txt"), "w") as f:
+    with open(log_path, "w") as f:
         f.writelines(contents)
