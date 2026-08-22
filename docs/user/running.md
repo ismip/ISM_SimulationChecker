@@ -2,7 +2,8 @@
 
 Once installed, run the checker from any directory with the
 `ismip7-compliance-checker` command (equivalently, `python -m isschecker`). It
-writes `compliance_checker_log.txt` into the `--source-path` directory.
+writes `compliance_checker_log.txt` into the `--source-path` directory, or into
+`--output-path` if you give one.
 
 ```bash
 # Check x,y,t (gridded) variables
@@ -19,6 +20,11 @@ ismip7-compliance-checker \
 ismip7-compliance-checker \
     --source-path ./Models/GrIS/ISMIP7/SYNTH1/CORE/C001 \
     --variable-list ismip7
+
+# Check a read-only archive, writing the log somewhere else
+ismip7-compliance-checker \
+    --source-path /archive/GrIS/ISMIP7/SYNTH1/CORE/C001 \
+    --output-path ./checker-logs/C001
 ```
 
 ## Options
@@ -26,6 +32,7 @@ ismip7-compliance-checker \
 | Option | Default | Description |
 |--------|---------|-------------|
 | `--source-path` | `./Models/GrIS/ISMIP7/SYNTH1/CORE/C001` | Set-counter subdirectory containing `.nc` files to check |
+| `--output-path` | the `--source-path` directory | Directory to write `compliance_checker_log.txt` into; created if missing |
 | `--variable-list` | `ismip7_scalars` | `ismip7_xyt`, `ismip7_scalars`, or `ismip7` (both) |
 | `--version` | — | Print the installed version and exit; quote it when reporting a problem |
 
@@ -52,11 +59,20 @@ can be read from the top rather than scrolled through. Because it is written
 beside the files it describes, it can be archived with the submission or
 attached to an issue as it stands.
 
+That default is no use for an archive the checker is not allowed to write to,
+which it cannot check at all if the log has nowhere to go. Give `--output-path`
+a directory it can write to and the log goes there instead; the directory is
+created if it does not exist. The same option keeps the logs from several
+archives side by side, one directory each — the log always takes the name
+`compliance_checker_log.txt`, so two runs sharing an output directory overwrite
+one another.
+
 ## Exit status
 
 The checker exits **non-zero** when it found errors, or when it could not check
-anything at all — the `--source-path` does not exist, or holds no `.nc` files.
-It exits **zero** when the submission is compliant, including when there are
-warnings to review; see {doc}`errors-and-warnings`. Both
+anything at all — the `--source-path` does not exist, holds no `.nc` files, or
+the log cannot be written where it was asked to put it. It exits **zero** when
+the submission is compliant, including when there are warnings to review; see
+{doc}`errors-and-warnings`. Both
 `ismip7-compliance-checker` and `python -m isschecker` behave the same way, so
 either can be used in a script.

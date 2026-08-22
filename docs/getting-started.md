@@ -49,9 +49,10 @@ for the time-only ones, or `ismip7` for both. The full set of options is in
 
 Findings are printed as the run goes and written to
 `compliance_checker_log.txt` in the `--source-path` directory, so the log can
-be archived alongside the submission or attached to an issue. The log opens
-with a synthesis block counting errors and warnings by category, and the two
-severities mean quite different things:
+be archived alongside the submission or attached to an issue. Add
+`--output-path` to send it elsewhere, which is what an archive you cannot write
+to needs. The log opens with a synthesis block counting errors and warnings by
+category, and the two severities mean quite different things:
 
 - an **error** means the file, as submitted, cannot be used for the analysis it
   was submitted for;

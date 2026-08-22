@@ -20,8 +20,9 @@ ismip7-compliance-checker \
 
 `--variable-list` is `ismip7_xyt` for the gridded variables, `ismip7_scalars`
 for the time-only ones, or `ismip7` for both. Findings are printed and written
-to `compliance_checker_log.txt` in the `--source-path` directory. The checker
-exits non-zero if it found errors, so it can be run from a script.
+to `compliance_checker_log.txt` in the `--source-path` directory, or in
+`--output-path` if you give one. The checker exits non-zero if it found errors,
+so it can be run from a script.
 
 ## What is checked
 
