@@ -39,6 +39,23 @@
 #      undecoded, so a fill cell is the literal 9.96921e+36.
 #    - Array is not entirely fill/missing values.
 #
+# 2b. Consistency (_check_consistency)  [spatial variables only]
+#    - A no_ice / no_grounded_ice / no_floating_ice variable is missing exactly
+#      where its mask (sftgif / sftgrf / sftflf) is 0.  Holding a value where
+#      there is no ice is an error; being missing where there is ice is at the
+#      severity 'margin_severity' names, a warning for the first round of
+#      submissions -- see _margin_severity.
+#    - An outside_domain variable is defined wherever there is ice (error), and
+#      the outside_domain variables agree about where the domain is (warning:
+#      a forcing or reference dataset may legitimately cover more).
+#    - sftgrf + sftflf equals sftgif; lithk is greater than 0 exactly where
+#      sftgif is; orog equals base + lithk; and the ice base rests on the bed
+#      where sftgrf is 1 and lies above it where sftflf is 1.  No densities:
+#      all of this is submitted geometry compared against itself.
+#    - The companion file is found by name, every field matching but the
+#      variable.  When it is absent the check says so and is skipped, so a
+#      submission can still be checked a part at a time.
+#
 # 3. Spatial (_check_spatial)  [xyt variables only]
 #    - Lower-left and upper-right grid corners lie within the expected AIS or GrIS extents.
 #    - Grid resolution is one of the allowed values (1, 2, 4, 8, 16, 32 km).
@@ -114,6 +131,7 @@
 
 import datetime
 import difflib
+import glob
 import os
 import re
 import subprocess
@@ -510,6 +528,35 @@ FILL_POLICIES = (
 )
 
 
+# The policies that say a variable is defined only where there is ice of some
+# kind, and how to say that in a finding.
+ICE_ONLY_POLICIES = {
+    "no_ice": "where there is ice",
+    "no_grounded_ice": "where there is grounded ice",
+    "no_floating_ice": "where there is floating ice",
+}
+
+
+def _margin_severity(value) -> str:
+    """How to report a finding that turns on where a model puts the ice margin.
+
+    Two of the cross-file rules compare a field against an ice mask cell by
+    cell, and a conservatively interpolated mask puts fractions like 1e-6 in a
+    ring all along the edge.  A model that decides where to write fill from its
+    own native-grid mask will disagree in every one of those cells.  Which of
+    them is right is a question one round of real submissions answers better
+    than any amount of reasoning, so the severity of those findings -- and only
+    those -- lives in the data request, where promoting them after the trial is
+    a one-cell diff rather than a patch to this file.
+
+    Anything the column does not say means error, as with range_severity, so
+    the column is safe to add before it is filled in.
+    """
+    if value is not None and pd.notna(value) and str(value).strip().lower() == "warning":
+        return "warning"
+    return "error"
+
+
 def _fill_policy(value) -> str | None:
     """Where a variable is defined, from the fill_policy column of the request.
 
@@ -575,6 +622,7 @@ def _load_criteria(variable_list: str):
             "type": str(row["Type"]) if pd.notna(row["Type"]) else "",
             "range_severity": _range_severity(row.get("range_severity")),
             "fill_policy": _fill_policy(row.get("fill_policy")),
+            "margin_severity": _margin_severity(row.get("margin_severity")),
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -907,6 +955,7 @@ def _empty_summary() -> dict:
         "total_naming_errors": 0,
         "total_num_errors": 0,
         "total_spatial_errors": 0,
+        "total_consistency_errors": 0,
         "total_time_errors": 0,
         "total_attr_errors": 0,
         "total_file_errors": 0,
@@ -914,6 +963,7 @@ def _empty_summary() -> dict:
         "total_naming_warnings": 0,
         "total_num_warnings": 0,
         "total_spatial_warnings": 0,
+        "total_consistency_warnings": 0,
         "total_time_warnings": 0,
         "total_attr_warnings": 0,
         "total_file_warnings": 0,
@@ -1004,6 +1054,7 @@ def _process_experiments(
         "total_naming_errors": reporter.error_count("naming"),
         "total_num_errors": reporter.error_count("num"),
         "total_spatial_errors": reporter.error_count("spatial"),
+        "total_consistency_errors": reporter.error_count("consistency"),
         "total_time_errors": reporter.error_count("time"),
         "total_attr_errors": reporter.error_count("attr"),
         "total_file_errors": reporter.error_count("file"),
@@ -1011,6 +1062,7 @@ def _process_experiments(
         "total_naming_warnings": reporter.warning_count("naming"),
         "total_num_warnings": reporter.warning_count("num"),
         "total_spatial_warnings": reporter.warning_count("spatial"),
+        "total_consistency_warnings": reporter.warning_count("consistency"),
         "total_time_warnings": reporter.warning_count("time"),
         "total_attr_warnings": reporter.warning_count("attr"),
         "total_file_warnings": reporter.warning_count("file"),
@@ -1327,6 +1379,7 @@ def _process_single_file(
         _run_variable_checks(
             reporter=file_reporter,
             ds=ds,
+            source_path=source_path,
             file_name=file_name,
             considered_variable=considered_variable,
             experiment_name=experiment_name,
@@ -1805,6 +1858,21 @@ def _check_missing_values(reporter, ivar, criteria, is_fill, is_nonfinite, fill)
             f" is 0, not missing."
         )
 
+    # A field that is missing nowhere has been written over open ocean and bare
+    # ground.  This needs no companion file, which is what makes it worth
+    # having: it is the only thing that can be said about these variables when
+    # the ice mask has not been submitted alongside them.  It costs no
+    # threshold either, because it fires only at exactly full coverage, and no
+    # ISMIP7 grid can be fully glaciated -- ice reaches at most about 38% of
+    # the AIS grid and 35% of the GrIS grid.
+    if not n_fill and not n_nonfinite and criteria.get("fill_policy") in ICE_ONLY_POLICIES:
+        reporter.error(
+            f"variable '{ivar}' is defined in every cell, but the data request"
+            f" defines it only {ICE_ONLY_POLICIES[criteria['fill_policy']]}."
+            f" Ice covers at most 38% of the AIS grid and 35% of the GrIS grid,"
+            f" so the cells without it must hold the _FillValue ({fill})."
+        )
+
     if reporter.total_errors + reporter.total_warnings == findings_before:
         reporter.ok("Missing values: OK")
 
@@ -1903,6 +1971,634 @@ def _check_numerical(
                     + ") is out of range. Max value accepted: "
                     + str(ismip_meta[var_index]["max_value_" + region.lower()])
                 )
+
+
+def _companion_path(source_path: str, file_name: str, variable: str) -> str | None:
+    """The file beside this one holding `variable`, or None if there is none.
+
+    The naming convention makes this deterministic: field 0 is the variable and
+    every other field describes the run, so `sftgif_<rest>.nc` sits beside
+    `xvelmean_<rest>.nc` in the same directory.  A static x,y variable carries
+    0000-0000 as its year range while its companion carries the real one, so
+    when the exact name is absent the year range is matched loosely -- and only
+    accepted when it picks out exactly one file, since guessing between several
+    would be worse than not checking.
+    """
+    parts = file_name.split("_")
+    if len(parts) != ISMIP7_FILENAME_PARTS:
+        return None
+
+    exact = list(parts)
+    exact[ISMIP7_FILENAME_VAR_IDX] = variable
+    candidate = os.path.join(source_path, "_".join(exact))
+    if os.path.exists(candidate):
+        return candidate
+
+    stem = "_".join([variable] + parts[1:ISMIP7_FILENAME_YEAR_RANGE_IDX])
+    matches = sorted(glob.glob(os.path.join(source_path, stem + "_*.nc")))
+    return matches[0] if len(matches) == 1 else None
+
+
+def _nominal_years_of(ds, var_type: str):
+    """The nominal years a dataset's time axis encodes, or None if it has none.
+
+    Compared by nominal year rather than by timestamp because the convention
+    differs between variables: a mask is an ST variable stamped Jan 1 of the
+    following year, a mass flux is FL and stamped mid-year, and the same
+    simulation year therefore carries two different numbers.  Comparing raw
+    time values would align nothing.
+    """
+    if "time" not in ds.dims:
+        return None
+    try:
+        decoded = xr.decode_cf(
+            ds, decode_times=xr.coders.CFDatetimeCoder(use_cftime=True)
+        )
+        return [
+            _timestamp_to_nominal_year(value, var_type)
+            for value in decoded["time"].values
+        ]
+    except Exception:
+        return None
+
+
+def _variable_type(ismip_meta: list, variable: str) -> str:
+    for entry in ismip_meta:
+        if entry["variable"] == variable:
+            return entry.get("type", "")
+    return ""
+
+
+class Companion(NamedTuple):
+    """An open companion dataset and how its time axis maps onto this file's.
+
+    `at` holds, for each time step of the file being checked, the index of the
+    companion time step for the same nominal year, so a rule can ask for one
+    slice at a time rather than holding a second full field in memory.  It is
+    None for a static x,y variable, which has no time axis of its own and is
+    compared against the greatest extent the run reaches.
+    """
+    dataset: object
+    variable: str
+    at: list | None
+
+    def slice_at(self, step: int):
+        """The companion's 2-D field for one time step of the file checked."""
+        values = self.dataset[self.variable]
+        if self.at is None:
+            if "time" in values.dims:
+                return np.asarray(values.max(dim="time").values)
+            return np.asarray(values.values)
+        return np.asarray(values.isel(time=self.at[step]).values)
+
+
+def _open_companion(reporter, source_path, file_name, variable, years,
+                    ismip_meta):
+    """Open the companion holding `variable`, aligned to this file's time axis.
+
+    Returns None, having said why in the log, when the comparison cannot be
+    made.  An absent companion is a note rather than an error: checking a
+    submission a part at a time -- a run scoped to the scalars, a model that
+    does not produce the mask yet -- has to keep working.
+    """
+    path = _companion_path(source_path, file_name, variable)
+    if path is None:
+        reporter.note(
+            f"Not checked against '{variable}': no matching {variable} file in"
+            f" this directory."
+        )
+        return None
+
+    try:
+        ds = xr.open_dataset(path, decode_times=False, mask_and_scale=False)
+    except (ValueError, TypeError, OSError) as error:
+        reporter.note(f"Not checked against '{variable}': {error}")
+        return None
+
+    if variable not in ds:
+        ds.close()
+        reporter.note(
+            f"Not checked against '{variable}': {os.path.basename(path)} does"
+            f" not contain it."
+        )
+        return None
+
+    if years is None:
+        return Companion(ds, variable, None)
+
+    companion_years = _nominal_years_of(ds, _variable_type(ismip_meta, variable))
+    if companion_years is None:
+        ds.close()
+        reporter.note(
+            f"Not checked against '{variable}': its time axis could not be read."
+        )
+        return None
+
+    index = {year: step for step, year in enumerate(companion_years)}
+    missing = [year for year in years if year not in index]
+    if missing:
+        ds.close()
+        reporter.note(
+            f"Not checked against '{variable}': its time axis does not cover"
+            f" nominal year(s) {_format_year_runs(sorted(set(missing)))}."
+        )
+        return None
+
+    return Companion(ds, variable, [index[year] for year in years])
+
+
+# The mask a variable of each ice-only policy is compared against.
+ICE_MASK_FOR_POLICY = {
+    "no_ice": "sftgif",
+    "no_grounded_ice": "sftgrf",
+    "no_floating_ice": "sftflf",
+}
+
+# Below this fraction a cell is the partly glaciated margin rather than the
+# interior.  Used only to describe a finding, never to decide one: the rule is
+# exact, and this says how much of what it found is margin.
+MARGIN_FRACTION = 0.01
+
+
+def _check_ice_extent(reporter, ds, ivar, criteria, companion) -> None:
+    """A variable defined only where there is ice is missing everywhere else.
+
+    Both directions are compared, and reported as two findings, because they
+    are different mistakes: a value over bare ground is data an analyst will
+    take at face value, and a hole under ice is data they needed and did not
+    get.  Told apart by count, "40000 cells defined where there is no ice"
+    reads as a model that has not applied the rule at all, while "312 cells
+    missing under ice" reads as a disagreement about the margin -- so the
+    second finding says how much of itself is margin.
+    """
+    mask_name = companion.variable
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    # x,y,z,t variables carry a vertical axis the mask does not; the mask
+    # applies to every level of a column alike.
+    steps = missing.shape[0] if missing.ndim > 2 else 1
+
+    defined_without_ice = 0
+    missing_with_ice = 0
+    missing_at_margin = 0
+    total = 0
+
+    for step in range(steps):
+        here = missing[step] if missing.ndim > 2 else missing
+        fraction = companion.slice_at(step)
+        if here.shape[-2:] != fraction.shape[-2:]:
+            reporter.note(
+                f"Not checked against '{mask_name}': its grid is"
+                f" {fraction.shape[-2:]} and this file's is {here.shape[-2:]}."
+            )
+            return
+        _, unknown = _companion_slice(companion, step)
+        fraction = np.broadcast_to(fraction, here.shape)
+        known = ~np.broadcast_to(unknown, here.shape)
+        has_ice = np.logical_and(known, fraction > 0.0)
+        no_ice = np.logical_and(known, fraction == 0.0)
+
+        defined_without_ice += int(np.logical_and(~here, no_ice).sum())
+        wrong_holes = np.logical_and(here, has_ice)
+        missing_with_ice += int(wrong_holes.sum())
+        missing_at_margin += int(
+            np.logical_and(wrong_holes, fraction < MARGIN_FRACTION).sum()
+        )
+        total += here.size
+
+    if defined_without_ice:
+        reporter.error(
+            f"variable '{ivar}' holds a value in"
+            f" {_count_phrase(defined_without_ice, total)} where '{mask_name}'"
+            f" is 0. The data request defines it only where there is ice, so"
+            f" those cells must hold the _FillValue."
+        )
+
+    if missing_with_ice:
+        report = (
+            reporter.warning
+            if criteria.get("margin_severity") == "warning"
+            else reporter.error
+        )
+        margin = ""
+        if missing_at_margin:
+            margin = (
+                f" {missing_at_margin} of them have '{mask_name}' below"
+                f" {MARGIN_FRACTION}, which is the partly glaciated margin"
+                f" rather than the interior."
+            )
+        report(
+            f"variable '{ivar}' is missing in"
+            f" {_count_phrase(missing_with_ice, total)} where '{mask_name}' is"
+            f" greater than 0, so there is ice the file says nothing about."
+            + margin
+        )
+
+
+def _companion_slice(companion, step):
+    """The companion's values for one time step, and where it says nothing.
+
+    A mask with holes in it cannot answer "is there ice here", so those cells
+    are excluded from every comparison rather than guessed at.  It matters more
+    than it sounds: read undecoded a fill value is 9.96921e+36, so a hole taken
+    at face value would read as ice everywhere the mask is broken.  The hole
+    itself is reported against the mask's own file, where it belongs.
+    """
+    values = companion.slice_at(step)
+    fill = _fill_value(companion.dataset, companion.variable)
+    if values.dtype.kind == "f":
+        unknown = ~np.isfinite(values)
+    else:
+        unknown = np.zeros(values.shape, dtype=bool)
+    if fill is not None:
+        unknown = np.logical_or(unknown, values == fill)
+    return values, unknown
+
+
+def _check_domain_covers_ice(reporter, ds, ivar, companion) -> None:
+    """Wherever there is ice, a variable of the domain is defined.
+
+    The computational domain is not recorded anywhere in a submission -- with
+    the masks carrying no missing values, `sftgif == 0` covers both "inside the
+    domain, ice-free" and "outside it entirely".  So there is nothing to
+    validate the domain against, and nothing needs to be: the one thing that
+    must hold is that the domain contains the ice.  A submission failing this
+    has ice sitting outside its own computational domain.
+    """
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    steps = missing.shape[0] if missing.ndim > 2 else 1
+
+    ice_outside = 0
+    total = 0
+    for step in range(steps):
+        here = missing[step] if missing.ndim > 2 else missing
+        fraction = companion.slice_at(step)
+        if here.shape[-2:] != fraction.shape[-2:]:
+            reporter.note(
+                f"Not checked against '{companion.variable}': its grid is"
+                f" {fraction.shape[-2:]} and this file's is {here.shape[-2:]}."
+            )
+            return
+        _, unknown = _companion_slice(companion, step)
+        has_ice = np.logical_and(
+            ~np.broadcast_to(unknown, here.shape),
+            np.broadcast_to(fraction, here.shape) > 0.0,
+        )
+        ice_outside += int(np.logical_and(here, has_ice).sum())
+        total += here.size
+
+    if ice_outside:
+        reporter.error(
+            f"variable '{ivar}' is missing in {_count_phrase(ice_outside, total)}"
+            f" where '{companion.variable}' is greater than 0. The data request"
+            f" defines it throughout the computational domain, so this"
+            f" submission has ice outside its own domain."
+        )
+
+
+def _check_footprint_matches(reporter, ds, ivar, companion) -> None:
+    """The variables of the domain should agree about where the domain is.
+
+    They are missing in exactly one place -- outside it -- so their missing
+    masks ought to be identical.  A warning rather than an error because some
+    of them come from forcing or reference datasets whose footprint is
+    legitimately wider than the ice model's: acabf over ice-free ground,
+    hfgeoubed and refgeoid over the whole grid.
+    """
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    missing = np.logical_or(is_fill, is_nonfinite)
+    steps = missing.shape[0] if missing.ndim > 2 else 1
+
+    disagreeing = 0
+    total = 0
+    for step in range(steps):
+        here = missing[step] if missing.ndim > 2 else missing
+        _, there = _companion_slice(companion, step)
+        if here.shape[-2:] != there.shape[-2:]:
+            return
+        disagreeing += int((here != np.broadcast_to(there, here.shape)).sum())
+        total += here.size
+
+    if disagreeing:
+        reporter.warning(
+            f"variable '{ivar}' and '{companion.variable}' disagree about which"
+            f" cells are missing in {_count_phrase(disagreeing, total)}. Both"
+            f" are defined throughout the computational domain and missing"
+            f" outside it, so they should agree about where that is; a wider"
+            f" footprint is expected only where the field comes from a forcing"
+            f" or reference dataset."
+        )
+
+
+# Comfortably above float32 rounding on fractions in [0, 1], and far below any
+# difference that would mean the masks were built inconsistently.
+MASK_SUM_TOLERANCE = 1.0e-5
+
+
+def _field_and_steps(ds, ivar):
+    """A variable's values, where it says nothing, and how many time steps.
+
+    The missing mask matters as much here as on the companion side: read
+    undecoded a fill cell holds 9.96921e+36, which is both finite and greater
+    than zero, so a rule that only skipped NaNs would read a hole as a very
+    thick piece of ice.
+    """
+    values = np.asarray(ds[ivar].values)
+    is_fill, is_nonfinite = _missing_masks(ds, ivar)
+    return values, np.logical_or(is_fill, is_nonfinite), (
+        values.shape[0] if values.ndim > 2 else 1
+    )
+
+
+def _step_of(values, step):
+    return values[step] if values.ndim > 2 else values
+
+
+def _check_mask_sum(reporter, ds, ivar, grounded, floating) -> None:
+    """Grounded fraction plus floating fraction is the ice fraction.
+
+    True by definition -- every ice-covered part of a cell is either grounded
+    or afloat -- which is what makes it worth checking: it needs no geometry,
+    no densities and no judgement, and it catches a whole class of mistakes in
+    how the masks were built.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    disagreeing = 0
+    worst = 0.0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        grounded_values, grounded_unknown = _companion_slice(grounded, step)
+        floating_values, floating_unknown = _companion_slice(floating, step)
+        if here.shape != grounded_values.shape != floating_values.shape:
+            reporter.note(
+                "Not checked against 'sftgrf' and 'sftflf': their grids differ"
+                " from this file's."
+            )
+            return
+        known = ~np.logical_or(
+            np.logical_or(grounded_unknown, floating_unknown),
+            _step_of(missing, step),
+        )
+        difference = np.where(
+            known, np.abs(grounded_values + floating_values - here), 0.0
+        )
+        disagreeing += int((difference > MASK_SUM_TOLERANCE).sum())
+        worst = max(worst, float(difference.max()))
+        total += here.size
+
+    if disagreeing:
+        reporter.error(
+            f"'sftgrf' + 'sftflf' does not equal '{ivar}' in"
+            f" {_count_phrase(disagreeing, total)}, by up to {worst:.3g}. Every"
+            f" ice-covered part of a cell is either grounded or afloat, so the"
+            f" two fractions must sum to the total."
+        )
+
+
+def _check_thickness_matches_mask(reporter, ds, ivar, criteria, companion) -> None:
+    """Ice with no thickness, or thickness with no ice, contradicts itself.
+
+    Both variables are defined everywhere and hold no missing values, so this
+    is an exact two-way comparison with nothing to exclude but a broken mask.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    thickness_without_ice = 0
+    ice_without_thickness = 0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        fraction, unknown = _companion_slice(companion, step)
+        if here.shape != fraction.shape:
+            reporter.note(
+                f"Not checked against '{companion.variable}': its grid differs"
+                f" from this file's."
+            )
+            return
+        known = np.logical_and(~unknown, ~_step_of(missing, step))
+        has_ice = np.logical_and(known, fraction > 0.0)
+        is_thick = np.logical_and(known, here > 0.0)
+        thickness_without_ice += int(np.logical_and(is_thick, ~has_ice).sum())
+        ice_without_thickness += int(np.logical_and(has_ice, ~is_thick).sum())
+        total += here.size
+
+    report = (
+        reporter.warning
+        if criteria.get("margin_severity") == "warning"
+        else reporter.error
+    )
+    if thickness_without_ice:
+        report(
+            f"variable '{ivar}' is greater than 0 in"
+            f" {_count_phrase(thickness_without_ice, total)} where"
+            f" '{companion.variable}' is 0, so the file carries ice thickness"
+            f" in cells its own mask says hold no ice."
+        )
+    if ice_without_thickness:
+        report(
+            f"variable '{ivar}' is 0 in"
+            f" {_count_phrase(ice_without_thickness, total)} where"
+            f" '{companion.variable}' is greater than 0, so the file's mask"
+            f" claims ice the thickness does not account for."
+        )
+
+
+# Metres.  float32 carries elevations up to 5500 m to well under a millimetre,
+# so this is loose enough for rounding and far tighter than any real mistake.
+ELEVATION_TOLERANCE = 1.0e-2
+
+
+def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
+    """Surface elevation is the ice base plus the ice thickness.
+
+    Checked in every cell rather than only in fully glaciated ones.  The
+    identity is linear, so it survives cell-mean averaging: it holds pointwise,
+    therefore it holds for any consistent mean of the three fields.  The one
+    thing it assumes is that they share an averaging convention in a partly
+    glaciated cell, which the data request should say and does not yet.
+
+    It also settles the ice-free case without a rule of its own: where the
+    thickness is zero it says the surface is the base, and the bed comparison
+    says the base is the bed there.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    disagreeing = 0
+    worst = 0.0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        base_values, base_unknown = _companion_slice(base, step)
+        thickness_values, thickness_unknown = _companion_slice(thickness, step)
+        if here.shape != base_values.shape or here.shape != thickness_values.shape:
+            reporter.note(
+                "Not checked against 'base' and 'lithk': their grids differ"
+                " from this file's."
+            )
+            return
+        known = ~np.logical_or(
+            np.logical_or(base_unknown, thickness_unknown),
+            _step_of(missing, step),
+        )
+        difference = np.where(
+            known, np.abs(base_values + thickness_values - here), 0.0
+        )
+        disagreeing += int((difference > ELEVATION_TOLERANCE).sum())
+        worst = max(worst, float(difference.max()))
+        total += here.size
+
+    if disagreeing:
+        reporter.error(
+            f"variable '{ivar}' does not equal 'base' + 'lithk' in"
+            f" {_count_phrase(disagreeing, total)}, by up to {worst:.3g} m."
+            f" Surface elevation is the ice base plus the ice thickness."
+        )
+
+
+def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None:
+    """Where the ice sits relative to the bed, and whether the masks agree.
+
+    No densities are needed, which is the point: every field here is submitted
+    geometry, so the check does not have to assume each model's constants.
+    Grounded and floating are only compared in cells that are wholly one or the
+    other -- in a half-and-half cell the mean ice base sits somewhere between
+    and nothing follows from it.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    below_bed = 0
+    grounded_afloat = 0
+    floating_aground = 0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        bed_values, bed_unknown = _companion_slice(bed, step)
+        grounded_values, grounded_unknown = _companion_slice(grounded, step)
+        floating_values, floating_unknown = _companion_slice(floating, step)
+        if here.shape != bed_values.shape:
+            reporter.note(
+                "Not checked against 'topg': its grid differs from this file's."
+            )
+            return
+        known = ~np.logical_or(bed_unknown, _step_of(missing, step))
+        above = here - bed_values
+
+        below_bed += int(
+            np.logical_and(known, above < -ELEVATION_TOLERANCE).sum()
+        )
+        wholly_grounded = np.logical_and(
+            np.logical_and(known, ~grounded_unknown), grounded_values == 1.0
+        )
+        grounded_afloat += int(
+            np.logical_and(wholly_grounded, np.abs(above) > ELEVATION_TOLERANCE).sum()
+        )
+        wholly_floating = np.logical_and(
+            np.logical_and(known, ~floating_unknown), floating_values == 1.0
+        )
+        floating_aground += int(
+            np.logical_and(wholly_floating, above <= ELEVATION_TOLERANCE).sum()
+        )
+        total += here.size
+
+    if below_bed:
+        reporter.error(
+            f"variable '{ivar}' lies below 'topg' in"
+            f" {_count_phrase(below_bed, total)}. The ice base cannot be under"
+            f" the bed, whatever the masks say."
+        )
+    if grounded_afloat:
+        reporter.error(
+            f"variable '{ivar}' differs from 'topg' in"
+            f" {_count_phrase(grounded_afloat, total)} that 'sftgrf' says are"
+            f" wholly grounded. Grounded ice rests on the bed."
+        )
+    if floating_aground:
+        reporter.error(
+            f"variable '{ivar}' is not above 'topg' in"
+            f" {_count_phrase(floating_aground, total)} that 'sftflf' says are"
+            f" wholly floating. Floating ice does not rest on the bed."
+        )
+
+
+def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
+                       ismip_meta, years) -> None:
+    """The checks that need more than the file in front of them.
+
+    Everything a companion cannot supply has already been reported by now; what
+    is left is the questions only two files together can answer.
+    """
+    policy = criteria.get("fill_policy")
+    mask_name = ICE_MASK_FOR_POLICY.get(policy)
+    # Some variables are compared by policy -- where the request says they are
+    # defined -- and some by name, because a particular pair or triple of them
+    # has to agree about the ice sheet.  A variable can be both: orog is
+    # defined throughout the domain and is also base plus thickness.
+    by_name = ivar in ("sftgif", "lithk", "orog", "base")
+    if ivar not in ds or (
+        mask_name is None and policy != "outside_domain" and not by_name
+    ):
+        return
+
+    reporter.write("CONSISTENCY Tests\n")
+    findings_before = reporter.total_errors + reporter.total_warnings
+
+    def against(names, check):
+        """Run `check` with the named companions, or say why it did not run."""
+        companions = [
+            _open_companion(reporter, source_path, file_name, name, years, ismip_meta)
+            for name in names
+        ]
+        try:
+            if all(companion is not None for companion in companions):
+                check(*companions)
+        finally:
+            for companion in companions:
+                if companion is not None:
+                    companion.dataset.close()
+
+    if mask_name is not None:
+        against(
+            [mask_name],
+            lambda c: _check_ice_extent(reporter, ds, ivar, criteria, c),
+        )
+    elif policy == "outside_domain":
+        against(
+            ["sftgif"], lambda c: _check_domain_covers_ice(reporter, ds, ivar, c)
+        )
+        # Anchored on one other variable of the domain rather than compared
+        # with all of them: agreement is transitive, and every file then
+        # reports the same disagreement from its own side.
+        against(
+            ["orog" if ivar == "topg" else "topg"],
+            lambda c: _check_footprint_matches(reporter, ds, ivar, c),
+        )
+
+    if ivar == "sftgif":
+        against(
+            ["sftgrf", "sftflf"],
+            lambda g, f: _check_mask_sum(reporter, ds, ivar, g, f),
+        )
+    elif ivar == "lithk":
+        against(
+            ["sftgif"],
+            lambda c: _check_thickness_matches_mask(reporter, ds, ivar, criteria, c),
+        )
+    elif ivar == "orog":
+        against(
+            ["base", "lithk"],
+            lambda b, h: _check_surface_geometry(reporter, ds, ivar, b, h),
+        )
+    elif ivar == "base":
+        against(
+            ["topg", "sftgrf", "sftflf"],
+            lambda b, g, f: _check_base_against_bed(reporter, ds, ivar, b, g, f),
+        )
+
+    if reporter.total_errors + reporter.total_warnings == findings_before:
+        reporter.ok("Consistent with the files beside it: OK")
 
 
 def _check_spatial(
@@ -2308,6 +3004,7 @@ def _check_attributes(
 def _run_variable_checks(
     reporter: Reporter,
     ds,
+    source_path: str,
     file_name: str,
     considered_variable: str,
     experiment_name: str,
@@ -2322,6 +3019,7 @@ def _run_variable_checks(
     num_reporter = reporter.category("num")
     spatial_reporter = reporter.category("spatial")
     time_reporter = reporter.category("time")
+    consistency_reporter = reporter.category("consistency")
     attr_reporter = reporter.category("attr", qualifier="attributes")
 
     reporter.write("\n")
@@ -2370,6 +3068,12 @@ def _run_variable_checks(
         )
     elif not isscalar:
         _check_spatial(spatial_reporter, ds, grid_extent, possible_resolution)
+
+    if not isscalar:
+        _check_consistency(
+            consistency_reporter, ds, ivar, ismip_meta[index], source_path,
+            file_name, ismip_meta, _nominal_years_of(ds, var_type),
+        )
 
     _check_time(
         time_reporter, ds, dim, experiments, experiment_name, var_type,
@@ -2480,6 +3184,7 @@ SYNTHESIS_CATEGORIES = (
     ("naming", "Naming Tests       "),
     ("num", "Numerical Tests    "),
     ("spatial", "Spatial Tests      "),
+    ("consistency", "Consistency Tests  "),
     ("time", "Time Tests         "),
     ("attr", "Attribute Tests    "),
 )
@@ -2490,6 +3195,7 @@ _SUMMARY_KEYS = {
     "naming": "total_naming_{severity}s",
     "num": "total_num_{severity}s",
     "spatial": "total_spatial_{severity}s",
+    "consistency": "total_consistency_{severity}s",
     "time": "total_time_{severity}s",
     "attr": "total_attr_{severity}s",
 }

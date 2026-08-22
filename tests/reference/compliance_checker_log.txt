@@ -17,6 +17,7 @@ Verified directory: <source-path>
   - Naming Tests       : 0 error(s)
   - Numerical Tests    : 0 error(s)
   - Spatial Tests      : 0 error(s)
+  - Consistency Tests  : 0 error(s)
   - Time Tests         : 0 error(s)
   - Attribute Tests    : 0 error(s)
 
@@ -25,6 +26,7 @@ Verified directory: <source-path>
   - Naming Tests       : 0 warning(s)
   - Numerical Tests    : 0 warning(s)
   - Spatial Tests      : 0 warning(s)
+  - Consistency Tests  : 0 warning(s)
   - Time Tests         : 0 warning(s)
   - Attribute Tests    : 0 warning(s)
 
@@ -60,6 +62,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -95,6 +99,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -223,6 +229,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -258,6 +266,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual FL time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -456,6 +466,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -491,6 +503,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -561,6 +575,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -631,6 +647,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -840,6 +858,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -875,6 +895,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
@@ -910,6 +932,8 @@ SPATIAL Tests
  - Grid: Lowest left corner is well defined.
  - Grid: Upper right corner is well defined.
  - The grid resolution (16 km) was successfully verified.
+CONSISTENCY Tests
+ - Consistent with the files beside it: OK
 TIME Tests
  - Time is a record (unlimited) dimension: OK
  - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK

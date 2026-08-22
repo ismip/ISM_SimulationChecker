@@ -1,6 +1,6 @@
 # What the checker checks
 
-Every file is validated in five categories, and the log reports findings under
+Every file is validated in six categories, and the log reports findings under
 these same headings.
 
 ## 1. Naming
@@ -45,7 +45,19 @@ For `x,y,t` and `t` variables that means every nominal year from
 prescribes. For `x,y,z,t` variables it means the required set of sparse
 snapshots. Both conventions are described in {doc}`time-encoding`.
 
-## 5. Attributes
+## 5. Consistency
+
+*Spatial variables only.* Each file is compared against the files beside it: a
+variable is missing exactly where its ice mask says there is no ice, the
+variables of the computational domain cover the ice, the grounded and floating
+fractions sum to the ice fraction, thickness agrees with the ice mask, and
+surface elevation, ice base and bed agree with each other. See
+[Checks that compare files](errors-and-warnings.md#checks-that-compare-files).
+
+When a file a check needs is not in the directory, the check says so and is
+skipped, so a submission can still be checked a part at a time.
+
+## 6. Attributes
 
 Required global and coordinate attributes are present and have correct values;
 `standard_name` matches the data request; `_FillValue` equals the NetCDF4
