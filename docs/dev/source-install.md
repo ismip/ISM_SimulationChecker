@@ -37,10 +37,11 @@ For development, add `-e` for an editable install:
 python -m pip install --no-deps --no-build-isolation -e .
 ```
 
-(`pytest` comes from the conda environment, so the `[test]` extra is not
-needed.) An editable install is worth having while developing, because the
-tests import the installed package: after a non-editable install, edits to the
-source tree do not affect a test run until you reinstall.
+(`pytest` and the documentation packages come from the conda environment, so
+neither the `[test]` nor the `[docs]` extra is needed; see
+{doc}`building-docs`.) An editable install is worth having while developing,
+because the tests import the installed package: after a non-editable install,
+edits to the source tree do not affect a test run until you reinstall.
 
 If a rebuild ever behaves as though it were still running older code, delete
 the `build/` directory: `setuptools` reuses its contents, so files that have

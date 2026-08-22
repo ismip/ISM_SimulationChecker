@@ -33,8 +33,9 @@ dependencies = [
 test = ["pytest>=8"]
 # The docs build needs none of the dependencies above -- it reads the data
 # request CSVs from the repository rather than through the package -- so this
-# extra stands alone.  It must stay in sync with ci/docs_env.yml, which is what
-# CI and a local `sphinx-build` actually use.
+# extra stands alone.  It must stay in sync with the documentation section of
+# isschecker_env.yml, which is the developer environment, and with
+# ci/docs_env.yml, the smaller environment CI builds the docs in.
 docs = [
     "sphinx>=8",
     "myst-parser>=4",

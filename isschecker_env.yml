@@ -1,8 +1,9 @@
-# Development environment: the checker's dependencies, but not the checker
-# itself, which is then pip-installed from a source checkout (see "Installing
-# from source" in the developer guide).  To *use* the checker, install it from
-# conda-forge instead -- `conda create -n isschecker -c conda-forge isschecker`
-# -- which brings these packages with it.
+# Development environment: everything needed to work on the checker -- its
+# dependencies, the test suite's, and the documentation build's -- but not the
+# checker itself, which is then pip-installed from a source checkout (see
+# "Installing from source" in the developer guide).  To *use* the checker,
+# install it from conda-forge instead -- `conda create -n isschecker -c
+# conda-forge isschecker` -- which brings the runtime packages with it.
 name: isschecker
 channels:
   - conda-forge
@@ -32,3 +33,14 @@ dependencies:
 
 # Testing
   - pytest >=8
+
+# Documentation
+  # The docs build needs none of the packages above -- it reads the data
+  # request CSVs from the repository and the version from pyproject.toml --
+  # but a developer environment should be able to build them.  CI uses the
+  # smaller ci/docs_env.yml instead; keep the two in step.
+  - sphinx >=8
+  - myst-parser >=4
+  - furo
+  - sphinx-copybutton
+  - sphinx-design

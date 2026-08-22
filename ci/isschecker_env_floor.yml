@@ -1,7 +1,9 @@
 # The oldest dependency versions the checker supports: every floor in
-# isschecker_env.yml pinned exactly.  CI runs the test suite against this
-# environment as well as the latest solve, so both ends of every range in
-# isschecker_env.yml are actually verified rather than assumed.
+# isschecker_env.yml that the checker itself needs, pinned exactly.  CI runs the
+# test suite against this environment as well as the latest solve, so both ends
+# of every range in isschecker_env.yml are actually verified rather than
+# assumed.  The documentation packages are left out: nothing here runs the docs
+# build, and CI builds them from ci/docs_env.yml.
 #
 # Keep this file in step with isschecker_env.yml: when a floor moves there, move
 # it here too.
