@@ -469,7 +469,8 @@ def _git_commit() -> str | None:
 
 def _parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Check simulation NetCDF datasets for ISMIP compliance."
+        description="Check ISMIP7 NetCDF model output against the data "
+                    "request and write a log of what is wrong."
     )
     parser.add_argument(
         "--version",
@@ -480,20 +481,24 @@ def _parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--source-path",
         default=DEFAULT_SOURCE_PATH,
-        help="Path to the directory containing the CORE NetCDF files.",
+        help="The set counter directory holding the .nc files to check, "
+             "e.g. Models/GrIS/VUW/PISM1/CORE/C001 "
+             f"(default: {DEFAULT_SOURCE_PATH}).",
     )
     parser.add_argument(
         "--output-path",
         default=None,
-        help="Directory to write the checker log into; created if it does not "
-             "exist. Defaults to --source-path, which cannot be used for an "
-             "archive the checker is not allowed to write to.",
+        help="Directory to write compliance_checker_log.txt into; created "
+             "if it does not exist. Use it when you cannot write to the "
+             "source directory (default: the source directory).",
     )
     parser.add_argument(
         "--variable-list",
         choices=VARIABLE_LIST_CHOICES,
         default=DEFAULT_VARIABLE_LIST,
-        help="Variable list to apply: ismip7_xyt, ismip7_scalars, or ismip7 (both).",
+        help="Which files to look for: ismip7_xyt for the gridded variables, "
+             "ismip7_scalars for the time series, ismip7 for both "
+             f"(default: {DEFAULT_VARIABLE_LIST}).",
     )
     return parser.parse_args()
 
