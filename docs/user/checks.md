@@ -1,87 +1,91 @@
 # What the checker checks
 
-Every file is validated in six categories, and the log reports findings under
-these same headings.
+Every file is checked in six categories, and the log reports findings under
+the same headings.
 
 ## 1. Naming
 
-The file name is parsed and each of its fields checked: variable name, region
-field, ISM member id (`mNNN`), ESM name (CMIP6/CMIP7 registry), forcing member
-id (`fNNN`), set counter (`[C|E|P]NNN`), and year range (well formed
-`YYYY-YYYY`; what the range *means* is checked under [Time](#4-time)).
+The file name has ten fields, separated by underscores:
 
-Inside the file: the variable the file name names is the one the file contains,
-with the dimensions the data request asks for, in the conventional
-`(time, z, y, x)` order, and the file holds nothing else beyond its coordinates
-and the companion variables CF lets them name (`bounds`, `grid_mapping`,
-`coordinates`, `cell_measures`, `ancillary_variables`) — anything further is a
-warning.
+```
+lithk_GrIS_VUW_PISM1_m001_CESM2-WACCM_f001_ctrl_C001_2015-2300.nc
+│     │    │   │     │    │           │    │    │    └ nominal years, YYYY-YYYY
+│     │    │   │     │    │           │    │    └ set counter, C/E/P + 3 digits
+│     │    │   │     │    │           │    └ experiment
+│     │    │   │     │    │           └ forcing member id, f + 3 digits
+│     │    │   │     │    └ ESM, from the CMIP6/CMIP7 registry
+│     │    │   │     └ ISM member id, m + 3 digits
+│     │    │   └ model
+│     │    └ group
+│     └ region, GrIS or AIS
+└ variable
+```
+
+Each field is checked. What the year range *means* is checked under
+[Time](#4-time).
+
+Inside the file, the variable the name promises is present with the
+dimensions the data request asks for, in (time, z, y, x) order. Nothing else
+is in the file beyond the coordinates and the companion variables CF lets
+them name (bounds, grid_mapping, coordinates, cell_measures,
+ancillary_variables). Anything further is a warning.
 
 ## 2. Numerical
 
-Units match the data request, in any UDUNITS spelling: `m2`, `m^2` and `m**2`
-are all accepted, as are `kg m-2 s-1`, `kg.m-2.s-1` and `kg/m2/s`. Every value
-is either a finite number or the declared `_FillValue`, so a bare NaN is never
-how a file says "missing". All values lie within the allowed min/max range for
-the relevant region, and the array is not entirely fill values.
-
-The ranges themselves, per variable and per region, are listed in
+Units match the data request in any UDUNITS spelling: m2, m^2 and m**2 are
+all accepted, as are kg m-2 s-1, kg.m-2.s-1 and kg/m2/s. Every value is
+either a finite number or the declared _FillValue, so a bare NaN is never how
+a file says "missing". All values lie within the range allowed for the region,
+and the array is not entirely fill values. The ranges are listed in
 {doc}`data-request`.
 
 ## 3. Spatial
 
-*(`x,y,t` variables only)* Grid corners lie within the expected AIS or GrIS
-extents; the resolution is one of the allowed values; and x and y cell size are
-equal.
+Gridded variables only. The grid corners lie within the expected AIS or GrIS
+extent, the resolution is one of the allowed values, and the x and y cell
+sizes are equal.
 
 ## 4. Time
 
-The time dimension is present, unlimited, and monotonically increasing; the
-file name's year range is one the experiment allows; and the time axis is
-**exactly** the axis the experiment calls for.
-
-For `x,y,t` and `t` variables that means every nominal year from
-`experiments_ismip7.csv`, each carrying the timestamp its ST/FL convention
-prescribes. For `x,y,z,t` variables it means the required set of sparse
-snapshots. Both conventions are described in {doc}`time-encoding`.
+The time dimension is present, unlimited and increasing. The year range in
+the file name is one the experiment allows, and the time axis is **exactly**
+the one the experiment calls for: every nominal year, each stamped as its
+ST or FL convention prescribes. For x,y,z,t variables it is instead the
+required set of snapshots. Both are described in {doc}`time-encoding`.
 
 ## 5. Consistency
 
-*Spatial variables only.* Each file is compared against the files beside it: a
+Gridded variables only. Each file is compared against the files beside it: a
 variable is missing exactly where its ice mask says there is no ice, the
-variables of the computational domain cover the ice, the grounded and floating
-fractions sum to the ice fraction, thickness agrees with the ice mask, and
-surface elevation, ice base and bed agree with each other. See
+variables of the computational domain cover the ice, the grounded and
+floating fractions sum to the ice fraction, thickness agrees with the ice
+mask, and surface elevation, ice base and bed agree with each other. See
 [Checks that compare files](errors-and-warnings.md#checks-that-compare-files).
 
 When a file a check needs is not in the directory, the check says so and is
-skipped, so a submission can still be checked a part at a time.
+skipped, so a submission can be checked a part at a time.
 
 ## 6. Attributes
 
-Required global and coordinate attributes are present and have correct values;
-`standard_name` matches the data request; `_FillValue` equals the NetCDF4
-default for the variable's dtype; the variable is float32, and so is the time
-coordinate (a warning — one number per record cannot inflate a file);
-`scale_factor` and `add_offset` are not allowed.
+Required global and coordinate attributes are present with the right values;
+standard_name matches the data request; _FillValue is the NetCDF4 default
+for the variable's dtype; the variable and the time coordinate are float32
+(a warning for time); and scale_factor and add_offset are not used.
 
 ## How far a file gets
 
 Every file is checked as far as it can be. A naming problem stops the other
-checks only where it leaves them nothing to read — a missing `x` or `y`
-dimension, or a file that does not contain the variable its name promises.
-Everything else (a mistyped ESM name, a malformed year range, an unrecognized
-region) is reported and the file is checked on, so one run tells you everything
-that is wrong rather than only the first thing. An unrecognized region costs
-just the checks that depend on it: value range, grid extent and resolution, and
-`crs`.
+checks only where it leaves them nothing to read: a missing x or y dimension,
+or a file that does not contain the variable its name promises. Everything
+else, a mistyped ESM name, a malformed year range, an unrecognized region, is
+reported and the file is checked on, so one run tells you everything that is
+wrong. An unrecognized region costs just the checks that depend on it: value
+range, grid extent and resolution, and crs.
 
 ## Where the criteria come from
 
-Compliance criteria are defined in
-`isschecker/data/ISMIP7_variable_request.csv` (variable metadata) and
-`isschecker/data/experiments_ismip7.csv` (valid experiment year ranges and
-durations). Together with the grid definitions in `isschecker/data/gdfs/`,
-these files are bundled with the package, so the checker applies the criteria
-of the release you installed. {doc}`data-request` lists what they currently
-say.
+The criteria are in two CSV files bundled with the package,
+ISMIP7_variable_request.csv (the variables) and experiments_ismip7.csv (the
+experiments and their year ranges), together with the grid definitions. The
+checker applies the criteria of the release you installed, and
+{doc}`data-request` lists what they currently say.
