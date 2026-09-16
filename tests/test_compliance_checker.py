@@ -1161,9 +1161,9 @@ def test_checker_reports_a_main_variable_that_is_not_float32(case_dir):
 def test_range_severity_is_honoured(xyt_case_dir, range_severity, errors, warnings):
     """Driven by a synthetic criteria row, not by editing the shipped CSV.
 
-    The mechanism and the data are then tested independently: every shipped row
-    is `error` today (see test_shipped_range_severities_are_all_errors), so
-    nothing here would be exercised by a run over the real request.
+    The mechanism and the data are then tested independently: which shipped
+    rows are `warning` is pinned by test_shipped_range_severities, and this
+    test exercises both severities on the same variable regardless.
     """
     criteria = {
         "variable": "lithk",
@@ -1192,16 +1192,33 @@ def test_range_severity_is_honoured(xyt_case_dir, range_severity, errors, warnin
     assert "is out of range" in log.getvalue()
 
 
-def test_shipped_range_severities_are_all_errors():
-    """The mechanism ships with no classification changed.
+# The variables whose range check is a warning rather than an error.  The
+# velocity bounds are the kind issue #10 had in mind: a stress-balance solver
+# can produce a few grid points of very high speed near the margin that say
+# nothing about the simulation as a whole (discussion ismip#46), so exceeding
+# them is worth a second look but not a failed file.  Everything else --
+# fractions, thicknesses, temperatures, fluxes -- keeps a hard bound.
+SHIPPED_RANGE_WARNINGS = {
+    "xvelsurf", "yvelsurf", "zvelsurf",
+    "xvelbase", "yvelbase", "zvelbase",
+    "xvelmean", "yvelmean",
+}
 
-    Which variables have bounds a legitimate model can exceed is case-by-case
-    work, done as data-only changes after this. Until then every row is `error`,
-    so behaviour is exactly what it was.
+
+def test_shipped_range_severities():
+    """Which variables may exceed their bounds is data, and changes on purpose.
+
+    Moving a variable between `error` and `warning` is a one-cell change to the
+    data request, so this test is what makes it a deliberate one.
     """
     ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
 
-    assert {entry["range_severity"] for entry in ismip_meta} == {"error"}
+    warnings = {
+        entry["variable"]
+        for entry in ismip_meta
+        if entry["range_severity"] == "warning"
+    }
+    assert warnings == SHIPPED_RANGE_WARNINGS
 
 
 SHIPPED_FILL_POLICIES = {
