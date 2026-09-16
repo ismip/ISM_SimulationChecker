@@ -141,9 +141,18 @@ Some of the bounds in the data request depend on the forcing, input data and
 model implementation ([issue #10]), and some do not, so the severity of an
 out-of-range value is a per-variable question. The range_severity column of
 the data request answers it with `error` or `warning`; a blank cell means
-`error`. Every shipped row is currently `error`.
+`error`.
+
+The velocity components (`xvelsurf`, `yvelsurf`, `zvelsurf`, `xvelbase`,
+`yvelbase`, `zvelbase`, `xvelmean` and `yvelmean`) are `warning`: a
+stress-balance solver can produce a few grid points of very high speed near
+the ice margin that say nothing about the simulation as a whole, and there is
+nothing a modeler can do about them ([discussion #46]). A velocity outside its
+range is still reported, so it is worth a look, but it does not fail the file.
+Every other variable is `error`.
 
 The bounds and their severities are listed under
 [Value ranges](data-request.md#value-ranges).
 
 [issue #10]: https://github.com/ismip/ISM_SimulationChecker/issues/10
+[discussion #46]: https://github.com/orgs/ismip/discussions/46
