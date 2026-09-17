@@ -52,11 +52,11 @@ optional one is a warning you can quiet by declaring it, as described in
 
 ## Value ranges
 
-Every value in a file must lie within the range its variable and region
+Every value in a file should lie within the range its variable and region
 allow. The bounds differ between Antarctica and Greenland where the ice
-sheets differ, and the severity column says whether exceeding them fails the
-file or only reports it; see
-[Value ranges](errors-and-warnings.md#value-ranges).
+sheets differ. A few values outside them are a warning and a large share of
+the field is an error, unless the severity column says the bound is soft
+everywhere; see [Value ranges](errors-and-warnings.md#value-ranges).
 
 ```{include} ../_generated/value-ranges.md
 ```

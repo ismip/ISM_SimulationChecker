@@ -35,8 +35,9 @@ ancillary_variables). Anything further is a warning.
 Units match the data request in any UDUNITS spelling: m2, m^2 and m**2 are
 all accepted, as are kg m-2 s-1, kg.m-2.s-1 and kg/m2/s. Every value is
 either a finite number or the declared _FillValue, so a bare NaN is never how
-a file says "missing". All values lie within the range allowed for the region,
-and the array is not entirely fill values. The ranges are listed in
+a file says "missing". Values lie within the range allowed for the region: a
+few outside it are a warning, a large share of the field is an error. The
+array is not entirely fill values. The ranges are listed in
 {doc}`data-request`.
 
 ## 3. Spatial
