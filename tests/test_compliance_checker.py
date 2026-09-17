@@ -1280,10 +1280,17 @@ def test_range_severity_column_caps_the_finding(
 
 
 # The variables whose range check can never be more than a warning, because
-# the bound is soft everywhere rather than just at a few cells.  None today:
-# every case so far (discussion ismip#46) was a few cells, which the count in
-# _check_range handles for every variable without a classification.
-SHIPPED_RANGE_WARNINGS = set()
+# the bound is soft everywhere rather than just at a few cells.  The count in
+# _check_range handles a few cells for every variable without a
+# classification; this is for the rest.
+#
+# hfgeoubed: a model with a bedrock thermal layer reports the flux at the top
+# of it, and its fill policy (outside_domain) lets the file cover ice-free land
+# as well as ice.  Over bare ground under a warming surface that flux points
+# down, so a run had 6.6% of its values below zero -- all of Greenland's
+# ice-free land, not a few cells (discussion ismip#46).  The bound describes
+# the flux under ice, and a single-file check cannot tell the two apart.
+SHIPPED_RANGE_WARNINGS = {"hfgeoubed"}
 
 
 def test_shipped_range_severities():
