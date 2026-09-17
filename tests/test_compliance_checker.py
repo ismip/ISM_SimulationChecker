@@ -788,6 +788,10 @@ def test_checker_reports_flux_variable_with_state_timestamps(case_dir):
         ("tendacabf", "kg s^-1"),
         ("tendacabf", "kg/s"),
         ("tendacabf", "kg.s-1"),
+        # UDUNITS names as well as symbols: what PISM writes (discussion
+        # ismip#46).
+        ("tendacabf", "kilogram second^-1"),
+        ("tendacabf", "kg/second"),
     ],
 )
 def test_checker_accepts_equivalent_units_spellings(case_dir, variable_name, units):
@@ -812,6 +816,23 @@ def test_checker_reports_wrong_units(case_dir):
     assert "The unit of the variable is m^3 and should be m^2" in summary["log_text"]
 
 
+def test_checker_reports_a_units_string_udunits_cannot_parse(case_dir):
+    """A string that is not a unit at all is its own finding.
+
+    'M' is not a spelling of metres, and saying so is more use than saying
+    it is the wrong unit, which would send the modeler looking for a factor.
+    """
+    set_variable_units(dataset_for_variable(case_dir, "lim"), "M")
+
+    summary = run_checker(case_dir)
+
+    assert summary["total_num_errors"] == 1
+    assert (
+        "The unit of the variable, 'M', is not one UDUNITS recognizes, and"
+        " should be kg" in summary["log_text"]
+    )
+
+
 @pytest.mark.parametrize(
     "actual, expected, matches",
     [
@@ -822,23 +843,51 @@ def test_checker_reports_wrong_units(case_dir):
         ("kg/m2/s", "kg m-2 s-1", True),
         ("s-1 kg m-2", "kg m-2 s-1", True),
         ("kg  m-2   s-1", "kg m-2 s-1", True),
+        ("kg/(m2 s)", "kg m-2 s-1", True),
         ("1", "1", True),
+        # Names as well as symbols, which is what PISM writes (discussion
+        # ismip#46).
+        ("kelvin", "K", True),
+        ("Kelvin", "K", True),
+        ("degK", "K", True),
+        ("kg m^-2 second^-1", "kg m-2 s-1", True),
+        ("meters/second", "m s-1", True),
+        ("N m-2", "Pa", True),
         ("m3", "m2", False),
         ("kg m-2", "kg m-2 s-1", False),
+        # Same dimension is not the same unit: the numbers would be off by a
+        # factor, or an offset, that the units attribute hides.
         ("km", "m", False),
-        ("M", "m", False),
+        ("kPa", "Pa", False),
+        ("m yr-1", "m s-1", False),
+        ("degC", "K", False),
+        ("percent", "1", False),
         # UDUNITS divides left to right, so the '/' inverts only 'm2' here.
         ("kg/m2*s", "kg m-2 s-1", False),
         ("kg/m2 s", "kg m-2 s-1", False),
-        # Not understood, so compared as strings rather than guessed at.
+        # Not a unit UDUNITS recognizes, so it matches nothing.
+        ("M", "m", False),
         ("", "1", False),
-        ("kg/(m2 s)", "kg m-2 s-1", False),
         ("days since 1850-01-01", "days since 1850-01-01", True),
         ("days since 1850-01-01", "days since 2000-01-01", False),
     ],
 )
 def test_units_match(actual, expected, matches):
     assert checker._units_match(actual, expected) is matches
+
+
+def test_every_requested_unit_is_one_udunits_recognizes():
+    """A typo in the data request would otherwise fail every file of a variable.
+
+    The comparison is UDUNITS's own, so the request has to speak UDUNITS too.
+    """
+    ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
+
+    assert {
+        entry["variable"]: entry["units"]
+        for entry in ismip_meta
+        if checker._unit(entry["units"]) is None
+    } == {}
 
 
 def test_checker_reports_variable_missing_from_file(case_dir):

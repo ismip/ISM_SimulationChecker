@@ -30,6 +30,9 @@ dependencies:
   - xarray >=2025.1.2,<2027
   - cftime >=1.6.4,<2
   - netcdf4 >=1.7,<2
+  # cf-units is UDUNITS-2, which is what CF says a units attribute must be
+  # recognized by; >=3.3 is the first release built against numpy 2
+  - cf-units >=3.3,<4
 
 # Testing
   - pytest >=8
