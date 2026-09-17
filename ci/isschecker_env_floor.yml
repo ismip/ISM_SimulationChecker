@@ -24,5 +24,6 @@ dependencies:
   - xarray =2025.1.2
   - cftime =1.6.4
   - netcdf4 =1.7
+  - cf-units =3.3
 
   - pytest =8

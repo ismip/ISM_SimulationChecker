@@ -66,6 +66,7 @@ results should agree across machines and operating systems within these bounds.
 | `xarray` | `>=2025.1.2,<2027` | `xarray.coders.CFDatetimeCoder` (public API in 2025.1.1) and non-nanosecond datetime decoding, both used by the time checks |
 | `cftime` | `>=1.6.4,<2` | date arithmetic in the start/end/duration checks |
 | `netCDF4` | `>=1.7,<2` | `_FillValue` checks compare against `netCDF4.default_fillvals` |
+| `cf-units` | `>=3.3,<4` | UDUNITS-2, which decides whether a units attribute means what the data request asks for; 3.3 is the first release built against numpy 2 |
 | `tqdm` | `>=4.66` | progress bar only; never affects the log |
 
 If you report a problem with the checker, please include the output of

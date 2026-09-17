@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "isschecker"
-version = "0.4.0"
+version = "0.5.0"
 description = "ISMIP7 compliance checker for ice sheet model simulation NetCDF datasets"
 readme = "README.md"
 license = "MIT"
@@ -26,6 +26,7 @@ dependencies = [
     "xarray>=2025.1.2,<2027",
     "cftime>=1.6.4,<2",
     "netCDF4>=1.7,<2",
+    "cf-units>=3.3,<4",
     "tqdm>=4.66",
 ]
 
