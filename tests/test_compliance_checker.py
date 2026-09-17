@@ -1,4 +1,5 @@
 import io
+import math
 import os
 import shutil
 from datetime import datetime
@@ -1147,62 +1148,142 @@ def test_checker_reports_a_main_variable_that_is_not_float32(case_dir):
     )
 
 
-@pytest.mark.parametrize(
-    "range_severity, errors, warnings",
-    [
-        ("error", 2, 0),
-        ("warning", 0, 2),
-        # A blank cell, an unrecognised value and a missing column all have to
-        # mean what the checker did before the column existed.
-        (None, 2, 0),
-        ("nonsense", 2, 0),
-    ],
-)
-def test_range_severity_is_honoured(xyt_case_dir, range_severity, errors, warnings):
-    """Driven by a synthetic criteria row, not by editing the shipped CSV.
+def _check_range_of(case_dir, variable, criteria):
+    """Run the numerical checks on a case file against a synthetic criteria row.
 
-    The mechanism and the data are then tested independently: which shipped
-    rows are `warning` is pinned by test_shipped_range_severities, and this
-    test exercises both severities on the same variable regardless.
+    Driven by a synthetic row rather than by editing the shipped CSV, so that
+    the mechanism and the data are tested independently: which shipped rows
+    are soft is pinned by test_shipped_range_severities.
     """
+    log = io.StringIO()
+    reporter = checker.Reporter(log).category("num")
+    with xr.open_dataset(
+        dataset_for_variable(case_dir, variable), decode_times=False
+    ) as ds:
+        checker._check_numerical(
+            reporter, ds, variable, [criteria], 0, "GrIS", isscalar=False
+        )
+    return reporter, log.getvalue()
+
+
+def _lithk_criteria(**overrides):
     criteria = {
         "variable": "lithk",
         "dim": "x,y,t",
         "units": "m",
         "standard_name": "land_ice_thickness",
         "type": "ST",
-        # Bounds no data can satisfy, so both ends fire.
-        "min_value_gris": 1.0e9,
-        "max_value_gris": -1.0e9,
+        "min_value_gris": 0.0,
+        "max_value_gris": 5000.0,
     }
+    criteria.update(overrides)
+    return criteria
+
+
+def test_a_few_cells_out_of_range_are_a_warning_that_says_how_many(xyt_case_dir):
+    """The finding Andy's velocity, heat flux and calving cases should get.
+
+    A stress-balance solver puts a few grid points of very high speed at the
+    margin, and nothing a modeler does will move them (discussion ismip#46).
+    That is worth a look but not a failed file, and the message says how many
+    cells so the reader can judge.
+    """
+    write_values(dataset_for_variable(xyt_case_dir, "lithk"), -1.0, count=3)
+    write_values(
+        dataset_for_variable(xyt_case_dir, "lithk"), 6000.0, count=2, start=10
+    )
+
+    reporter, log = _check_range_of(xyt_case_dir, "lithk", _lithk_criteria())
+
+    assert reporter.total_errors == 0, log
+    assert reporter.total_warnings == 2, log
+    assert "The minimum value (-1.0) is out of range" in log
+    assert "3 of " in log and "are below it" in log
+    assert "The maximum value (6000.0) is out of range" in log
+    assert "2 of " in log and "are above it" in log
+
+
+def test_a_field_largely_out_of_range_is_an_error(xyt_case_dir):
+    """The units attribute that lies.
+
+    A velocity in m yr-1 under a 'm s-1' attribute passes the units check,
+    which reads the attribute, and only the range check notices that every
+    cell is thirty million times too large.  That has to stay an error: a
+    whole field outside physical bounds is not an outlier, it is a wrong file.
+    """
+    # Bounds no data can satisfy, so every cell is outside at both ends.
+    reporter, log = _check_range_of(
+        xyt_case_dir,
+        "lithk",
+        _lithk_criteria(min_value_gris=1.0e9, max_value_gris=-1.0e9),
+    )
+
+    assert reporter.total_errors == 2, log
+    assert reporter.total_warnings == 0, log
+    assert "is out of range" in log
+    assert "(100%) are below it" in log
+    assert "(100%) are above it" in log
+
+
+def test_range_error_threshold_is_a_share_of_the_valid_values(xyt_case_dir):
+    """Just under the threshold is a warning; at it, an error.
+
+    The threshold is a share of the values that hold a number, not of the
+    grid, so a variable defined only where there is ice is judged against the
+    ice and not against the ocean around it.
+    """
+    path = dataset_for_variable(xyt_case_dir, "lithk")
+    with netCDF4.Dataset(path) as dataset:
+        total = dataset.variables["lithk"].size
+    threshold = math.ceil(checker.RANGE_ERROR_FRACTION * total)
+    assert threshold > 2, "the synthetic grid is too small to test this"
+
+    write_values(path, -1.0, count=threshold - 1)
+    reporter, log = _check_range_of(xyt_case_dir, "lithk", _lithk_criteria())
+    assert reporter.total_errors == 0, log
+    assert reporter.total_warnings == 1, log
+
+    write_values(path, -1.0, count=threshold)
+    reporter, log = _check_range_of(xyt_case_dir, "lithk", _lithk_criteria())
+    assert reporter.total_errors == 1, log
+    assert reporter.total_warnings == 0, log
+
+
+@pytest.mark.parametrize(
+    "range_severity, errors, warnings",
+    [
+        ("warning", 0, 2),
+        ("error", 2, 0),
+        # A blank cell, an unrecognised value and a missing column all have to
+        # mean the graded default.
+        (None, 2, 0),
+        ("nonsense", 2, 0),
+    ],
+)
+def test_range_severity_column_caps_the_finding(
+    xyt_case_dir, range_severity, errors, warnings
+):
+    """A 'warning' row never fails a file, however much of it is outside.
+
+    That is the escape hatch for a bound that is soft everywhere, as opposed
+    to one that a few cells routinely exceed; the count handles the latter.
+    """
+    criteria = _lithk_criteria(min_value_gris=1.0e9, max_value_gris=-1.0e9)
     if range_severity is not None:
         criteria["range_severity"] = range_severity
 
-    log = io.StringIO()
-    reporter = checker.Reporter(log).category("num")
-    with xr.open_dataset(
-        dataset_for_variable(xyt_case_dir, "lithk"), decode_times=False
-    ) as ds:
-        checker._check_numerical(
-            reporter, ds, "lithk", [criteria], 0, "GrIS", isscalar=False
-        )
+    reporter, log = _check_range_of(xyt_case_dir, "lithk", criteria)
 
-    assert reporter.total_errors == errors, log.getvalue()
-    assert reporter.total_warnings == warnings, log.getvalue()
-    assert "is out of range" in log.getvalue()
+    assert reporter.total_errors == errors, log
+    assert reporter.total_warnings == warnings, log
+    assert "is out of range" in log
 
 
-# The variables whose range check is a warning rather than an error.  The
-# velocity bounds are the kind issue #10 had in mind: a stress-balance solver
-# can produce a few grid points of very high speed near the margin that say
-# nothing about the simulation as a whole (discussion ismip#46), so exceeding
-# them is worth a second look but not a failed file.  Everything else --
-# fractions, thicknesses, temperatures, fluxes -- keeps a hard bound.
-SHIPPED_RANGE_WARNINGS = {
-    "xvelsurf", "yvelsurf", "zvelsurf",
-    "xvelbase", "yvelbase", "zvelbase",
-    "xvelmean", "yvelmean",
-}
+# The variables whose range check can never be more than a warning, because
+# the bound is soft everywhere rather than just at a few cells.  None today:
+# every case so far (discussion ismip#46) was a few cells, which the count in
+# _check_range handles for every variable without a classification.
+SHIPPED_RANGE_WARNINGS = set()
 
 
 def test_shipped_range_severities():

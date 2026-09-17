@@ -137,22 +137,35 @@ have sftgif below 0.01", so the decision can be made on evidence.
 
 ## Value ranges
 
-Some of the bounds in the data request depend on the forcing, input data and
-model implementation ([issue #10]), and some do not, so the severity of an
-out-of-range value is a per-variable question. The range_severity column of
-the data request answers it with `error` or `warning`; a blank cell means
-`error`.
+The bounds in the data request are sanity limits. A field that is largely
+outside them is not a plausible ice sheet: the `units` attribute says `m s-1`
+over data in m yr⁻¹, a temperature is in Celsius, a mask is in percent, a
+flux has its sign flipped. The units check reads the attribute, not the data,
+so this is the only check that catches those, and they are errors.
 
-The velocity components (`xvelsurf`, `yvelsurf`, `zvelsurf`, `xvelbase`,
-`yvelbase`, `zvelbase`, `xvelmean` and `yvelmean`) are `warning`: a
-stress-balance solver can produce a few grid points of very high speed near
-the ice margin that say nothing about the simulation as a whole, and there is
-nothing a modeler can do about them ([discussion #46]). A velocity outside its
-range is still reported, so it is worth a look, but it does not fail the file.
-Every other variable is `error`.
+But a few cells outside the bounds are routine in a legitimate simulation. A
+stress-balance solver can put a few grid points of very high speed at the ice
+margin, bedrock that has just lost its ice can carry a heat flux the bounds
+do not allow for, and a calving event can put one year's flux far past the
+bound ([discussion #46]). There is nothing a modeler can do about any of
+those, and failing a file on them would have valid runs discarded.
 
-The bounds and their severities are listed under
-[Value ranges](data-request.md#value-ranges).
+So the severity depends on how much of the field is outside. Fewer than 1% of
+the values that hold a number is a **warning**; 1% or more is an **error**.
+Either way the finding says how many, "3 of 38372 value(s) (0.00782%) are
+below it", so the decision can be checked against the evidence: a handful of
+cells at the margin is one thing, and a third of the ice sheet is another.
+The share is of the values that hold a number, not of the grid, so a variable
+defined only where there is ice is judged against the ice and not against the
+ocean around it.
+
+Some bounds may turn out to be soft everywhere, not just at a few cells
+([issue #10]). For those the `range_severity` column of the data request can
+be set to `warning`, and the finding is then a warning however much of the
+field is outside. No shipped row says so today; a blank cell means the graded
+rule above.
+
+The bounds are listed under [Value ranges](data-request.md#value-ranges).
 
 [issue #10]: https://github.com/ismip/ISM_SimulationChecker/issues/10
 [discussion #46]: https://github.com/orgs/ismip/discussions/46

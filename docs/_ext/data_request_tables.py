@@ -157,10 +157,10 @@ def _value_range_table(rows: list[dict[str, str]]) -> list[str]:
             _plain(row['max_value_gris']),
         ]
         if has_severity:
-            # An unrecognized value means `error`, which is what the checker
-            # does with it, so the table says what would actually happen.
+            # Anything but `warning` means the graded default, which is what
+            # the checker does with it, so the table says what would happen.
             severity = row['range_severity'].strip().lower()
-            cells.append(severity if severity == 'warning' else 'error')
+            cells.append('always a warning' if severity == 'warning' else 'graded')
         table_rows.append(cells)
 
     return _table(headers, table_rows)

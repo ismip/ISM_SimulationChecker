@@ -32,11 +32,12 @@
 #      value is 0 rather than missing.  The other policies -- outside_domain,
 #      no_ice, no_grounded_ice, no_floating_ice -- say where a field sits
 #      relative to the ice masks, which takes more than one file to check.
-#    - All values lie within the allowed min/max range for the relevant region,
-#      at the severity that variable's 'range_severity' names (error unless the
-#      data request says otherwise).  Cells that hold a fill value, or no
-#      number at all, are excluded from that comparison: files are read
-#      undecoded, so a fill cell is the literal 9.96921e+36.
+#    - All values lie within the allowed min/max range for the relevant region.
+#      A few cells outside it are a warning; RANGE_ERROR_FRACTION or more of
+#      the values are an error, unless the variable's 'range_severity' says
+#      warning -- see _check_range.  Cells that hold a fill value, or no number
+#      at all, are excluded from that comparison: files are read undecoded, so
+#      a fill cell is the literal 9.96921e+36.
 #    - Array is not entirely fill/missing values.
 #
 # 2b. Consistency (_check_consistency)  [spatial variables only]
@@ -504,7 +505,7 @@ def _parse_args() -> argparse.Namespace:
 
 
 def _range_severity(value) -> str:
-    """How a value outside a variable's min/max range should be reported.
+    """Whether a variable's min/max range can ever fail a file.
 
     Issue #10 is that some of these bounds "are dependent on the forcing, input
     data and model implementation", so failing a run on them is too strong --
@@ -513,9 +514,12 @@ def _range_severity(value) -> str:
     variable row, and switching a variable is a data-only diff that needs no
     reasoning about the checker.
 
-    Anything the column does not say is an error, which is what makes the
-    column safe to add before it is filled in: a blank cell, a missing column
-    and an unrecognised value all mean what the checker did before.
+    'warning' means the bound is soft everywhere: however much of the field is
+    outside it, the finding is a warning.  Anything else means the bound is
+    graded by how much of the field is outside it, a few cells being a warning
+    and more an error (see _check_range); that is the default, which makes
+    the column safe to leave blank: a blank cell, a missing column and an
+    unrecognized value all mean the same thing.
     """
     if value is not None and pd.notna(value) and str(value).strip().lower() == "warning":
         return "warning"
@@ -1944,38 +1948,79 @@ def _check_numerical(
             "Value range: not checked (the allowed range depends on the"
             " region, which the file name does not identify)."
         )
-    elif not isscalar:
-        # The severity of an out-of-range value is per variable, from the
-        # range_severity column of the data request; see _range_severity.
-        report_range = (
-            reporter.warning
-            if ismip_meta[var_index].get("range_severity") == "warning"
-            else reporter.error
+    elif not isscalar and not all_missing:
+        _check_range(
+            reporter,
+            np.asarray(ds[ivar].values)[~missing],
+            ismip_meta[var_index],
+            region,
         )
-        if not all_missing:
-            values = np.asarray(ds[ivar].values)[~missing]
-            minimum = values.min().item()
-            maximum = values.max().item()
 
-            if minimum >= ismip_meta[var_index]["min_value_" + region.lower()]:
-                reporter.ok("The minimum value successfully verified.")
-            else:
-                report_range(
-                    "The minimum value ("
-                    + str(minimum)
-                    + ") is out of range. Min value accepted: "
-                    + str(ismip_meta[var_index]["min_value_" + region.lower()])
-                )
 
-            if maximum <= ismip_meta[var_index]["max_value_" + region.lower()]:
-                reporter.ok("The maximum value successfully verified.")
-            else:
-                report_range(
-                    "The maximum value ("
-                    + str(maximum)
-                    + ") is out of range. Max value accepted: "
-                    + str(ismip_meta[var_index]["max_value_" + region.lower()])
-                )
+# Above this share of a field's values outside the allowed range, the finding
+# is an error rather than a warning.  See _check_range for why there is a
+# threshold and why it sits here.
+RANGE_ERROR_FRACTION = 0.01
+
+
+def _check_range(reporter, values, criteria, region) -> None:
+    """How much of a field lies outside its allowed range, and how far.
+
+    The bounds in the data request are sanity limits, and a field that is
+    largely outside them is not a plausible ice sheet: the units attribute says
+    m s-1 over data in m yr-1, a temperature is in Celsius, a mask is in
+    percent, a flux has its sign flipped.  Those are errors, and this is the
+    only check that catches them, since _units_match compares what the
+    attribute says and not what the data does.
+
+    But the extreme of a field over millions of cells and decades is the least
+    robust statistic there is, and a few cells outside the bounds are routine
+    in a legitimate simulation: a stress-balance solver can put a few grid
+    points of very high speed at the margin, bedrock that has just lost its
+    ice can carry a heat flux the bounds do not allow for, and a calving event
+    can put one year's flux far past the bound (discussion ismip#46).  None of
+    that is something a modeler can fix, and a check that fails a file on it
+    would have valid runs discarded.  So the severity depends on how much of
+    the field is outside -- RANGE_ERROR_FRACTION of the values it holds -- and
+    the finding says the count, so that the decision can be checked against
+    the evidence.
+
+    A variable whose range_severity is 'warning' never goes past a warning,
+    whatever the count.  That is for a bound that is soft everywhere, not just
+    at a few cells; see _range_severity.
+    """
+    lower = criteria["min_value_" + region.lower()]
+    upper = criteria["max_value_" + region.lower()]
+    total = values.size
+    soft = criteria.get("range_severity") == "warning"
+
+    def report(count: int, message: str) -> None:
+        if soft or count < RANGE_ERROR_FRACTION * total:
+            reporter.warning(message)
+        else:
+            reporter.error(message)
+
+    below = int((values < lower).sum())
+    if below == 0:
+        reporter.ok("The minimum value successfully verified.")
+    else:
+        report(
+            below,
+            f"The minimum value ({values.min().item()}) is out of range."
+            f" Min value accepted: {lower};"
+            f" {_count_phrase(below, total)} are below it.",
+        )
+
+    above = int((values > upper).sum())
+    if above == 0:
+        reporter.ok("The maximum value successfully verified.")
+    else:
+        report(
+            above,
+            f"The maximum value ({values.max().item()}) is out of range."
+            f" Max value accepted: {upper};"
+            f" {_count_phrase(above, total)} are above it.",
+        )
 
 
 def _companion_path(source_path: str, file_name: str, variable: str) -> str | None:
