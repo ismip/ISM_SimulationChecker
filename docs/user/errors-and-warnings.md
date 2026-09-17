@@ -159,11 +159,17 @@ The share is of the values that hold a number, not of the grid, so a variable
 defined only where there is ice is judged against the ice and not against the
 ocean around it.
 
-Some bounds may turn out to be soft everywhere, not just at a few cells
-([issue #10]). For those the `range_severity` column of the data request can
-be set to `warning`, and the finding is then a warning however much of the
-field is outside. No shipped row says so today; a blank cell means the graded
-rule above.
+Some bounds are soft everywhere, not just at a few cells ([issue #10]). For
+those the `range_severity` column of the data request is set to `warning`,
+and the finding is then a warning however much of the field is outside. A
+blank cell means the graded rule above. One shipped row says so today:
+
+- `hfgeoubed`: a model with a bedrock thermal layer reports the flux at the
+  top of it, and its fill policy lets the file cover ice-free land as well as
+  ice. Over bare ground under a warming surface that flux points down, so a
+  run had 6.6% of its values below zero, which is all of Greenland's ice-free
+  land rather than a few cells ([discussion #46]). The bound describes the
+  flux under ice, and a single-file check cannot tell the two apart.
 
 The bounds are listed under [Value ranges](data-request.md#value-ranges).
 
