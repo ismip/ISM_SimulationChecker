@@ -7,3 +7,4 @@ dist/
 .venv/
 docs/_build/
 docs/_generated/
+.claude/worktrees/
