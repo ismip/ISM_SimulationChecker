@@ -639,6 +639,135 @@ def test_checker_reports_historical_time_range_violation(case_dir):
     )
 
 
+def generate_ocx_run(root: Path, start_year: int, include_xyt: bool) -> Path:
+    """An OCX run ending in 2025, with NONE in the ESM field."""
+    generate_test_files.create_netcdf_file(
+        None,
+        grid_name="GrIS_16000m",
+        scenario="ocx",
+        start_year=start_year,
+        nyears=2025 - start_year + 1,
+        include_scalars=not include_xyt,
+        include_xyt=include_xyt,
+        include_non_mandatory=include_xyt,
+        esm_id="NONE",
+        set_counter="C011",
+        output_root=root,
+    )
+    return root / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "C011"
+
+
+def test_checker_accepts_an_ocx_run(tmp_path):
+    core_dir = generate_ocx_run(tmp_path / "gen", 1950, include_xyt=False)
+
+    summary = run_checker(core_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert (
+        "covering nominal years 1950-2025, as experiment 'ocx' requires: OK"
+        in summary["log_text"]
+    )
+
+
+@pytest.mark.parametrize("esm_name", ["ERA5", "CESM2-WACCM"])
+def test_checker_accepts_any_esm_name_in_ocx(tmp_path, esm_name):
+    core_dir = generate_ocx_run(tmp_path / "gen", 2015, include_xyt=False)
+    for file_path in sorted(core_dir.glob("*.nc")):
+        rename_file_part(file_path, checker.ISMIP7_FILENAME_ESM_IDX, esm_name)
+
+    summary = run_checker(core_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+
+
+@pytest.mark.parametrize("esm_name", ["", "RACMO2.3p2-ERA"])
+def test_checker_reports_a_malformed_esm_name_in_ocx(tmp_path, esm_name):
+    core_dir = generate_ocx_run(tmp_path / "gen", 2015, include_xyt=False)
+    rename_file_part(
+        first_dataset(core_dir), checker.ISMIP7_FILENAME_ESM_IDX, esm_name
+    )
+
+    summary = run_checker(core_dir)
+
+    assert summary["total_errors"] == 1
+    assert summary["total_naming_errors"] == 1
+    assert (
+        f"ESM name '{esm_name}' (field 5) must be a name of letters, digits and"
+        " hyphens for experiment 'ocx' (e.g. NONE or ERA5)." in summary["log_text"]
+    )
+
+
+def test_checker_reports_an_ocx_file_without_an_esm_field(tmp_path):
+    core_dir = generate_ocx_run(tmp_path / "gen", 2015, include_xyt=False)
+    file_path = dataset_for_variable(core_dir, "lim")
+    file_path.rename(file_path.with_name(file_path.name.replace("_NONE_", "_")))
+
+    summary = run_checker(core_dir)
+
+    assert summary["total_errors"] == 2
+    assert (
+        "In experiment ocx, these mandatory variable(s) is (are) missing: ['lim']"
+        in summary["log_text"]
+    )
+
+
+def test_checker_accepts_ocx_snapshots_at_the_first_and_last_year(tmp_path):
+    """OCX does not branch from historical, so its initial state is required."""
+    core_dir = generate_ocx_run(tmp_path / "gen", 2010, include_xyt=True)
+
+    summary = run_xyt_checker(core_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+
+    set_time_axis(
+        dataset_for_variable(core_dir, "litemp"), state_timestamps([2025])
+    )
+    summary = run_xyt_checker(core_dir)
+
+    assert summary["total_time_errors"] == 1
+    assert (
+        "required snapshot nominal year(s) missing: 2010" in summary["log_text"]
+    )
+
+
+def test_checker_reports_ocx_starting_before_1950(tmp_path):
+    core_dir = generate_ocx_run(tmp_path / "gen", 1949, include_xyt=False)
+
+    summary = run_checker(core_dir)
+
+    assert (
+        "the file name starts at year 1949, but experiment 'ocx' must be"
+        " between 1950 and 2015." in summary["log_text"]
+    )
+
+
+def test_checker_reports_ocx_ending_before_2025(tmp_path):
+    core_dir = generate_ocx_run(tmp_path / "gen", 2015, include_xyt=False)
+    target_file = dataset_for_variable(core_dir, "lim")
+    set_time_axis(target_file, state_timestamps(range(2015, 2025)))
+    rename_file_part(
+        target_file, checker.ISMIP7_FILENAME_YEAR_RANGE_IDX, "2015-2024.nc"
+    )
+
+    summary = run_checker(core_dir)
+
+    assert summary["total_naming_errors"] == 0
+    assert (
+        "the file name ends at year 2024, but experiment 'ocx' must end at 2025."
+        in summary["log_text"]
+    )
+
+
+def test_checker_says_experiment_names_are_lower_case(tmp_path):
+    """The forcing directories are named OCX; the experiment is ocx."""
+    core_dir = generate_ocx_run(tmp_path / "gen", 2015, include_xyt=False)
+    for file_path in sorted(core_dir.glob("*.nc")):
+        rename_file_part(file_path, checker.ISMIP7_FILENAME_EXPERIMENT_IDX, "OCX")
+
+    summary = run_checker(core_dir)
+
+    assert "Experiment names are lower case: 'ocx'." in summary["log_text"]
+
 def test_checker_reports_time_axis_hollowed_out_between_correct_endpoints(
     ctrl_case_dir,
 ):

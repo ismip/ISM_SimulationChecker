@@ -13,7 +13,9 @@
 #      An unrecognised region costs only the checks that need it (value range,
 #      grid extent and resolution, crs); the rest of the file is still checked.
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
-#    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.
+#    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.  An
+#      experiment not forced by an ESM (ocx) may put any name of letters,
+#      digits and hyphens there.
 #    - Forcing member id (field 6) matches format fNNN (e.g. f001).
 #    - Set counter (field 8) matches format [C|E|P]NNN (e.g. C001, E041, P132).
 #    - Year range (field 9) matches format YYYY-YYYY and start <= end.  What the
@@ -73,7 +75,7 @@
 #      cadence reasoning cannot see.
 #    - For x,y,z,t snapshot variables the axis is instead checked against the
 #      required set of snapshot nominal years: the run's last year, the century
-#      marks inside it, and (for historical only) the run's first year.  A
+#      marks inside it, and (for historical and ocx only) the run's first year.  A
 #      missing snapshot is an error; an unasked-for one is a warning, since the
 #      request specifies the snapshots as a minimum set.  That includes a
 #      snapshot at 2000, which the data request does not ask for -- see
@@ -252,6 +254,14 @@ VALID_ESM_NAMES: set[str] = {
     "NorESM3-LM", "NorESM3-MM",
     "UKESM2-0-LL",
 }
+
+# Experiments not forced by an ESM.  OCX is forced by reanalysis (ERA5 for the
+# atmosphere, EN4 for the Greenland ocean) and by expert judgement (the
+# Antarctic ocean), and groups may choose other products, so no one name
+# describes it.  Its files still carry the ESM field, so that every file name
+# has the same fields, but any name of letters, digits and hyphens will do:
+# a placeholder such as NONE, the forcing's source, or even a CMIP model name.
+EXPERIMENTS_WITHOUT_ESM = frozenset({"ocx"})
 
 
 class Reporter:
@@ -698,10 +708,10 @@ def _timestamp_to_nominal_year(timestamp, var_type: str) -> int:
 def _expected_nominal_years(exp: dict, start_year: int) -> list[int]:
     """The nominal simulation years a file for this experiment should carry.
 
-    Every experiment but 'historical' pins its start year in
+    Every experiment but 'historical' and 'ocx' pins its start year in
     experiments_ismip7.csv, so the whole axis follows from the table alone.
-    'historical' may start anywhere in [start_year_min, start_year_max] (which
-    is what a duration of -1 records), so it needs one number from the file --
+    Those two may start anywhere in [start_year_min, start_year_max] (which is
+    what a duration of -1 records), so they need one number from the file --
     see :func:`_axis_start_year`.
     """
     if exp["duration"] != -1:
@@ -866,9 +876,9 @@ def _required_snapshot_years(exp: dict, run_years: list[int]) -> set[int]:
 
     The final year of the run is always reported, as are the century marks
     inside it.  The *first* year is only required where the protocol leaves it
-    open -- that is, for 'historical', whose start year is the modeller's choice
-    (duration -1) and so is not recorded anywhere else.  A projection's initial
-    state is the historical run's final state, already reported as historical's
+    open -- that is, for 'historical' and 'ocx', whose start year is the
+    modeller's choice (duration -1) and so is not recorded anywhere else.  A
+    projection's initial state is the historical run's final state, already reported as historical's
     last-year snapshot, so requiring it again in every projection would ask for
     the same field twice.
     """
@@ -1279,12 +1289,21 @@ def _process_single_experiment(
         reporter.write(" **  Experiment: " + experiment_name + "\n ")
         reporter.write("**********************************************************\n")
         reporter.write("\n ")
+        experiment_names = [exp["experiment"] for exp in experiments]
+        # The forcing directories are named OCX, so a group copying them gets
+        # the case wrong; experiment names are lower case, like ssp585.
+        case_hint = (
+            f" Experiment names are lower case: '{experiment_name.lower()}'."
+            if experiment_name.lower() in experiment_names
+            else ""
+        )
         naming_reporter.error(
             "The compliance check is ignored for experiment "
             + experiment_name
             + " as it is not in "
-            + str([exp["experiment"] for exp in experiments])
+            + str(experiment_names)
             + "."
+            + case_hint
         )
         report_naming_issues.append(
             "Compliance check ignored : experiment "
@@ -1493,7 +1512,13 @@ def _check_naming(
             )
 
         esm_name = parts[ISMIP7_FILENAME_ESM_IDX]
-        if esm_name not in VALID_ESM_NAMES:
+        experiment_name = parts[ISMIP7_FILENAME_EXPERIMENT_IDX]
+        if experiment_name in EXPERIMENTS_WITHOUT_ESM:
+            if not re.fullmatch(r"[A-Za-z0-9-]+", esm_name):
+                reporter.error(
+                    f"ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) must be a name of letters, digits and hyphens for experiment '{experiment_name}' (e.g. NONE or ERA5)."
+                )
+        elif esm_name not in VALID_ESM_NAMES:
             reporter.error(
                 f"ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is not a recognised CMIP6/CMIP7 model name."
             )
@@ -2743,11 +2768,11 @@ def _check_time(
 def _axis_start_year(exp: dict, filename_years, actual: list, var_type: str) -> int:
     """The nominal year the expected time axis should begin at.
 
-    Only 'historical' has a say in the matter -- every other experiment pins its
-    start year in experiments_ismip7.csv -- and for it the file name is what
-    decides: it is the file's own declared claim about its contents, and any
-    start year in [start_year_min, start_year_max] is permitted, so there is
-    nothing else to measure the file against.
+    Only 'historical' and 'ocx' have a say in the matter -- every other
+    experiment pins its start year in experiments_ismip7.csv -- and for them the
+    file name is what decides: it is the file's own declared claim about its
+    contents, and any start year in [start_year_min, start_year_max] is
+    permitted, so there is nothing else to measure the file against.
 
     Falls back to the axis when the file name cannot supply a usable year, so
     that the cadence and the end year are still checked rather than the file

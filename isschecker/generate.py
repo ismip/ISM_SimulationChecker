@@ -649,7 +649,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
         snap_set = {end_year} | {
             y for y in CENTURY_SNAPSHOT_YEARS if start_year <= y <= end_year
         }
-        if scenario == 'historical':
+        if scenario in ('historical', 'ocx'):
             snap_set.add(start_year)
         snapshot_years = sorted(snap_set)
         origin = datetime(1850, 1, 1).date()

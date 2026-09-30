@@ -24,6 +24,17 @@ lithk_GrIS_VUW_PISM1_m001_CESM2-WACCM_f001_ctrl_C001_2015-2300.nc
 Each field is checked. What the year range *means* is checked under
 [Time](#4-time).
 
+The ocx experiment is not forced by an ESM. Its files still have the ESM
+field, but any name of letters, digits and hyphens is accepted there, such as
+NONE or the reanalysis you used:
+
+```
+lithk_GrIS_VUW_PISM1_m001_NONE_f001_ocx_C011_1979-2025.nc
+lithk_GrIS_VUW_PISM1_m001_ERA5_f001_ocx_C011_1979-2025.nc
+```
+
+Experiment names are lower case: ocx, not OCX as in the forcing directories.
+
 Inside the file, the variable the name promises is present with the
 dimensions the data request asks for, in (time, z, y, x) order. Nothing else
 is in the file beyond the coordinates and the companion variables CF lets
