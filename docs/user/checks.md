@@ -24,11 +24,12 @@ lithk_GrIS_VUW_PISM1_m001_CESM2-WACCM_f001_ctrl_C001_2015-2300.nc
 Each field is checked. What the year range *means* is checked under
 [Time](#4-time).
 
-The ocx experiment is not forced by an ESM. Its files may leave the ESM
-field out, or put a name there that is not a CMIP model name:
+The ocx experiment is not forced by an ESM. Its files still have the ESM
+field, but any name of letters, digits and hyphens is accepted there, such as
+NONE or the reanalysis you used:
 
 ```
-lithk_GrIS_VUW_PISM1_m001_f001_ocx_C011_1979-2025.nc
+lithk_GrIS_VUW_PISM1_m001_NONE_f001_ocx_C011_1979-2025.nc
 lithk_GrIS_VUW_PISM1_m001_ERA5_f001_ocx_C011_1979-2025.nc
 ```
 

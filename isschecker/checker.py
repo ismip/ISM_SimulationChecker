@@ -14,8 +14,8 @@
 #      grid extent and resolution, crs); the rest of the file is still checked.
 #    - ISM member id (field 4) matches format mNNN (e.g. m001).
 #    - ESM name (field 5) is a recognised CMIP6/CMIP7 model name.  An
-#      experiment not forced by an ESM (ocx) may leave the field out or put
-#      any other name there, but not a CMIP model name.
+#      experiment not forced by an ESM (ocx) may put any name of letters,
+#      digits and hyphens there.
 #    - Forcing member id (field 6) matches format fNNN (e.g. f001).
 #    - Set counter (field 8) matches format [C|E|P]NNN (e.g. C001, E041, P132).
 #    - Year range (field 9) matches format YYYY-YYYY and start <= end.  What the
@@ -257,28 +257,11 @@ VALID_ESM_NAMES: set[str] = {
 
 # Experiments not forced by an ESM.  OCX is forced by reanalysis (ERA5 for the
 # atmosphere, EN4 for the Greenland ocean) and by expert judgement (the
-# Antarctic ocean), so no one name describes it.  Its files may leave the ESM
-# field out, or put any name there but a CMIP model's.
+# Antarctic ocean), and groups may choose other products, so no one name
+# describes it.  Its files still carry the ESM field, so that every file name
+# has the same fields, but any name of letters, digits and hyphens will do:
+# a placeholder such as NONE, the forcing's source, or even a CMIP model name.
 EXPERIMENTS_WITHOUT_ESM = frozenset({"ocx"})
-
-
-def _file_name_fields(file_name: str) -> list[str] | None:
-    """The ten fields of an ISMIP7 file name, or None if it has another shape.
-
-    A file of an experiment without an ESM may leave the ESM field out; it is
-    returned as an empty field, so that every field keeps its index.  The
-    experiment is matched regardless of case, so that a file naming it OCX is
-    told it should be ocx rather than that it has too few fields.
-    """
-    parts = file_name.split("_")
-    if len(parts) == ISMIP7_FILENAME_PARTS:
-        return parts
-    if (
-        len(parts) == ISMIP7_FILENAME_PARTS - 1
-        and parts[ISMIP7_FILENAME_EXPERIMENT_IDX - 1].lower() in EXPERIMENTS_WITHOUT_ESM
-    ):
-        return parts[:ISMIP7_FILENAME_ESM_IDX] + [""] + parts[ISMIP7_FILENAME_ESM_IDX:]
-    return None
 
 
 class Reporter:
@@ -894,8 +877,8 @@ def _required_snapshot_years(exp: dict, run_years: list[int]) -> set[int]:
     The final year of the run is always reported, as are the century marks
     inside it.  The *first* year is only required where the protocol leaves it
     open -- that is, for 'historical' and 'ocx', whose start year is the
-    modeller's choice (duration -1) and so is not recorded anywhere else.  A projection's initial
-    state is the historical run's final state, already reported as historical's
+    modeller's choice (duration -1) and so is not recorded anywhere else.  A
+    projection's initial state is the historical run's final state, already reported as historical's
     last-year snapshot, so requiring it again in every projection would ask for
     the same field twice.
     """
@@ -1014,8 +997,8 @@ def _group_files_by_experiment(source_path: str) -> dict:
     for f in sorted(os.listdir(source_path)):
         if not f.endswith(".nc"):
             continue
-        fields = _file_name_fields(f)
-        exp_name = fields[ISMIP7_FILENAME_EXPERIMENT_IDX] if fields is not None else "_unknown"
+        parts = f.split("_")
+        exp_name = parts[ISMIP7_FILENAME_EXPERIMENT_IDX] if len(parts) == ISMIP7_FILENAME_PARTS else "_unknown"
         if exp_name not in groups:
             groups[exp_name] = []
         groups[exp_name].append(f)
@@ -1366,8 +1349,7 @@ def _process_single_file(
         return
     file_variables = list(ds.data_vars)
 
-    fields = _file_name_fields(file_name)
-    if fields is None:
+    if len(file_name_split) != ISMIP7_FILENAME_PARTS:
         naming_reporter.error(
             "the file name "
             + file_name
@@ -1382,7 +1364,7 @@ def _process_single_file(
         )
         return
 
-    experiment_varname = fields[ISMIP7_FILENAME_EXPERIMENT_IDX]
+    experiment_varname = file_name_split[ISMIP7_FILENAME_EXPERIMENT_IDX]
     if experiment_varname != experiment_name:
         naming_reporter.error(
             "in the file name "
@@ -1521,8 +1503,8 @@ def _check_naming(
             + " due to wrong naming."
         )
 
-    parts = _file_name_fields(file_name)
-    if parts is not None:
+    parts = file_name.split("_")
+    if len(parts) == ISMIP7_FILENAME_PARTS:
         ism_member = parts[ISMIP7_FILENAME_ISM_MEMBER_IDX]
         if not re.fullmatch(r"m\d{3}", ism_member):
             reporter.error(
@@ -1532,9 +1514,9 @@ def _check_naming(
         esm_name = parts[ISMIP7_FILENAME_ESM_IDX]
         experiment_name = parts[ISMIP7_FILENAME_EXPERIMENT_IDX]
         if experiment_name in EXPERIMENTS_WITHOUT_ESM:
-            if esm_name in VALID_ESM_NAMES:
+            if not re.fullmatch(r"[A-Za-z0-9-]+", esm_name):
                 reporter.error(
-                    f"ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) is a CMIP model name, but experiment '{experiment_name}' is not forced by an ESM."
+                    f"ESM name '{esm_name}' (field {ISMIP7_FILENAME_ESM_IDX}) must be a name of letters, digits and hyphens for experiment '{experiment_name}' (e.g. NONE or ERA5)."
                 )
         elif esm_name not in VALID_ESM_NAMES:
             reporter.error(
@@ -2021,17 +2003,17 @@ def _companion_path(source_path: str, file_name: str, variable: str) -> str | No
     accepted when it picks out exactly one file, since guessing between several
     would be worse than not checking.
     """
-    if _file_name_fields(file_name) is None:
+    parts = file_name.split("_")
+    if len(parts) != ISMIP7_FILENAME_PARTS:
         return None
 
-    # Split afresh rather than using the fields: a name without an ESM field
-    # has to be rebuilt without one.
-    parts = file_name.split("_")
-    candidate = os.path.join(source_path, "_".join([variable] + parts[1:]))
+    exact = list(parts)
+    exact[ISMIP7_FILENAME_VAR_IDX] = variable
+    candidate = os.path.join(source_path, "_".join(exact))
     if os.path.exists(candidate):
         return candidate
 
-    stem = "_".join([variable] + parts[1:-1])
+    stem = "_".join([variable] + parts[1:ISMIP7_FILENAME_YEAR_RANGE_IDX])
     matches = sorted(glob.glob(os.path.join(source_path, stem + "_*.nc")))
     return matches[0] if len(matches) == 1 else None
 
