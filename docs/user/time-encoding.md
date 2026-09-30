@@ -32,6 +32,7 @@ series. Which nominal years are required depends on the experiment:
 |---|---|
 | historical | first year of the run, 1900 (if in range), last year of the run (2014) |
 | projection (ssp585, ctrl, ...) | 2100, 2200, 2300 (each if within the run) |
+| ocx | first year of the run, last year of the run (2025) |
 
 Together, a historical run and a projection give snapshots at the first
 historical year, 1900, 2014, 2100, 2200 and 2300. A projection's initial

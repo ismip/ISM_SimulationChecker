@@ -490,10 +490,13 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
     source_id = group
     ism_id = model
     experiment_id = scenario
-    filename_template = (
-        f"{domain_id}_{source_id}_{ism_id}_{ism_member_id}_{esm_id}_{forcing_member_id}_"
-        f"{experiment_id}_{set_counter}_{time_range}.nc"
-    )
+    # An empty esm_id leaves the ESM field out, as ocx allows.
+    run_fields = [domain_id, source_id, ism_id, ism_member_id]
+    if esm_id:
+        run_fields.append(esm_id)
+    run_fields += [forcing_member_id, experiment_id, set_counter]
+    run_id = "_".join(run_fields)
+    filename_template = f"{run_id}_{time_range}.nc"
 
     # Create separate file for each variable
     created_files = []
@@ -649,7 +652,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
         snap_set = {end_year} | {
             y for y in CENTURY_SNAPSHOT_YEARS if start_year <= y <= end_year
         }
-        if scenario == 'historical':
+        if scenario in ('historical', 'ocx'):
             snap_set.add(start_year)
         snapshot_years = sorted(snap_set)
         origin = datetime(1850, 1, 1).date()
@@ -712,10 +715,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             })
 
             snap_time_range = f"{start_year}-{end_year}"
-            snap_filename_template = (
-                f"{domain_id}_{source_id}_{ism_id}_{ism_member_id}_{esm_id}_{forcing_member_id}_"
-                f"{experiment_id}_{set_counter}_{snap_time_range}.nc"
-            )
+            snap_filename_template = f"{run_id}_{snap_time_range}.nc"
             filename = f"{var_name}_{snap_filename_template}"
             output_path = output_dir / filename
 
@@ -781,10 +781,7 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
             })
 
             # Static field: use 0000-0000 as year-range placeholder (checker skips this check)
-            static_filename_template = (
-                f"{domain_id}_{source_id}_{ism_id}_{ism_member_id}_{esm_id}_{forcing_member_id}_"
-                f"{experiment_id}_{set_counter}_0000-0000.nc"
-            )
+            static_filename_template = f"{run_id}_0000-0000.nc"
             filename = f"{var_name}_{static_filename_template}"
             output_path = output_dir / filename
 
@@ -1050,7 +1047,7 @@ def main():
     parser.add_argument(
         '--esm-id',
         default='CESM2-WACCM',
-        help='ESM id (default: CESM2-WACCM)'
+        help="ESM id; '' leaves the field out, as ocx allows (default: CESM2-WACCM)"
     )
     parser.add_argument(
         '--forcing-member-id',

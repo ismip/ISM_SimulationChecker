@@ -214,9 +214,9 @@ def _experiments_table(rows: list[dict[str, str]]) -> list[str]:
                 _plain(row['start_year_min']),
                 _plain(row['start_year_max']),
                 _plain(row['end_year']),
-                # `historical` carries -1, which is the file's way of saying
-                # that its duration follows from the start year the modeler
-                # chose rather than being fixed by the protocol.
+                # `historical` and `ocx` carry -1, which is the file's way of
+                # saying that the duration follows from the start year the
+                # modeler chose rather than being fixed by the protocol.
                 'set by the start year'
                 if row['duration'].strip() == '-1'
                 else _plain(row['duration']),

@@ -67,9 +67,9 @@ everywhere; see [Value ranges](errors-and-warnings.md#value-ranges).
 ## Experiments
 
 An experiment's row fixes the nominal years its files may cover, and with
-them the time axis every annual file must carry. The historical run is the
-one experiment whose start year the modeler chooses; every projection runs
-from 2015 to a fixed end year.
+them the time axis every annual file must carry. The modeler chooses the
+start year of historical and ocx, within the range given; every projection
+runs from 2015 to a fixed end year.
 
 ```{include} ../_generated/experiments.md
 ```
