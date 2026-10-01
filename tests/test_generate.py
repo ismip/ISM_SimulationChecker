@@ -140,8 +140,10 @@ def test_generated_files_are_missing_exactly_where_their_policy_says(tmp_path):
         "topg": ~geometry["domain"],
         "orog": ~geometry["domain"],
         "xvelmean": geometry["sftgif"] == 0.0,
-        "libmassbfgr": geometry["sftgrf"] == 0.0,
-        "libmassbffl": geometry["sftflf"] == 0.0,
+        "litempbotgr": geometry["sftgrf"] == 0.0,
+        "litempbotfl": geometry["sftflf"] == 0.0,
+        "libmassbfgr": np.zeros_like(geometry["domain"]),
+        "libmassbffl": np.zeros_like(geometry["domain"]),
     }
     for variable_name, expected in expected_missing.items():
         values, _, _ = read(variable_name)
@@ -149,3 +151,9 @@ def test_generated_files_are_missing_exactly_where_their_policy_says(tmp_path):
         assert np.array_equal(
             missing, np.broadcast_to(expected, missing.shape)
         ), variable_name
+
+    # The basal fluxes are defined everywhere but are 0 without their ice.
+    for variable_name, mask_name in generate.ZERO_WITHOUT_MASK.items():
+        values, _, _ = read(variable_name)
+        no_ice = np.broadcast_to(geometry[mask_name] == 0.0, values.shape)
+        assert np.all(values[no_ice] == 0.0), variable_name

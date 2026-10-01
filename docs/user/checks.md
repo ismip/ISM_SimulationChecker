@@ -71,8 +71,9 @@ required set of snapshots. Both are described in {doc}`time-encoding`.
 
 Gridded variables only. Each file is compared against the files beside it: a
 variable is missing exactly where its ice mask says there is no ice, the
-variables of the computational domain cover the ice, the grounded and
-floating fractions sum to the ice fraction, thickness agrees with the ice
+variables of the computational domain cover the ice, the basal mass balance
+fluxes are zero where there is none of their ice, the grounded and floating
+fractions sum to the ice fraction, thickness agrees with the ice
 mask, and surface elevation, ice base and bed agree with each other. See
 [Checks that compare files](errors-and-warnings.md#checks-that-compare-files).
 
