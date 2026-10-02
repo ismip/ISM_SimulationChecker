@@ -1489,22 +1489,21 @@ def test_shipped_range_severities():
 
 SHIPPED_FILL_POLICIES = {
     "forbidden": {
-        "lithk", "dlithkdt", "sftgif", "sftgrf", "sftflf", "licalvf",
-        "ligroundf", "lifmassbf", "lim", "limnsw", "iareagr", "iareafl",
+        "lithk", "dlithkdt", "sftgif", "sftgrf", "sftflf", "acabf",
+        "libmassbfgr", "libmassbffl", "licalvf", "ligroundf", "lifmassbf", "lim", "limnsw", "iareagr", "iareafl",
         "tendacabf", "tendlibmassbfgr", "tendlibmassbffl", "tendlicalvf",
         "tendlifmassbf", "tendligroundf",
     },
     "outside_domain": {
-        "orog", "topg", "base", "acabf", "hfgeoubed", "thdrflf", "deltag",
-        "refgeoid",
+        "orog", "topg", "base", "hfgeoubed", "thdrflf", "deltag", "refgeoid",
     },
     "no_ice": {
         "xvelsurf", "yvelsurf", "zvelsurf", "xvelbase", "yvelbase", "zvelbase",
         "xvelmean", "yvelmean", "strbasemag", "litemptop", "litempavg",
         "litemp",
     },
-    "no_grounded_ice": {"litempbotgr", "libmassbfgr"},
-    "no_floating_ice": {"litempbotfl", "libmassbffl"},
+    "no_grounded_ice": {"litempbotgr"},
+    "no_floating_ice": {"litempbotfl"},
 }
 
 
@@ -1614,6 +1613,51 @@ def test_checker_reports_a_fill_value_the_request_forbids(
     )
 
 
+@pytest.mark.parametrize("variable_name", ["acabf", "libmassbfgr", "libmassbffl"])
+def test_a_fill_value_in_a_mass_balance_flux_is_a_warning_for_now(
+    xyt_case_dir, variable_name
+):
+    """Issue #39 made these fluxes `forbidden` after the first round.
+
+    Submissions written to the old policies are not failed for it; see
+    fill_severity.
+    """
+    write_values(
+        dataset_for_variable(xyt_case_dir, variable_name),
+        netCDF4.default_fillvals["f4"],
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_warnings"] >= 1
+    assert (
+        f"variable '{variable_name}' holds a fill value in 5 of"
+        in summary["log_text"]
+    )
+
+
+def test_shipped_fill_severities():
+    """Which fill values are only a warning is data, and changes on purpose."""
+    ismip_meta, _, _, _, _ = checker._load_criteria("ismip7")
+
+    warnings = {
+        entry["variable"]
+        for entry in ismip_meta
+        if entry["fill_severity"] == "warning"
+    }
+    assert warnings == {"acabf", "libmassbfgr", "libmassbffl"}
+
+
+@pytest.mark.parametrize(
+    "value, expected",
+    [("warning", "warning"), ("error", "error"), (None, "error"),
+     ("nonsense", "error")],
+)
+def test_fill_severity_defaults_to_error(value, expected):
+    assert checker._fill_severity(value) == expected
+
+
 def test_checker_reports_a_gappy_scalar_series(case_dir):
     """A scalar carries the same policy: a missing total ice mass is a hole.
 
@@ -1651,7 +1695,7 @@ def test_a_nan_and_a_fill_value_are_two_separate_findings(xyt_case_dir):
 
 @pytest.mark.parametrize(
     "variable_name, value",
-    [("xvelmean", 0.0), ("libmassbfgr", 0.0), ("libmassbffl", 0.0)],
+    [("xvelmean", 0.0), ("litempbotgr", 250.0), ("litempbotfl", 250.0)],
 )
 def test_checker_reports_an_ice_only_variable_defined_everywhere(
     xyt_case_dir, variable_name, value

@@ -14,7 +14,7 @@ from datetime import datetime
 from pathlib import Path
 import netCDF4
 
-from .checker import CENTURY_SNAPSHOT_YEARS
+from .checker import CENTURY_SNAPSHOT_YEARS, ZERO_WITHOUT_MASK
 
 DATA_PACKAGE = f'{__package__}.data'
 
@@ -142,14 +142,20 @@ def spatial_field(var_name, var_info, shape, min_val, max_val, geometry,
     """One spatial variable's synthetic data, with its missing values in place.
 
     Geometry variables come from the ice sheet; everything else is still drawn
-    at random within its allowed range, and then holed out where the variable's
-    policy says it is not defined.
+    at random within its allowed range, then set to 0 where a basal flux has no
+    ice to be beneath, and holed out where the variable's policy says it is not
+    defined.
     """
     field = geometry.get(var_name)
     if field is None:
         field = generate_synthetic_data(shape, min_val, max_val, rng=rng)
     else:
         field = np.broadcast_to(field, shape).astype(np.float32)
+
+    mask_name = ZERO_WITHOUT_MASK.get(var_name)
+    if mask_name is not None:
+        no_ice = np.broadcast_to(geometry[mask_name] == 0.0, shape)
+        field = np.where(no_ice, 0.0, field)
 
     missing = missing_where(var_info.get('fill_policy'), geometry)
     if missing is not None:

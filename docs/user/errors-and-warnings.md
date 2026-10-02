@@ -66,12 +66,17 @@ every variable in its fill_policy column; the table is under
 
 Two points modelers ask about. **Ice thickness is zero where there is no
 ice**, not missing, including outside your computational domain, and so are
-the three masks and the calving, grounding-line and ice-front fluxes. **The
+the three masks. **All mass fluxes are defined everywhere**: acabf,
+libmassbfgr, libmassbffl and the calving, grounding-line and ice-front
+fluxes hold a number in every cell, never a fill value. Where there is no
+ice, that number is usually 0, but acabf may be nonzero there. **The
 masks are not restricted to 0 and 1**: any fraction in [0, 1] is accepted,
 because conservative interpolation from your native grid legitimately
 produces intermediate values.
 
-A `forbidden` variable holding any fill value is an error. The other
+A `forbidden` variable holding any fill value is an error. For acabf,
+libmassbfgr and libmassbffl it is a warning for now ([issue #39]); see
+[Severities that will change](#severities-that-will-change). The other
 policies say where a field sits relative to the ice masks, which takes more
 than one file to check; see
 [Checks that compare files](#checks-that-compare-files).
@@ -87,6 +92,7 @@ A variable whose fill_policy cell is blank is unconstrained, and nothing
 about its missing values is checked. No shipped row is blank today.
 
 [issue #23]: https://github.com/ismip/ISM_SimulationChecker/issues/23
+[issue #39]: https://github.com/ismip/ISM_SimulationChecker/issues/39
 
 ## Checks that compare files
 
@@ -106,6 +112,9 @@ the name but the variable, and compares the two.
   domain is. That is a warning, because a field taken from a forcing or
   reference dataset may legitimately cover more of the grid than the ice
   model does.
+- libmassbfgr is 0 where sftgrf is 0, and libmassbffl is 0 where sftflf is
+  0. Where there is some grounded or floating ice, any value is accepted,
+  including 0. For now this is a warning (see below).
 - sftgrf + sftflf equals sftgif; lithk is greater than zero exactly where
   sftgif is; orog equals base + lithk; and the ice base rests on the bed
   where sftgrf is 1 and lies above it where sftflf is 1. None of these needs
@@ -121,17 +130,20 @@ there. The grounded and floating comparisons against the bed are the
 exception: they are made only in cells that are wholly one or the other,
 since in a half-and-half cell the mean ice base sits somewhere between.
 
-### One severity that will change
+### Severities that will change
 
-Two findings turn on where a model puts the ice margin: a variable being
-*missing where there is ice*, and thickness disagreeing with the ice mask. A
+Three findings turn on where a model puts the ice margin: a variable being
+*missing where there is ice*, thickness disagreeing with the ice mask, and a
+basal mass balance flux that is not 0 where its mask is 0. A
 conservatively interpolated mask puts fractions like 1e-6 in a ring along
 the edge, and a model that writes fill from its own native-grid mask will
 disagree in every one of those cells.
 
-One round of real submissions will settle which is right, so **those two
+One round of real submissions will settle which is right, so **those three
 findings are warnings for the first round and will become errors
-afterwards**. The definitions above are fixed, and a model can be written to
+afterwards**. A fill value in acabf, libmassbfgr or libmassbffl is also a
+warning for now: these fluxes were allowed missing values in the first
+round. The definitions above are fixed, and a model can be written to
 them today. The finding reports how much of itself is margin, "300 of them
 have sftgif below 0.01", so the decision can be made on evidence.
 

@@ -192,24 +192,60 @@ def test_the_two_directions_are_separate_findings(case_dir):
 
 @pytest.mark.parametrize(
     "variable_name, mask_name",
-    [("libmassbfgr", "sftgrf"), ("libmassbffl", "sftflf")],
+    [("litempbotgr", "sftgrf"), ("litempbotfl", "sftflf")],
 )
 def test_grounded_and_floating_variables_use_their_own_mask(
     case_dir, variable_name, mask_name
 ):
-    """A basal flux beneath grounded ice is not checked against all the ice.
+    """A temperature beneath grounded ice is not checked against all the ice."""
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, variable_name),
+              geometry[mask_name] == 0.0, 250.0)
+
+    summary = run(case_dir)
+
+    assert summary["total_consistency_errors"] == 1, summary["log_text"]
+    assert f"where '{mask_name}' is 0" in summary["log_text"]
+
+
+@pytest.mark.parametrize(
+    "variable_name, mask_name",
+    [("libmassbfgr", "sftgrf"), ("libmassbffl", "sftflf")],
+)
+def test_a_basal_flux_without_its_ice_is_a_warning_for_now(
+    case_dir, variable_name, mask_name
+):
+    """Issue #39: the flux is defined everywhere, and 0 without its ice.
 
     It is also an FL variable against an ST mask, so this is the case where
     matching raw timestamps would have aligned nothing.
     """
     geometry = geometry_of(case_dir)
     set_where(dataset_for_variable(case_dir, variable_name),
-              geometry[mask_name] == 0.0, 0.0)
+              geometry[mask_name] == 0.0, -1.0e-5)
 
     summary = run(case_dir)
 
-    assert summary["total_consistency_errors"] == 1, summary["log_text"]
+    assert summary["total_consistency_errors"] == 0, summary["log_text"]
+    assert summary["total_consistency_warnings"] == 1
+    assert "is not 0 in" in summary["log_text"]
     assert f"where '{mask_name}' is 0" in summary["log_text"]
+
+
+@pytest.mark.parametrize(
+    "variable_name, mask_name",
+    [("libmassbfgr", "sftgrf"), ("libmassbffl", "sftflf")],
+)
+def test_a_basal_flux_may_be_0_under_its_ice(case_dir, variable_name, mask_name):
+    """Only one direction is checked: ice with no melt beneath it is fine."""
+    geometry = geometry_of(case_dir)
+    set_where(dataset_for_variable(case_dir, variable_name),
+              geometry[mask_name] > 0.0, 0.0)
+
+    summary = run(case_dir)
+
+    assert summary["total_consistency_errors"] == 0, summary["log_text"]
+    assert summary["total_consistency_warnings"] == 0
 
 
 def test_an_absent_mask_leaves_a_note_and_no_finding(case_dir):
@@ -243,13 +279,13 @@ def test_ice_outside_the_computational_domain_is_an_error(case_dir):
 
 
 def test_a_wider_footprint_than_its_neighbours_is_only_a_warning(case_dir):
-    """acabf may legitimately come from a forcing dataset covering the grid.
+    """hfgeoubed may legitimately come from a dataset covering the grid.
 
     So a footprint wider than the ice model's is worth telling the modeler
     about without failing the run over it.
     """
-    set_where(dataset_for_variable(case_dir, "acabf"),
-              np.ones_like(geometry_of(case_dir)["domain"]), 0.0)
+    set_where(dataset_for_variable(case_dir, "hfgeoubed"),
+              np.ones_like(geometry_of(case_dir)["domain"]), 0.05)
 
     summary = run(case_dir)
 

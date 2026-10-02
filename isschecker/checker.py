@@ -32,9 +32,11 @@
 #      an error whatever the variable is.
 #    - A variable whose 'fill_policy' is 'forbidden' holds no fill values at
 #      all: it is defined over the whole grid, and where there is no ice the
-#      value is 0 rather than missing.  The other policies -- outside_domain,
-#      no_ice, no_grounded_ice, no_floating_ice -- say where a field sits
-#      relative to the ice masks, which takes more than one file to check.
+#      value is 0 rather than missing.  That is an error, or a warning for a
+#      variable whose 'fill_severity' says so -- see _fill_severity.  The
+#      other policies -- outside_domain, no_ice, no_grounded_ice,
+#      no_floating_ice -- say where a field sits relative to the ice masks,
+#      which takes more than one file to check.
 #    - All values lie within the allowed min/max range for the relevant region.
 #      A few cells outside it are a warning; RANGE_ERROR_FRACTION or more of
 #      the values are an error, unless the variable's 'range_severity' says
@@ -52,6 +54,8 @@
 #    - An outside_domain variable is defined wherever there is ice (error), and
 #      the outside_domain variables agree about where the domain is (warning:
 #      a forcing or reference dataset may legitimately cover more).
+#    - libmassbfgr is 0 where sftgrf is 0, and libmassbffl is 0 where sftflf
+#      is 0, at the severity 'margin_severity' names.
 #    - sftgrf + sftflf equals sftgif; lithk is greater than 0 exactly where
 #      sftgif is; orog equals base + lithk; and the ice base rests on the bed
 #      where sftgrf is 1 and lies above it where sftflf is 1.  No densities:
@@ -578,6 +582,20 @@ def _margin_severity(value) -> str:
     return "error"
 
 
+def _fill_severity(value) -> str:
+    """How to report a fill value in a variable that may not have any.
+
+    Issue #39 moved the surface and basal mass balance fluxes to `forbidden`
+    after the first round of submissions had been written to the old policies,
+    so for those variables a fill value is a warning until the later rounds.
+    As with the other severity columns, anything the column does not say means
+    error.
+    """
+    if value is not None and pd.notna(value) and str(value).strip().lower() == "warning":
+        return "warning"
+    return "error"
+
+
 def _fill_policy(value) -> str | None:
     """Where a variable is defined, from the fill_policy column of the request.
 
@@ -644,6 +662,7 @@ def _load_criteria(variable_list: str):
             "range_severity": _range_severity(row.get("range_severity")),
             "fill_policy": _fill_policy(row.get("fill_policy")),
             "margin_severity": _margin_severity(row.get("margin_severity")),
+            "fill_severity": _fill_severity(row.get("fill_severity")),
         }
         for col in df.columns:
             lc = str(col).lower()
@@ -1824,7 +1843,12 @@ def _check_missing_values(reporter, ivar, criteria, is_fill, is_nonfinite, fill)
     # whole grid, so a hole in it is a hole in the archive.
     n_fill = int(is_fill.sum())
     if n_fill and criteria.get("fill_policy") == "forbidden":
-        reporter.error(
+        report = (
+            reporter.warning
+            if criteria.get("fill_severity") == "warning"
+            else reporter.error
+        )
+        report(
             f"variable '{ivar}' holds a fill value in"
             f" {_count_phrase(n_fill, total)}. The data request does not permit"
             f" missing values in this variable: where there is no ice the value"
@@ -2133,6 +2157,13 @@ ICE_MASK_FOR_POLICY = {
     "no_floating_ice": "sftflf",
 }
 
+# The basal mass balance fluxes are defined everywhere, but are zero wherever
+# there is none of the ice they are the flux beneath (issue #39).
+ZERO_WITHOUT_MASK = {
+    "libmassbfgr": "sftgrf",
+    "libmassbffl": "sftflf",
+}
+
 # Below this fraction a cell is the partly glaciated margin rather than the
 # interior.  Used only to describe a finding, never to decide one: the rule is
 # exact, and this says how much of what it found is margin.
@@ -2214,6 +2245,45 @@ def _check_ice_extent(reporter, ds, ivar, criteria, companion) -> None:
         )
 
 
+def _check_zero_without_ice(reporter, ds, ivar, criteria, companion) -> None:
+    """A basal flux is 0 wherever there is none of the ice it lies beneath.
+
+    Only that direction: a cell with some of that ice may still have no melt.
+    Fill cells have been reported already and are left out here.
+    """
+    values, missing, steps = _field_and_steps(ds, ivar)
+    nonzero_without_ice = 0
+    total = 0
+
+    for step in range(steps):
+        here = _step_of(values, step)
+        fraction, unknown = _companion_slice(companion, step)
+        if here.shape != fraction.shape:
+            reporter.note(
+                f"Not checked against '{companion.variable}': its grid differs"
+                f" from this file's."
+            )
+            return
+        no_ice = np.logical_and(
+            np.logical_and(~unknown, ~_step_of(missing, step)), fraction == 0.0
+        )
+        nonzero_without_ice += int(np.logical_and(no_ice, here != 0.0).sum())
+        total += here.size
+
+    if nonzero_without_ice:
+        report = (
+            reporter.warning
+            if criteria.get("margin_severity") == "warning"
+            else reporter.error
+        )
+        report(
+            f"variable '{ivar}' is not 0 in"
+            f" {_count_phrase(nonzero_without_ice, total)} where"
+            f" '{companion.variable}' is 0. The flux must be 0 where there is"
+            f" no ice for it to be beneath."
+        )
+
+
 def _companion_slice(companion, step):
     """The companion's values for one time step, and where it says nothing.
 
@@ -2282,8 +2352,8 @@ def _check_footprint_matches(reporter, ds, ivar, companion) -> None:
     They are missing in exactly one place -- outside it -- so their missing
     masks ought to be identical.  A warning rather than an error because some
     of them come from forcing or reference datasets whose footprint is
-    legitimately wider than the ice model's: acabf over ice-free ground,
-    hfgeoubed and refgeoid over the whole grid.
+    legitimately wider than the ice model's: hfgeoubed and refgeoid over the
+    whole grid.
     """
     is_fill, is_nonfinite = _missing_masks(ds, ivar)
     missing = np.logical_or(is_fill, is_nonfinite)
@@ -2555,7 +2625,7 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
     # defined -- and some by name, because a particular pair or triple of them
     # has to agree about the ice sheet.  A variable can be both: orog is
     # defined throughout the domain and is also base plus thickness.
-    by_name = ivar in ("sftgif", "lithk", "orog", "base")
+    by_name = ivar in ("sftgif", "lithk", "orog", "base", *ZERO_WITHOUT_MASK)
     if ivar not in ds or (
         mask_name is None and policy != "outside_domain" and not by_name
     ):
@@ -2614,6 +2684,11 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
         against(
             ["topg", "sftgrf", "sftflf"],
             lambda b, g, f: _check_base_against_bed(reporter, ds, ivar, b, g, f),
+        )
+    elif ivar in ZERO_WITHOUT_MASK:
+        against(
+            [ZERO_WITHOUT_MASK[ivar]],
+            lambda c: _check_zero_without_ice(reporter, ds, ivar, criteria, c),
         )
 
     if reporter.total_errors + reporter.total_warnings == findings_before:
