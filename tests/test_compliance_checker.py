@@ -639,6 +639,30 @@ def test_checker_reports_historical_time_range_violation(case_dir):
     )
 
 
+def test_checker_accepts_an_ssp534_over_run(tmp_path):
+    """The overshoot scenario of E001 and E002 runs 2015-2300."""
+    generate_test_files.create_netcdf_file(
+        None,
+        grid_name="GrIS_16000m",
+        scenario="ssp534-over",
+        start_year=2015,
+        nyears=286,
+        include_scalars=True,
+        include_xyt=False,
+        set_counter="E001",
+        output_root=tmp_path / "gen",
+    )
+    core_dir = tmp_path / "gen" / "GrIS" / "ISMIP7" / "SYNTH1" / "CORE" / "E001"
+
+    summary = run_checker(core_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert (
+        "covering nominal years 2015-2300, as experiment 'ssp534-over'"
+        " requires: OK" in summary["log_text"]
+    )
+
+
 def generate_ocx_run(root: Path, start_year: int, include_xyt: bool) -> Path:
     """An OCX run ending in 2025, with NONE in the ESM field."""
     generate_test_files.create_netcdf_file(
