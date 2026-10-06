@@ -639,14 +639,17 @@ def test_checker_reports_historical_time_range_violation(case_dir):
     )
 
 
-def test_checker_accepts_an_ssp534_over_run(tmp_path):
-    """The overshoot scenario of E001 and E002 runs 2015-2300."""
+@pytest.mark.parametrize(
+    ("scenario", "end_year"), [("ssp534-over", 2300), ("ssp245", 2100)]
+)
+def test_checker_accepts_an_esm_experiment_scenario(tmp_path, scenario, end_year):
+    """Scenarios forced only in the ESM experiments, not in the core ones."""
     generate_test_files.create_netcdf_file(
         None,
         grid_name="GrIS_16000m",
-        scenario="ssp534-over",
+        scenario=scenario,
         start_year=2015,
-        nyears=286,
+        nyears=end_year - 2015 + 1,
         include_scalars=True,
         include_xyt=False,
         set_counter="E001",
@@ -658,7 +661,7 @@ def test_checker_accepts_an_ssp534_over_run(tmp_path):
 
     assert summary["total_errors"] == 0, summary["log_text"]
     assert (
-        "covering nominal years 2015-2300, as experiment 'ssp534-over'"
+        f"covering nominal years 2015-{end_year}, as experiment '{scenario}'"
         " requires: OK" in summary["log_text"]
     )
 
