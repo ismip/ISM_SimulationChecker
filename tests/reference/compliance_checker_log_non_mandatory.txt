@@ -145,6 +145,7 @@ ATTRIBUTE Tests
  - Fill value attributes: OK
  - Dtype attributes: OK
  - Packing attributes: OK
+ - Reference geoid attribute: OK
 
 ----------------------------------------------------------
 historical - deltag - File:deltag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc

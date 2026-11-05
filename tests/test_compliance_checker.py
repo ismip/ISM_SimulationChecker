@@ -446,6 +446,77 @@ def test_non_mandatory_warning_is_scoped_to_the_selected_variable_list(xyt_case_
     assert all("variable(s): ['limg']." in line for line in lines)
 
 
+def set_variable_attribute(file_path: Path, attr_name: str, value) -> None:
+    """Set an attribute of the main variable, or delete it when value is None."""
+    variable_name = file_path.name.split("_")[0]
+    with netCDF4.Dataset(file_path, "a") as dataset:
+        variable = dataset.variables[variable_name]
+        if value is None:
+            variable.delncattr(attr_name)
+        else:
+            variable.setncattr(attr_name, value)
+
+
+@pytest.mark.parametrize("value", checker.REFERENCE_GEOID_VALUES)
+def test_checker_accepts_each_reference_geoid_value(xyt_case_dir, value):
+    set_variable_attribute(
+        dataset_for_variable(xyt_case_dir, "deltag"), "reference_geoid", value
+    )
+    dataset_for_variable(xyt_case_dir, "refgeoid").unlink()
+    write_not_modelled(xyt_case_dir, "refgeoid\n")
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_warnings"] == 0, summary["log_text"]
+    assert "Reference geoid attribute: OK" in summary["log_text"]
+
+
+def test_refgeoid_file_stands_in_for_the_reference_geoid_attribute(xyt_case_dir):
+    """The GIA protocol lets a submitted refgeoid replace the attribute."""
+    set_variable_attribute(
+        dataset_for_variable(xyt_case_dir, "deltag"), "reference_geoid", None
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_warnings"] == 0, summary["log_text"]
+    assert "Reference geoid attribute: OK" in summary["log_text"]
+
+
+def test_checker_warns_about_deltag_without_a_reference_geoid(xyt_case_dir):
+    set_variable_attribute(
+        dataset_for_variable(xyt_case_dir, "deltag"), "reference_geoid", None
+    )
+    dataset_for_variable(xyt_case_dir, "refgeoid").unlink()
+    write_not_modelled(xyt_case_dir, "refgeoid\n")
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_attr_warnings"] == 1
+    assert (
+        "WARNING (attributes): variable 'deltag' has no 'reference_geoid'"
+        " attribute and there is no refgeoid file beside it."
+        in summary["log_text"]
+    )
+
+
+def test_checker_warns_about_an_unlisted_reference_geoid(xyt_case_dir):
+    set_variable_attribute(
+        dataset_for_variable(xyt_case_dir, "deltag"), "reference_geoid", "EGM2008"
+    )
+
+    summary = run_xyt_checker(xyt_case_dir)
+
+    assert summary["total_errors"] == 0, summary["log_text"]
+    assert summary["total_attr_warnings"] == 1
+    assert (
+        "WARNING (attributes): variable 'deltag' attribute 'reference_geoid'"
+        " is 'EGM2008', expected one of 'EIGEN-6C4', 'GL04C',"
+        in summary["log_text"]
+    )
+
+
 def test_a_file_with_warnings_and_no_errors_still_passes(xyt_case_dir):
     """Warnings never change a verdict, at any level of the report."""
     dataset_for_variable(xyt_case_dir, "litemp").unlink()

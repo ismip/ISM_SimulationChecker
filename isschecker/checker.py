@@ -95,6 +95,8 @@
 #    - Main variable is single-precision float (float32 / f4); so is the time
 #      coordinate (warning -- one number per record cannot inflate a file).
 #    - scale_factor and add_offset are not allowed on the main variable.
+#    - deltag has a reference_geoid attribute with one of the values the GIA
+#      protocol lists, or a refgeoid file beside it.  (warning)
 #
 # A file is checked as far as it can be.  A naming problem stops the other
 # checks only when it leaves them nothing to read -- a missing x or y dimension,
@@ -2925,6 +2927,49 @@ def _check_snapshot_time_axis(
     )
 
 
+# The values the GIA and sea-level protocol (v4, Table 1) gives for deltag's
+# reference_geoid attribute, plus the "unknown" its use case 2 falls back on
+# when a paleo spinup leaves the reference geoid undetermined.  The protocol
+# spells the variable ref_geoid in the third value; the data request calls it
+# refgeoid, and the value is taken as the protocol writes it.
+REFERENCE_GEOID_VALUES = (
+    "EIGEN-6C4",
+    "GL04C",
+    "custom, defined by ref_geoid variable",
+    "unknown",
+)
+
+
+def _check_reference_geoid(
+    reporter: Reporter, ds, ivar: str, source_path: str, file_name: str
+) -> None:
+    """Check that deltag says which geoid it is relative to.
+
+    The GIA protocol asks for a reference_geoid attribute on deltag, which may
+    be left out when a refgeoid file is submitted beside it.  Both cases are
+    warnings rather than errors: a refgeoid file not in the directory being
+    checked may still be submitted, and an unlisted value may still name the
+    geoid in a way a reader can follow.
+    """
+    warnings_before = reporter.total_warnings
+    value = ds[ivar].attrs.get("reference_geoid")
+    accepted = ", ".join(f"'{v}'" for v in REFERENCE_GEOID_VALUES)
+    if value is None:
+        if _companion_path(source_path, file_name, "refgeoid") is None:
+            reporter.warning(
+                f"variable '{ivar}' has no 'reference_geoid' attribute and"
+                f" there is no refgeoid file beside it. Add the attribute,"
+                f" with one of {accepted}, or submit refgeoid."
+            )
+    elif str(value) not in REFERENCE_GEOID_VALUES:
+        reporter.warning(
+            f"variable '{ivar}' attribute 'reference_geoid' is '{value}',"
+            f" expected one of {accepted}."
+        )
+    if reporter.total_warnings == warnings_before:
+        reporter.ok("Reference geoid attribute: OK")
+
+
 def _check_attributes(
     reporter: Reporter,
     ds,
@@ -2934,6 +2979,8 @@ def _check_attributes(
     isscalar: bool,
     var_type: str,
     region: str,
+    source_path: str,
+    file_name: str,
 ) -> None:
     reporter.write("ATTRIBUTE Tests\n")
 
@@ -3094,6 +3141,10 @@ def _check_attributes(
     if reporter.total_errors == errors_before:
         reporter.ok("Packing attributes: OK")
 
+    # Sub-test 7: deltag names the geoid it is relative to
+    if ivar == "deltag" and ivar in ds:
+        _check_reference_geoid(reporter, ds, ivar, source_path, file_name)
+
 
 def _run_variable_checks(
     reporter: Reporter,
@@ -3175,7 +3226,8 @@ def _run_variable_checks(
     )
 
     _check_attributes(
-        attr_reporter, ds, ivar, ismip_meta, var_index, isscalar, var_type, region
+        attr_reporter, ds, ivar, ismip_meta, var_index, isscalar, var_type,
+        region, source_path, file_name,
     )
 
 

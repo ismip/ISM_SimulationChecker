@@ -574,6 +574,12 @@ def create_netcdf_file(output_file, grid_name='GrIS_16000m', scenario='ctrl', st
                     }
                 )
             }
+            # The GIA protocol asks deltag to name the geoid it is relative
+            # to.  The synthetic geoid is the refgeoid file written alongside.
+            if var_name == 'deltag':
+                data_vars[var_name][2]['reference_geoid'] = (
+                    'custom, defined by ref_geoid variable'
+                )
 
             # Add time bounds for flux variables (units: days since 1850)
             if time_bounds is not None:
