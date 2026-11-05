@@ -394,6 +394,46 @@ def test_a_surface_that_is_not_base_plus_thickness_is_an_error(case_dir):
     assert summary["total_consistency_errors"] >= 1
 
 
+def open_ocean_of(geometry):
+    """Cells inside the domain with no ice and the bed below sea level."""
+    open_ocean = np.logical_and.reduce(
+        [geometry["domain"], geometry["lithk"] == 0.0, geometry["topg"] < 0.0]
+    )
+    assert open_ocean.any(), "the synthetic ice sheet should have open ocean"
+    return open_ocean
+
+
+def test_an_ice_base_on_the_bed_over_open_ocean_is_accepted(case_dir):
+    """Issue #45: over open ocean the surface is 0 and the ice base may be 0 or
+    the bed, so orog = base + lithk does not hold there and is not checked."""
+    geometry = geometry_of(case_dir)
+    open_ocean = open_ocean_of(geometry)
+    set_where(dataset_for_variable(case_dir, "base"), open_ocean,
+              geometry["topg"][open_ocean])
+
+    summary = run(case_dir)
+
+    assert summary["total_consistency_errors"] == 0, summary["log_text"]
+    assert summary["total_consistency_warnings"] == 0, summary["log_text"]
+
+
+def test_a_surface_on_the_bed_over_open_ocean_is_a_warning(case_dir):
+    """What issue #45 describes: orog = base = topg over open ocean.  The
+    finding says the surface is sea level there, not that the identity fails."""
+    geometry = geometry_of(case_dir)
+    open_ocean = open_ocean_of(geometry)
+    for name in ("base", "orog"):
+        set_where(dataset_for_variable(case_dir, name), open_ocean,
+                  geometry["topg"][open_ocean])
+
+    summary = run(case_dir)
+
+    assert summary["total_consistency_errors"] == 0, summary["log_text"]
+    assert summary["total_consistency_warnings"] == 1, summary["log_text"]
+    assert "is not 0 over open ocean" in summary["log_text"]
+    assert "does not equal 'base' + 'lithk'" not in summary["log_text"]
+
+
 def test_an_ice_base_below_the_bed_is_an_error(case_dir):
     """Impossible whatever the masks say, so it is checked everywhere."""
     geometry = geometry_of(case_dir)

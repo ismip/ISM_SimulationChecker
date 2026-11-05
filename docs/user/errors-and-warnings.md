@@ -116,9 +116,9 @@ the name but the variable, and compares the two.
   0. Where there is some grounded or floating ice, any value is accepted,
   including 0. For now this is a warning (see below).
 - sftgrf + sftflf equals sftgif; lithk is greater than zero exactly where
-  sftgif is; orog equals base + lithk; and the ice base rests on the bed
-  where sftgrf is 1 and lies above it where sftflf is 1. None of these needs
-  an assumed density.
+  sftgif is; orog equals base + lithk, except over open ocean (see below);
+  and the ice base rests on the bed where sftgrf is 1 and lies above it
+  where sftflf is 1. None of these needs an assumed density.
 
 **If a file a check needs is not there, the check says so and is skipped**,
 so a run scoped to the scalars, or a model that does not produce a mask yet,
@@ -129,6 +129,31 @@ glaciated ones, and assume that the fields use the same averaging convention
 there. The grounded and floating comparisons against the bed are the
 exception: they are made only in cells that are wholly one or the other,
 since in a half-and-half cell the mean ice base sits somewhere between.
+
+### Surface and base where there is no ice
+
+orog, base and topg are heights above sea level. For ISMIP7, sea level is
+the model's own geoid, which changes with time if the model couples to
+sea level (ISMIP7 GIA and sea-level protocol). Where there is no ice (lithk
+is 0):
+
+| | orog | base |
+|---|---|---|
+| Ice-free land (topg ≥ 0) | topg | topg |
+| Open ocean (topg < 0) | 0 | 0 or topg |
+
+Over open ocean, orog = base + lithk is not checked, because base may be
+topg there. Instead, orog must be 0. A model that writes orog = topg over
+open ocean gets a warning in the orog file, and an error because those
+values are below the minimum for orog:
+
+```
+ - ERROR: The minimum value (-3500.0) is out of range. Min value accepted: 0.0; 7280 of 12516 value(s) (58.2%) are below it.
+ - WARNING: variable 'orog' is not 0 over open ocean ('lithk' is 0 and 'topg' is below 0) in 7280 of 38372 value(s) (19%), by up to 3.5e+03 m. Over open ocean the surface elevation is sea level, 0.
+```
+
+The fix for both is to write 0 over open ocean.
+
 
 ### Severities that will change
 

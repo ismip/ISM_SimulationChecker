@@ -57,9 +57,11 @@
 #    - libmassbfgr is 0 where sftgrf is 0, and libmassbffl is 0 where sftflf
 #      is 0, at the severity 'margin_severity' names.
 #    - sftgrf + sftflf equals sftgif; lithk is greater than 0 exactly where
-#      sftgif is; orog equals base + lithk; and the ice base rests on the bed
-#      where sftgrf is 1 and lies above it where sftflf is 1.  No densities:
-#      all of this is submitted geometry compared against itself.
+#      sftgif is; orog equals base + lithk, except over open ocean (lithk 0,
+#      topg below 0), where orog is 0 (warning) and base may be 0 or topg; and
+#      the ice base rests on the bed where sftgrf is 1 and lies above it where
+#      sftflf is 1.  No densities: all of this is submitted geometry compared
+#      against itself.
 #    - The companion file is found by name, every field matching but the
 #      variable.  When it is absent the check says so and is skipped, so a
 #      submission can still be checked a part at a time.
@@ -2500,8 +2502,9 @@ def _check_thickness_matches_mask(reporter, ds, ivar, criteria, companion) -> No
 ELEVATION_TOLERANCE = 1.0e-2
 
 
-def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
-    """Surface elevation is the ice base plus the ice thickness.
+def _check_surface_geometry(reporter, ds, ivar, base, thickness, bed) -> None:
+    """Surface elevation is the ice base plus the ice thickness, and sea level
+    over open ocean.
 
     Checked in every cell rather than only in fully glaciated ones.  The
     identity is linear, so it survives cell-mean averaging: it holds pointwise,
@@ -2509,34 +2512,66 @@ def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
     thing it assumes is that they share an averaging convention in a partly
     glaciated cell, which the data request should say and does not yet.
 
-    It also settles the ice-free case without a rule of its own: where the
-    thickness is zero it says the surface is the base, and the bed comparison
-    says the base is the bed there.
+    Open ocean -- no ice, and the bed below sea level -- is the exception
+    (issue #45).  There the surface is sea level, 0, and the ice base is
+    either 0 or the bed: both are reasonable ways to say "no ice here", and
+    the data request does not choose.  So the identity is not checked there,
+    and orog is compared with 0 instead.  Heights are measured from the
+    model's own time-evolving geoid (the ISMIP7 GIA protocol), which is the
+    sea surface, so this holds with sea-level coupling too.  It is a warning:
+    a model that reports heights from a fixed reference geoid puts the sea
+    surface somewhere else, and that is a question about its datum rather
+    than a contradiction.
+
+    On ice-free land the identity says the surface is the base, and the bed
+    comparison says nothing more: the base is not below the bed.
     """
     values, missing, steps = _field_and_steps(ds, ivar)
     disagreeing = 0
     worst = 0.0
+    off_sea_level = 0
+    worst_off_sea_level = 0.0
     total = 0
 
     for step in range(steps):
         here = _step_of(values, step)
         base_values, base_unknown = _companion_slice(base, step)
         thickness_values, thickness_unknown = _companion_slice(thickness, step)
-        if here.shape != base_values.shape or here.shape != thickness_values.shape:
+        bed_values, bed_unknown = _companion_slice(bed, step)
+        if (
+            here.shape != base_values.shape
+            or here.shape != thickness_values.shape
+            or here.shape != bed_values.shape
+        ):
             reporter.note(
-                "Not checked against 'base' and 'lithk': their grids differ"
-                " from this file's."
+                "Not checked against 'base', 'lithk' and 'topg': their grids"
+                " differ from this file's."
             )
             return
-        known = ~np.logical_or(
-            np.logical_or(base_unknown, thickness_unknown),
-            _step_of(missing, step),
+        here_known = ~_step_of(missing, step)
+        open_ocean = np.logical_and.reduce(
+            [
+                here_known,
+                ~thickness_unknown,
+                ~bed_unknown,
+                thickness_values == 0.0,
+                bed_values < 0.0,
+            ]
+        )
+        known = np.logical_and.reduce(
+            [here_known, ~base_unknown, ~thickness_unknown, ~open_ocean]
         )
         difference = np.where(
             known, np.abs(base_values + thickness_values - here), 0.0
         )
         disagreeing += int((difference > ELEVATION_TOLERANCE).sum())
         worst = max(worst, float(difference.max()))
+
+        above_sea_level = np.where(open_ocean, np.abs(here), 0.0)
+        off_sea_level += int((above_sea_level > ELEVATION_TOLERANCE).sum())
+        worst_off_sea_level = max(
+            worst_off_sea_level, float(above_sea_level.max())
+        )
         total += here.size
 
     if disagreeing:
@@ -2544,6 +2579,13 @@ def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
             f"variable '{ivar}' does not equal 'base' + 'lithk' in"
             f" {_count_phrase(disagreeing, total)}, by up to {worst:.3g} m."
             f" Surface elevation is the ice base plus the ice thickness."
+        )
+    if off_sea_level:
+        reporter.warning(
+            f"variable '{ivar}' is not 0 over open ocean ('lithk' is 0 and"
+            f" 'topg' is below 0) in {_count_phrase(off_sea_level, total)},"
+            f" by up to {worst_off_sea_level:.3g} m. Over open ocean the"
+            f" surface elevation is sea level, 0."
         )
 
 
@@ -2677,8 +2719,8 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
         )
     elif ivar == "orog":
         against(
-            ["base", "lithk"],
-            lambda b, h: _check_surface_geometry(reporter, ds, ivar, b, h),
+            ["base", "lithk", "topg"],
+            lambda b, h, t: _check_surface_geometry(reporter, ds, ivar, b, h, t),
         )
     elif ivar == "base":
         against(
