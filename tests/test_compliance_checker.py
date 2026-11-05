@@ -436,7 +436,14 @@ def test_non_mandatory_warning_is_scoped_to_the_selected_variable_list(xyt_case_
         version="tests",
     )
 
-    assert "carries no files for the non-mandatory" not in summary["log_text"]
+    # limg is the one non-mandatory scalar, and this directory has no scalar
+    # files at all; the x,y,t variables missing beside it are not named.
+    lines = [
+        line for line in summary["log_text"].splitlines()
+        if "carries no files for the non-mandatory" in line
+    ]
+    assert lines
+    assert all("variable(s): ['limg']." in line for line in lines)
 
 
 def test_a_file_with_warnings_and_no_errors_still_passes(xyt_case_dir):
@@ -1086,6 +1093,8 @@ def test_checker_warns_about_unexpected_variable_in_file(case_dir):
     ask for, so this is a 'look at this', not a 'fix this'.
     """
     add_variable_to_file(dataset_for_variable(case_dir, "lim"), "mask")
+    # The baseline carries no limg, which would be a second warning.
+    write_not_modelled(case_dir, "limg\n")
 
     summary = run_checker(case_dir)
 
@@ -1517,7 +1526,7 @@ def test_shipped_range_severities():
 SHIPPED_FILL_POLICIES = {
     "forbidden": {
         "lithk", "dlithkdt", "sftgif", "sftgrf", "sftflf", "acabf",
-        "libmassbfgr", "libmassbffl", "licalvf", "ligroundf", "lifmassbf", "lim", "limnsw", "iareagr", "iareafl",
+        "libmassbfgr", "libmassbffl", "licalvf", "ligroundf", "lifmassbf", "lim", "limnsw", "limg", "iareagr", "iareafl",
         "tendacabf", "tendlibmassbfgr", "tendlibmassbffl", "tendlicalvf",
         "tendlifmassbf", "tendligroundf",
     },
