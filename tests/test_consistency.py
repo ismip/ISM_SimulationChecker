@@ -403,35 +403,35 @@ def open_ocean_of(geometry):
     return open_ocean
 
 
-def test_an_ice_base_on_the_bed_over_open_ocean_is_accepted(case_dir):
-    """Issue #45: over open ocean the surface is 0 and the ice base may be 0 or
-    the bed, so orog = base + lithk does not hold there and is not checked."""
+def test_an_ice_base_on_the_bed_over_open_ocean_is_an_error(case_dir):
+    """Issue #45: over open ocean the ice base is sea level, 0, the limit of an
+    ice shelf thinning to nothing.  The surface stays at 0, so orog = base +
+    lithk fails there as well."""
     geometry = geometry_of(case_dir)
     open_ocean = open_ocean_of(geometry)
     set_where(dataset_for_variable(case_dir, "base"), open_ocean,
               geometry["topg"][open_ocean])
 
-    summary = run(case_dir)
+    log = run(case_dir)["log_text"]
 
-    assert summary["total_consistency_errors"] == 0, summary["log_text"]
-    assert summary["total_consistency_warnings"] == 0, summary["log_text"]
+    assert "variable 'base' is not 0 over open ocean" in log
+    assert "does not equal 'base' + 'lithk'" in log
 
 
-def test_a_surface_on_the_bed_over_open_ocean_is_a_warning(case_dir):
+def test_orog_and_base_on_the_bed_over_open_ocean_are_errors(case_dir):
     """What issue #45 describes: orog = base = topg over open ocean.  The
-    finding says the surface is sea level there, not that the identity fails."""
+    identity holds, so the findings are that base is not 0 and that orog is
+    below its minimum."""
     geometry = geometry_of(case_dir)
     open_ocean = open_ocean_of(geometry)
     for name in ("base", "orog"):
         set_where(dataset_for_variable(case_dir, name), open_ocean,
                   geometry["topg"][open_ocean])
 
-    summary = run(case_dir)
+    log = run(case_dir)["log_text"]
 
-    assert summary["total_consistency_errors"] == 0, summary["log_text"]
-    assert summary["total_consistency_warnings"] == 1, summary["log_text"]
-    assert "is not 0 over open ocean" in summary["log_text"]
-    assert "does not equal 'base' + 'lithk'" not in summary["log_text"]
+    assert "variable 'base' is not 0 over open ocean" in log
+    assert "does not equal 'base' + 'lithk'" not in log
 
 
 def test_an_ice_base_below_the_bed_is_an_error(case_dir):

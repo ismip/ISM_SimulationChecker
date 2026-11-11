@@ -57,11 +57,10 @@
 #    - libmassbfgr is 0 where sftgrf is 0, and libmassbffl is 0 where sftflf
 #      is 0, at the severity 'margin_severity' names.
 #    - sftgrf + sftflf equals sftgif; lithk is greater than 0 exactly where
-#      sftgif is; orog equals base + lithk, except over open ocean (lithk 0,
-#      topg below 0), where orog is 0 (warning) and base may be 0 or topg; and
-#      the ice base rests on the bed where sftgrf is 1 and lies above it where
-#      sftflf is 1.  No densities: all of this is submitted geometry compared
-#      against itself.
+#      sftgif is; orog equals base + lithk; the ice base rests on the bed
+#      where sftgrf is 1 and lies above it where sftflf is 1; and over open
+#      ocean (no ice, topg below 0) the ice base is 0.  No densities:
+#      all of this is submitted geometry compared against itself.
 #    - The companion file is found by name, every field matching but the
 #      variable.  When it is absent the check says so and is skipped, so a
 #      submission can still be checked a part at a time.
@@ -2502,9 +2501,8 @@ def _check_thickness_matches_mask(reporter, ds, ivar, criteria, companion) -> No
 ELEVATION_TOLERANCE = 1.0e-2
 
 
-def _check_surface_geometry(reporter, ds, ivar, base, thickness, bed) -> None:
-    """Surface elevation is the ice base plus the ice thickness, and sea level
-    over open ocean.
+def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
+    """Surface elevation is the ice base plus the ice thickness.
 
     Checked in every cell rather than only in fully glaciated ones.  The
     identity is linear, so it survives cell-mean averaging: it holds pointwise,
@@ -2512,66 +2510,34 @@ def _check_surface_geometry(reporter, ds, ivar, base, thickness, bed) -> None:
     thing it assumes is that they share an averaging convention in a partly
     glaciated cell, which the data request should say and does not yet.
 
-    Open ocean -- no ice, and the bed below sea level -- is the exception
-    (issue #45).  There the surface is sea level, 0, and the ice base is
-    either 0 or the bed: both are reasonable ways to say "no ice here", and
-    the data request does not choose.  So the identity is not checked there,
-    and orog is compared with 0 instead.  Heights are measured from the
-    model's own time-evolving geoid (the ISMIP7 GIA protocol), which is the
-    sea surface, so this holds with sea-level coupling too.  It is a warning:
-    a model that reports heights from a fixed reference geoid puts the sea
-    surface somewhere else, and that is a question about its datum rather
-    than a contradiction.
-
-    On ice-free land the identity says the surface is the base, and the bed
-    comparison says nothing more: the base is not below the bed.
+    Where there is no ice it says the surface is the base.  What the base is
+    there is _check_base_against_bed's business: 0 over open ocean (issue
+    #45), and not below the bed anywhere.
     """
     values, missing, steps = _field_and_steps(ds, ivar)
     disagreeing = 0
     worst = 0.0
-    off_sea_level = 0
-    worst_off_sea_level = 0.0
     total = 0
 
     for step in range(steps):
         here = _step_of(values, step)
         base_values, base_unknown = _companion_slice(base, step)
         thickness_values, thickness_unknown = _companion_slice(thickness, step)
-        bed_values, bed_unknown = _companion_slice(bed, step)
-        if (
-            here.shape != base_values.shape
-            or here.shape != thickness_values.shape
-            or here.shape != bed_values.shape
-        ):
+        if here.shape != base_values.shape or here.shape != thickness_values.shape:
             reporter.note(
-                "Not checked against 'base', 'lithk' and 'topg': their grids"
-                " differ from this file's."
+                "Not checked against 'base' and 'lithk': their grids differ"
+                " from this file's."
             )
             return
-        here_known = ~_step_of(missing, step)
-        open_ocean = np.logical_and.reduce(
-            [
-                here_known,
-                ~thickness_unknown,
-                ~bed_unknown,
-                thickness_values == 0.0,
-                bed_values < 0.0,
-            ]
-        )
-        known = np.logical_and.reduce(
-            [here_known, ~base_unknown, ~thickness_unknown, ~open_ocean]
+        known = ~np.logical_or(
+            np.logical_or(base_unknown, thickness_unknown),
+            _step_of(missing, step),
         )
         difference = np.where(
             known, np.abs(base_values + thickness_values - here), 0.0
         )
         disagreeing += int((difference > ELEVATION_TOLERANCE).sum())
         worst = max(worst, float(difference.max()))
-
-        above_sea_level = np.where(open_ocean, np.abs(here), 0.0)
-        off_sea_level += int((above_sea_level > ELEVATION_TOLERANCE).sum())
-        worst_off_sea_level = max(
-            worst_off_sea_level, float(above_sea_level.max())
-        )
         total += here.size
 
     if disagreeing:
@@ -2579,13 +2545,6 @@ def _check_surface_geometry(reporter, ds, ivar, base, thickness, bed) -> None:
             f"variable '{ivar}' does not equal 'base' + 'lithk' in"
             f" {_count_phrase(disagreeing, total)}, by up to {worst:.3g} m."
             f" Surface elevation is the ice base plus the ice thickness."
-        )
-    if off_sea_level:
-        reporter.warning(
-            f"variable '{ivar}' is not 0 over open ocean ('lithk' is 0 and"
-            f" 'topg' is below 0) in {_count_phrase(off_sea_level, total)},"
-            f" by up to {worst_off_sea_level:.3g} m. Over open ocean the"
-            f" surface elevation is sea level, 0."
         )
 
 
@@ -2597,11 +2556,20 @@ def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None
     Grounded and floating are only compared in cells that are wholly one or the
     other -- in a half-and-half cell the mean ice base sits somewhere between
     and nothing follows from it.
+
+    Over open ocean -- no ice, and the bed below sea level -- the ice base is
+    sea level, 0 (issue #45): the limit of an ice shelf thinning to nothing.
+    With orog = base + lithk, that puts the surface at 0 there too.  Heights
+    are measured from the model's own geoid (the ISMIP7 GIA protocol), so sea
+    level is 0 with or without sea-level coupling; the geoid's own change is
+    reported in deltag.
     """
     values, missing, steps = _field_and_steps(ds, ivar)
     below_bed = 0
     grounded_afloat = 0
     floating_aground = 0
+    off_sea_level = 0
+    worst_off_sea_level = 0.0
     total = 0
 
     for step in range(steps):
@@ -2632,6 +2600,21 @@ def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None
         floating_aground += int(
             np.logical_and(wholly_floating, above <= ELEVATION_TOLERANCE).sum()
         )
+        open_ocean = np.logical_and.reduce(
+            [
+                known,
+                ~grounded_unknown,
+                ~floating_unknown,
+                grounded_values == 0.0,
+                floating_values == 0.0,
+                bed_values < 0.0,
+            ]
+        )
+        from_sea_level = np.where(open_ocean, np.abs(here), 0.0)
+        off_sea_level += int((from_sea_level > ELEVATION_TOLERANCE).sum())
+        worst_off_sea_level = max(
+            worst_off_sea_level, float(from_sea_level.max())
+        )
         total += here.size
 
     if below_bed:
@@ -2651,6 +2634,14 @@ def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None
             f"variable '{ivar}' is not above 'topg' in"
             f" {_count_phrase(floating_aground, total)} that 'sftflf' says are"
             f" wholly floating. Floating ice does not rest on the bed."
+        )
+    if off_sea_level:
+        reporter.error(
+            f"variable '{ivar}' is not 0 over open ocean ('sftgrf' and"
+            f" 'sftflf' are 0 and 'topg' is below 0) in"
+            f" {_count_phrase(off_sea_level, total)}, by up to"
+            f" {worst_off_sea_level:.3g} m. Where there is no ice over the"
+            f" ocean, the ice base is sea level, 0."
         )
 
 
@@ -2719,8 +2710,8 @@ def _check_consistency(reporter, ds, ivar, criteria, source_path, file_name,
         )
     elif ivar == "orog":
         against(
-            ["base", "lithk", "topg"],
-            lambda b, h, t: _check_surface_geometry(reporter, ds, ivar, b, h, t),
+            ["base", "lithk"],
+            lambda b, h: _check_surface_geometry(reporter, ds, ivar, b, h),
         )
     elif ivar == "base":
         against(
