@@ -1,7 +1,7 @@
 long_name,Dim,Type,Variable Name,standard_name,units,Mandatory (yes/no),Comment,min_value_ais,max_value_ais,min_value_gris,max_value_gris,range_severity,fill_policy,margin_severity,fill_severity
 Ice thickness,"x,y,t",ST,lithk,land_ice_thickness,m,yes,Ice thickness of the ice sheet,0,5500,0,5000,error,forbidden,warning,
 Surface elevation,"x,y,t",ST,orog,surface_altitude,m,yes,Surface elevation of the ice sheet,0,5500,0,4500,error,outside_domain,,
-Bedrock elevation,"x,y,t",ST,topg,bedrock_altitude,m,yes,The bedrock topography (may change during the projections),-7000,5500,-4000,4000,error,outside_domain,,
+Bedrock elevation,"x,y,t",ST,topg,bedrock_altitude,m,yes,The bedrock topography with respect to the time-evolving modelled geoid (may change during the projections),-7000,5500,-4000,4000,error,outside_domain,,
 Ice base elevation,"x,y,t",ST,base,,m,yes,Should get standard name land_ice_temperature,-4000,4000,-4000,4000,error,outside_domain,,
 Geothermal heat flux,"x,y,t",FL,hfgeoubed,upward_geothermal_heat_flux_in_land_ice,W m-2,no,Geothermal Heat flux at the ice interface,0,0.3,0,0.3,warning,outside_domain,,
 Surface mass balance flux,"x,y,t",FL,acabf,land_ice_surface_specific_mass_balance_flux,kg m-2 s-1,yes,Surface Mass Balance flux,-0.0006,0.001,-0.0006,0.001,error,forbidden,,warning
@@ -28,11 +28,12 @@ Land ice area fraction,"x,y,t",ST,sftgif,land_ice_area_fraction,1,yes,"Fraction 
 Grounded ice sheet area fraction,"x,y,t",ST,sftgrf,grounded_ice_sheet_area_fraction,1,yes,"Fraction of grid cell covered by grounded ice sheet, where grounded indicates that the quantity correspond to the ice sheet that flows over bedrock",0,1,0,1,error,forbidden,,
 Floating ice sheet area fraction,"x,y,t",ST,sftflf,floating_ice_shelf_area_fraction,1,yes,Fraction of grid cell covered by ice sheet flowing over seawater,0,1,0,1,error,forbidden,,
 Thermal forcing at the ice base under floating ice shelves,"x,y,t",ST,thdrflf,,K,no,Thermal forcing (thermal driving) interpolated to the ice draft under floating ice shelves (fill value for purely grounded ice or not ice),-1,30,-1,30,error,outside_domain,,
-Anomaly in geopotential height from reference geoid,"x,y,t",ST,deltag,geopotential_height_anomaly,m,no,The change in geoid height should be relative to the reference geoid,-4000,4000,-4000,4000,error,outside_domain,,
-Reference geoid,"x,y",ST,refgeoid,geoid_height_above_reference_ellipsoid,m,no,This field is calculated with respect to the WGS84 reference ellipsoid,-500,500,-500,500,error,outside_domain,,
+Anomaly in geopotential height from reference geoid,"x,y,t",ST,deltag,geopotential_height_anomaly,m,no,"The change in geoid height should be relative to the reference geoid. Only for models that calculate geoid changes. Should have a reference_geoid attribute: EIGEN-6C4 (BedMachine), GL04C (Bedmap) or custom, defined by ref_geoid variable",-4000,4000,-4000,4000,error,outside_domain,,
+Reference geoid,"x,y",ST,refgeoid,geoid_height_above_reference_ellipsoid,m,no,"This field is calculated with respect to the WGS84 reference ellipsoid. Only required if the reference geoid is not EIGEN-6C4 (BedMachine) or GL04C (Bedmap)",-500,500,-500,500,error,outside_domain,,
 Ice temperature,"x,y,z,t",ST,litemp,land_ice_temperature,K,no,"3D temperature snapshots at (1900 if in historical), initial state, 2014, 2100, 2200, and 2300. Output on the model native vertical coordinate. Only for models that have 3D temperature calculation",183,274,183,274,error,no_ice,warning,
 Total ice mass,t,ST,lim,land_ice_mass,kg,yes,"spatial integration, volume times density",0,1.00E+25,0,1.00E+25,error,forbidden,,
 Mass above floatation,t,ST,limnsw,land_ice_mass_not_displacing_sea_water,kg,yes,"spatial integration, volume times density",0,1.00E+25,0,1.00E+25,error,forbidden,,
+Grounded ice mass,t,ST,limg,,kg,no,"spatial integration, volume times density, grounded ice only. Only for models with bedrock adjustment. Should get standard name: land_ice_mass_grounded",0,1.00E+25,0,1.00E+25,error,forbidden,,
 Grounded ice area,t,ST,iareagr,grounded_ice_sheet_area,m^2,yes,spatial integration,0,1.00E+25,0,1.00E+25,error,forbidden,,
 Floating ice area,t,ST,iareafl,floating_ice_shelf_area,m^2,yes,spatial integration,0,1.00E+25,0,1.00E+25,error,forbidden,,
 Total SMB flux,t,FL,tendacabf,tendency_of_land_ice_mass_due_to_surface_mass_balance,kg s-1,yes,spatial integration,-1.00E+09,1.00E+09,-1.00E+09,1.00E+09,error,forbidden,,

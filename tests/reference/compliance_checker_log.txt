@@ -42,7 +42,7 @@ Hint: Use Cltr+F to look for specific problems.
  **********************************************************
 
  Mandatory variables Test: historical : all mandatory variables exist.
-WARNING: experiment historical carries no files for the non-mandatory variable(s): ['hfgeoubed', 'xvelsurf', 'yvelsurf', 'zvelsurf', 'xvelbase', 'yvelbase', 'zvelbase', 'litemptop', 'litempavg', 'litempbotgr', 'litempbotfl', 'thdrflf', 'deltag', 'refgeoid', 'litemp']. This is expected if your model does not represent them; it is listed only so that a variable lost from a submission does not pass unnoticed.
+WARNING: experiment historical carries no files for the non-mandatory variable(s): ['hfgeoubed', 'xvelsurf', 'yvelsurf', 'zvelsurf', 'xvelbase', 'yvelbase', 'zvelbase', 'litemptop', 'litempavg', 'litempbotgr', 'litempbotfl', 'thdrflf', 'deltag', 'refgeoid', 'litemp', 'limg']. This is expected if your model does not represent them; it is listed only so that a variable lost from a submission does not pass unnoticed.
 
 Experiment: historical - File: acabf_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
 

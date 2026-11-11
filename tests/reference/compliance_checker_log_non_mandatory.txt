@@ -10,7 +10,7 @@ source: https://github.com/ismip/ISM_SimulationChecker
 Verified directory: <source-path>
 ------------------------------------------------------------------------------------
 1 experiments checked.
-42 files checked.
+43 files checked.
 
 0 error(s) detected.
   - Variable presence  : 0 error(s)
@@ -145,6 +145,7 @@ ATTRIBUTE Tests
  - Fill value attributes: OK
  - Dtype attributes: OK
  - Packing attributes: OK
+ - Reference geoid attribute: OK
 
 ----------------------------------------------------------
 historical - deltag - File:deltag_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
@@ -486,6 +487,35 @@ ATTRIBUTE Tests
 
 ----------------------------------------------------------
 historical - lim - File:lim_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+No errors. Good job !
+No warnings.
+----------------------------------------------------------
+
+Experiment: historical - File: limg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
+
+NAMING Tests
+ - Filename year range 2013-2014 is well formed: OK
+ - Variable 'limg' from the file name is present in the file: OK
+ - No unexpected variables in the file: OK
+ - Variable 'limg' dimensions (time) match the requested t: OK
+** Tested Variable: limg
+
+NUMERICAL Tests
+ - The unit is correct: kg
+ - Missing values: OK
+TIME Tests
+ - Time is a record (unlimited) dimension: OK
+ - Time axis: 2 annual ST time step(s) covering nominal years 2013-2014, as experiment 'historical' requires: OK
+ATTRIBUTE Tests
+ - Global attributes: OK
+ - Coordinate attributes: OK
+ - Variable attributes: OK
+ - Fill value attributes: OK
+ - Dtype attributes: OK
+ - Packing attributes: OK
+
+----------------------------------------------------------
+historical - limg - File:limg_GrIS_ISMIP7_SYNTH1_m001_CESM2-WACCM_f001_historical_C001_2013-2014.nc
 No errors. Good job !
 No warnings.
 ----------------------------------------------------------

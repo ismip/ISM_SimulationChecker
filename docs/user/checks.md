@@ -87,6 +87,11 @@ standard_name matches the data request; _FillValue is the NetCDF4 default
 for the variable's dtype; the variable and the time coordinate are float32
 (a warning for time); and scale_factor and add_offset are not used.
 
+deltag has a reference_geoid attribute that names the geoid it is relative
+to: EIGEN-6C4 (BedMachine), GL04C (Bedmap), "custom, defined by ref_geoid
+variable" or "unknown". The attribute is not needed if a refgeoid file is in
+the same directory. A missing attribute or a different value is a warning.
+
 ## How far a file gets
 
 Every file is checked as far as it can be. A naming problem stops the other
