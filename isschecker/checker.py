@@ -285,6 +285,10 @@ class Reporter:
     worth, say -- that still rolls up into its parent, so a file's own footer and
     the run-wide synthesis count the same events rather than counting separately
     and hoping to agree.
+
+    A finding about one file names that file's variable in its label, 'ERROR
+    (acabf): ...', so that a line found by searching the log for ERROR or
+    WARNING still says which variable it is about.
     """
 
     def __init__(
@@ -294,10 +298,13 @@ class Reporter:
         category: str = "",
         qualifier: str | None = None,
         bullet: str = " - ",
+        subject: str | None = None,
     ):
         self.log_file = log_file
         self._parent = parent
         self._category = category
+        # The variable a file-level finding is about, named in its label.
+        self._subject = subject
         # _check_attributes has always labelled its findings 'ERROR
         # (attributes)'.  The qualifier reproduces that without every other
         # check growing a label of its own.
@@ -318,16 +325,22 @@ class Reporter:
             category=name,
             qualifier=qualifier,
             bullet=bullet,
+            subject=self._subject,
         )
 
-    def child(self) -> "Reporter":
-        """A reporter with its own sub-totals that still roll up into this one."""
+    def child(self, subject: str | None = None) -> "Reporter":
+        """A reporter with its own sub-totals that still roll up into this one.
+
+        `subject`, if given, is the variable its findings are about, and is
+        named in their labels.
+        """
         return Reporter(
             self.log_file,
             parent=self,
             category=self._category,
             qualifier=self._qualifier,
             bullet=self._bullet,
+            subject=self._subject if subject is None else subject,
         )
 
     @property
@@ -375,7 +388,8 @@ class Reporter:
         self.write(f"{self._bullet}{message}\n")
 
     def _report(self, label: str, message: str, count: int) -> None:
-        prefix = label if self._qualifier is None else f"{label} ({self._qualifier})"
+        tags = [t for t in (self._subject, self._qualifier) if t is not None]
+        prefix = f"{label} ({', '.join(tags)})" if tags else label
         self.write(f"{self._bullet}{prefix}: {message}\n")
         self._count(label, self._category, count)
 
@@ -1346,16 +1360,16 @@ def _process_single_file(
     experiments,
     report_naming_issues,
 ) -> None:
-    # A sub-total of this file's findings, for the footer below; it still rolls
-    # up into the experiment and the run.
-    file_reporter = reporter.child()
-    naming_reporter = file_reporter.category("naming")
-
     file_name = os.path.basename(file)
     file_name_split = file_name.split("_")
 
     considered_variable = file_name_split[ISMIP7_FILENAME_VAR_IDX]
     region = file_name_split[ISMIP7_FILENAME_REGION_IDX]
+
+    # A sub-total of this file's findings, for the footer below; it still rolls
+    # up into the experiment and the run.  Its findings name the variable.
+    file_reporter = reporter.child(subject=considered_variable)
+    naming_reporter = file_reporter.category("naming")
 
     try:
         # Read undecoded.  mask_and_scale would turn every fill value into a

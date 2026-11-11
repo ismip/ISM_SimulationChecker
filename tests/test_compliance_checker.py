@@ -495,7 +495,7 @@ def test_checker_warns_about_deltag_without_a_reference_geoid(xyt_case_dir):
     assert summary["total_errors"] == 0, summary["log_text"]
     assert summary["total_attr_warnings"] == 1
     assert (
-        "WARNING (attributes): variable 'deltag' has no 'reference_geoid'"
+        "WARNING (deltag, attributes): variable 'deltag' has no 'reference_geoid'"
         " attribute and there is no refgeoid file beside it."
         in summary["log_text"]
     )
@@ -511,7 +511,7 @@ def test_checker_warns_about_an_unlisted_reference_geoid(xyt_case_dir):
     assert summary["total_errors"] == 0, summary["log_text"]
     assert summary["total_attr_warnings"] == 1
     assert (
-        "WARNING (attributes): variable 'deltag' attribute 'reference_geoid'"
+        "WARNING (deltag, attributes): variable 'deltag' attribute 'reference_geoid'"
         " is 'EGM2008', expected one of 'EIGEN-6C4', 'GL04C',"
         in summary["log_text"]
     )
@@ -1173,7 +1173,7 @@ def test_checker_warns_about_unexpected_variable_in_file(case_dir):
     assert summary["total_naming_warnings"] == 1
     assert summary["total_warnings"] == 1
     assert (
-        "WARNING: unexpected variable 'mask' in the file" in summary["log_text"]
+        "WARNING (lim): unexpected variable 'mask' in the file" in summary["log_text"]
     )
     # An extra variable does not make the file uncheckable, so the requested
     # one is still checked...
@@ -1205,7 +1205,7 @@ def test_checker_accepts_cf_companion_variables(case_dir, attribute, value):
     summary = run_checker(case_dir)
 
     assert summary["total_errors"] == 0, summary["log_text"]
-    assert "ERROR: unexpected variable" not in summary["log_text"]
+    assert "ERROR (lim): unexpected variable" not in summary["log_text"]
 
 
 def test_generated_xyt_dataset_passes_checker(xyt_case_dir):
@@ -1256,7 +1256,8 @@ def test_checker_warns_about_litemp_snapshot_year_not_requested(xyt_case_dir):
     # still an error; what changed is that the extra one no longer is.
     assert summary["total_time_warnings"] == 1
     assert (
-        "WARNING: snapshot nominal year(s) the experiment does not call for: 1975"
+        "WARNING (litemp): snapshot nominal year(s) the experiment does not"
+        " call for: 1975"
         in summary["log_text"]
     )
 
@@ -1295,7 +1296,8 @@ def test_checker_warns_about_litemp_snapshot_at_2000(tmp_path):
     assert summary["total_errors"] == 0, summary["log_text"]
     assert summary["total_time_warnings"] == 1
     assert (
-        "WARNING: snapshot nominal year(s) the experiment does not call for: 2000"
+        "WARNING (litemp): snapshot nominal year(s) the experiment does not"
+        " call for: 2000"
         in summary["log_text"]
     )
 
@@ -1415,7 +1417,7 @@ def test_checker_warns_about_a_time_coordinate_that_is_not_float32(case_dir):
     assert summary["total_errors"] == 0, summary["log_text"]
     assert summary["total_attr_warnings"] == 1
     assert (
-        "WARNING (attributes): coordinate 'time' on-disk dtype is float64"
+        "WARNING (lim, attributes): coordinate 'time' on-disk dtype is float64"
         in summary["log_text"]
     )
 
@@ -1429,7 +1431,8 @@ def test_checker_reports_a_main_variable_that_is_not_float32(case_dir):
     assert summary["total_attr_errors"] == 1
     assert summary["total_errors"] == 1
     assert (
-        "ERROR (attributes): variable 'lim' dtype is float64" in summary["log_text"]
+        "ERROR (lim, attributes): variable 'lim' dtype is float64"
+        in summary["log_text"]
     )
 
 

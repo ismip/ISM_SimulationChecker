@@ -23,6 +23,22 @@ That makes a warning safe to leave alone:
 
 The block at the top of the log counts both severities by category.
 
+A finding about a file names that file's variable in parentheses, so you
+can search the log for findings and still see which variable each is about:
+
+```bash
+grep -E "ERROR|WARNING" compliance_checker_log.txt
+```
+
+```
+ - WARNING (acabf): The minimum value (-1000.0) is out of range. Min value accepted: -0.0006; 1 of 38372 value(s) (0.00261%) are below it.
+ - ERROR (acabf, attributes): coordinate 'time' missing attribute 'bounds'.
+ - ERROR (basee): 'basee' (field 0 of the file name) is not a variable in the data request ISMIP7_variable_request.csv. The closest requested name is 'base'.
+```
+
+A finding about a whole experiment, such as a missing mandatory variable,
+has no dash in front and names the experiment in its text.
+
 ## Variables your model does not represent
 
 An experiment with no files for a non-mandatory variable gets one warning
