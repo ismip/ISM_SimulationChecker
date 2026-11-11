@@ -22,9 +22,13 @@ can be run from any directory.
 
 ## Updating
 
+New releases come often while experiments are still being added. Update
+before you check a submission:
+
 ```bash
 conda activate isschecker
 conda update -c conda-forge isschecker
+ismip7-compliance-checker --version
 ```
 
 The conda-forge package is built from tagged releases, so it can be a release

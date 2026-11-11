@@ -14,7 +14,15 @@ do not mix.
 
 You get two commands: `ismip7-compliance-checker`, the checker, and
 `ismip7-generate-test-files`, which writes synthetic files the checker passes.
-{doc}`user/installation` covers updating and installing from source.
+
+If you installed the checker earlier, update it before you check a submission:
+
+```bash
+conda activate isschecker
+conda update -c conda-forge isschecker
+```
+
+{doc}`user/installation` has more on updating, and on installing from source.
 
 ## Lay out your files
 

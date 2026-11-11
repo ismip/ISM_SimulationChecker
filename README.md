@@ -30,6 +30,17 @@ used as submitted. A **warning** means it is usable but departs from what was
 asked for. Only errors make the command exit non-zero, so it can be run from
 a script.
 
+## Update
+
+New releases come often while experiments are still being added. Update
+before you check a submission:
+
+```bash
+conda activate isschecker
+conda update -c conda-forge isschecker
+ismip7-compliance-checker --version
+```
+
 ## Where to read more
 
 | | |
