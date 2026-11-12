@@ -48,6 +48,42 @@ def test_qualifier_labels_both_severities(log):
     )
 
 
+def test_subject_names_the_variable_in_both_severities(log):
+    """A line found by searching for ERROR or WARNING says which variable."""
+    reporter = Reporter(log).child(subject="acabf").category("time")
+
+    reporter.error("the time axis follows the ST convention.")
+    reporter.warning("snapshot nominal year(s) not called for: 1975")
+
+    assert log.getvalue() == (
+        " - ERROR (acabf): the time axis follows the ST convention.\n"
+        " - WARNING (acabf): snapshot nominal year(s) not called for: 1975\n"
+    )
+
+
+def test_subject_comes_before_the_qualifier(log):
+    reporter = Reporter(log).child(subject="lim").category(
+        "attr", qualifier="attributes"
+    )
+
+    reporter.error("coordinate 'time' missing attribute 'bounds'.")
+
+    assert log.getvalue() == (
+        " - ERROR (lim, attributes): coordinate 'time' missing attribute"
+        " 'bounds'.\n"
+    )
+
+
+def test_subject_is_kept_by_a_child_without_one(log):
+    reporter = Reporter(log).child(subject="lim").child().category("num")
+
+    reporter.warning("The minimum value is out of range.")
+
+    assert log.getvalue() == (
+        " - WARNING (lim): The minimum value is out of range.\n"
+    )
+
+
 def test_bullet_is_configurable_for_experiment_level_findings(log):
     """Experiment-level findings are written flush left, not as list items."""
     reporter = Reporter(log).category("file", bullet="")
