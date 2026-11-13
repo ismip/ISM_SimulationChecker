@@ -394,6 +394,46 @@ def test_a_surface_that_is_not_base_plus_thickness_is_an_error(case_dir):
     assert summary["total_consistency_errors"] >= 1
 
 
+def open_ocean_of(geometry):
+    """Cells inside the domain with no ice and the bed below sea level."""
+    open_ocean = np.logical_and.reduce(
+        [geometry["domain"], geometry["lithk"] == 0.0, geometry["topg"] < 0.0]
+    )
+    assert open_ocean.any(), "the synthetic ice sheet should have open ocean"
+    return open_ocean
+
+
+def test_an_ice_base_on_the_bed_over_open_ocean_is_an_error(case_dir):
+    """Issue #45: over open ocean the ice base is sea level, 0, the limit of an
+    ice shelf thinning to nothing.  The surface stays at 0, so orog = base +
+    lithk fails there as well."""
+    geometry = geometry_of(case_dir)
+    open_ocean = open_ocean_of(geometry)
+    set_where(dataset_for_variable(case_dir, "base"), open_ocean,
+              geometry["topg"][open_ocean])
+
+    log = run(case_dir)["log_text"]
+
+    assert "variable 'base' is not 0 over open ocean" in log
+    assert "does not equal 'base' + 'lithk'" in log
+
+
+def test_orog_and_base_on_the_bed_over_open_ocean_are_errors(case_dir):
+    """What issue #45 describes: orog = base = topg over open ocean.  The
+    identity holds, so the findings are that base is not 0 and that orog is
+    below its minimum."""
+    geometry = geometry_of(case_dir)
+    open_ocean = open_ocean_of(geometry)
+    for name in ("base", "orog"):
+        set_where(dataset_for_variable(case_dir, name), open_ocean,
+                  geometry["topg"][open_ocean])
+
+    log = run(case_dir)["log_text"]
+
+    assert "variable 'base' is not 0 over open ocean" in log
+    assert "does not equal 'base' + 'lithk'" not in log
+
+
 def test_an_ice_base_below_the_bed_is_an_error(case_dir):
     """Impossible whatever the masks say, so it is checked everywhere."""
     geometry = geometry_of(case_dir)

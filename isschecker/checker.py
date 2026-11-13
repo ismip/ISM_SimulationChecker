@@ -57,8 +57,9 @@
 #    - libmassbfgr is 0 where sftgrf is 0, and libmassbffl is 0 where sftflf
 #      is 0, at the severity 'margin_severity' names.
 #    - sftgrf + sftflf equals sftgif; lithk is greater than 0 exactly where
-#      sftgif is; orog equals base + lithk; and the ice base rests on the bed
-#      where sftgrf is 1 and lies above it where sftflf is 1.  No densities:
+#      sftgif is; orog equals base + lithk; the ice base rests on the bed
+#      where sftgrf is 1 and lies above it where sftflf is 1; and over open
+#      ocean (no ice, topg below 0) the ice base is 0.  No densities:
 #      all of this is submitted geometry compared against itself.
 #    - The companion file is found by name, every field matching but the
 #      variable.  When it is absent the check says so and is skipped, so a
@@ -2525,9 +2526,9 @@ def _check_surface_geometry(reporter, ds, ivar, base, thickness) -> None:
     thing it assumes is that they share an averaging convention in a partly
     glaciated cell, which the data request should say and does not yet.
 
-    It also settles the ice-free case without a rule of its own: where the
-    thickness is zero it says the surface is the base, and the bed comparison
-    says the base is the bed there.
+    Where there is no ice it says the surface is the base.  What the base is
+    there is _check_base_against_bed's business: 0 over open ocean (issue
+    #45), and not below the bed anywhere.
     """
     values, missing, steps = _field_and_steps(ds, ivar)
     disagreeing = 0
@@ -2571,11 +2572,20 @@ def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None
     Grounded and floating are only compared in cells that are wholly one or the
     other -- in a half-and-half cell the mean ice base sits somewhere between
     and nothing follows from it.
+
+    Over open ocean -- no ice, and the bed below sea level -- the ice base is
+    sea level, 0 (issue #45): the limit of an ice shelf thinning to nothing.
+    With orog = base + lithk, that puts the surface at 0 there too.  Heights
+    are measured from the model's own geoid (the ISMIP7 GIA protocol), so sea
+    level is 0 with or without sea-level coupling; the geoid's own change is
+    reported in deltag.
     """
     values, missing, steps = _field_and_steps(ds, ivar)
     below_bed = 0
     grounded_afloat = 0
     floating_aground = 0
+    off_sea_level = 0
+    worst_off_sea_level = 0.0
     total = 0
 
     for step in range(steps):
@@ -2606,6 +2616,21 @@ def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None
         floating_aground += int(
             np.logical_and(wholly_floating, above <= ELEVATION_TOLERANCE).sum()
         )
+        open_ocean = np.logical_and.reduce(
+            [
+                known,
+                ~grounded_unknown,
+                ~floating_unknown,
+                grounded_values == 0.0,
+                floating_values == 0.0,
+                bed_values < 0.0,
+            ]
+        )
+        from_sea_level = np.where(open_ocean, np.abs(here), 0.0)
+        off_sea_level += int((from_sea_level > ELEVATION_TOLERANCE).sum())
+        worst_off_sea_level = max(
+            worst_off_sea_level, float(from_sea_level.max())
+        )
         total += here.size
 
     if below_bed:
@@ -2625,6 +2650,14 @@ def _check_base_against_bed(reporter, ds, ivar, bed, grounded, floating) -> None
             f"variable '{ivar}' is not above 'topg' in"
             f" {_count_phrase(floating_aground, total)} that 'sftflf' says are"
             f" wholly floating. Floating ice does not rest on the bed."
+        )
+    if off_sea_level:
+        reporter.error(
+            f"variable '{ivar}' is not 0 over open ocean ('sftgrf' and"
+            f" 'sftflf' are 0 and 'topg' is below 0) in"
+            f" {_count_phrase(off_sea_level, total)}, by up to"
+            f" {worst_off_sea_level:.3g} m. Where there is no ice over the"
+            f" ocean, the ice base is sea level, 0."
         )
 
 
